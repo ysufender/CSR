@@ -16,9 +16,7 @@ while test $# -gt 0; do
             shift
             ;;
         *)
-            shift
             break
-            ;;
     esac
 done
 
@@ -39,4 +37,4 @@ if [ $generate == true ]; then
     exit
 fi
 
-cmake --build build --preset Debug
+cmake --build build --preset Debug "$@"

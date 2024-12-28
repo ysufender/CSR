@@ -1,0 +1,14 @@
+#pragma once
+
+#include <cstdint>
+
+#define CSR_VERSION "@CSR_VERSION@"
+#define CSR_VERSION_MAJOR @CSR_VERSION_MAJOR@
+#define CSR_VERSION_MINOR @CSR_VERSION_MINOR@
+#define CSR_VERSION_PATCH @CSR_VERSION_PATCH@
+#define CSR_DESCRIPTION "@CSR_DESCRIPTION@"
+
+#cmakedefine ENABLE_JIT 
+
+using systembit_t = uint32_t;
+using uchar_t = uint8_t;

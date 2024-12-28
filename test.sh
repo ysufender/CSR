@@ -9,9 +9,7 @@ while test $# -gt 0; do
             shift
             ;;
         *)
-            shift
             break
-            ;;
     esac
 done
 
@@ -23,4 +21,4 @@ echo "-----------------------------------------"
 echo "                RUNNING                  "
 echo "-----------------------------------------"
 echo
-build/bin/Debug/csr
+build/bin/Debug/csr "$@"
