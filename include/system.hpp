@@ -23,6 +23,12 @@
 
 struct System
 {
+    enum class ErrorCode
+    {
+        Ok,
+        Bad
+    };
+
     enum class LogLevel
     {
         Normal,
@@ -35,8 +41,6 @@ struct System
     static void LogWarning(std::string_view message, std::string_view file, int line);
     static void LogError(std::string_view message, LogLevel level, std::string_view file, int line);
 
-    static void Setup(const CLIParser::Flags& flags, std::ostream& cout, std::ostream& cerr);
-    
     static std::ifstream OpenInFile(const std::filesystem::path& path, const std::ios::openmode mode = std::ios::binary);
     static std::ofstream OpenOutFile(const std::filesystem::path& path, const std::ios::openmode mode = std::ios::binary);
 };

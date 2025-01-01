@@ -15,15 +15,6 @@
 // 
 // System Implementation
 //
-
-void System::Setup(const CLIParser::Flags& flags, std::ostream& cout, std::ostream& cerr)
-{
-    using FT = CLIParser::FlagType;
-
-    std::cout.rdbuf(cout.rdbuf());
-    std::cerr.rdbuf(cerr.rdbuf());
-}
-
 void System::LogInternal(std::string_view message, std::string_view file, int line)
 {
     size_t idx { file.find_first_of("CSR") };

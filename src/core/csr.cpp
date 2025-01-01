@@ -1,12 +1,17 @@
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <fstream>
+#include <ostream>
+#include <tuple>
 
 #include "CLIParser.hpp"
 
 #include "CSRConfig.hpp"
+#include "extensions/stringextensions.hpp"
 #include "system.hpp"
 #include "csr.hpp"
+#include "vm.hpp"
 
 int csrmain(int argc, char** args)
 {
@@ -22,11 +27,22 @@ int csrmain(int argc, char** args)
         {
             if (flags.GetFlag<CLIParser::FlagType::Bool>("jit"))
                LOGW("JIT support is currently unavailable. The program will use the standart execution.");
+            if (flags.GetFlag<CLIParser::FlagType::Bool>("no-new"))
+                LOGW("Single-process runtime is currently unavailable. A new instance will be created.");
 
-            SetStdout(flags);
+            std::vector<std::string> files { flags.GetFlag<CLIParser::FlagType::StringList>("exe") };
 
-            // Call create context for each executable.
-            // Flags such as 'jit' will be stored in the context, not the system. 
+            if (files.size() == 0)
+                LOGE(System::LogLevel::High, "CSR must have at least one file to execute.");
+            
+            for (const auto& file : files)
+                VM::GetVM().AddAssembly({
+                    // /*jit =*/ flags.GetFlag<CLIParser::FlagType::Bool>("jit"), 
+                    /*jit =*/ false,
+                    /*name =*/ std::filesystem::path(file).filename(),
+                    /*path =*/ file,
+                    /*type = will be setted by the Assembly class*/
+                });
         }
     }
     catch (const std::exception& exc)
@@ -58,38 +74,6 @@ void PrintHelp(const CLIParser::Flags &flags) noexcept
 {
     PrintHeader();
     std::cout << flags.GetHelpText() << '\n';
-}
-
-void SetStdout(const CLIParser::Flags& flags)
-{
-    std::vector<std::string> rdout { flags.GetFlag<CLIParser::FlagType::StringList>("redirect-stdout") };
-
-    std::ofstream out;
-    std::ofstream err;
-
-    if (!rdout.empty())
-    {
-        if (rdout.size() == 0)
-            LOGW("At least one path must be given after flag `--redirect-output (-r)`. Using default settings.");
-        else if (rdout.size() == 1)
-        {
-            out = System::OpenOutFile(rdout[0]);
-            err = System::OpenOutFile(rdout[0]);
-        }
-        else
-        {
-            out = System::OpenOutFile(rdout[0]);
-            err = System::OpenOutFile(rdout[1]);
-        }
-
-        if (rdout.size() > 2)
-            LOGE(System::LogLevel::Low, "--redirect-stdout cannot take more than 2 arguments.");
-    }
-
-    if (out.is_open() && err.is_open())
-        System::Setup(flags, out, err);
-    else
-        System::Setup(flags, std::cout, std::cerr);
 }
 
 CLIParser::Flags SetUpCLI(char **args, int argc)
