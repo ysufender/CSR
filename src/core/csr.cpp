@@ -1,14 +1,10 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
-#include <fstream>
 #include <ostream>
-#include <tuple>
 
 #include "CLIParser.hpp"
-
 #include "CSRConfig.hpp"
-#include "extensions/stringextensions.hpp"
 #include "system.hpp"
 #include "csr.hpp"
 #include "vm.hpp"
@@ -35,14 +31,29 @@ int csrmain(int argc, char** args)
             if (files.size() == 0)
                 LOGE(System::LogLevel::High, "CSR must have at least one file to execute.");
             
-            for (const auto& file : files)
-                VM::GetVM().AddAssembly({
+            for (const std::filesystem::path& file : files)
+            {
+                System::ErrorCode err { VM::GetVM().AddAssembly({
                     // /*jit =*/ flags.GetFlag<CLIParser::FlagType::Bool>("jit"), 
                     /*jit =*/ false,
-                    /*name =*/ std::filesystem::path(file).filename(),
+                    /*name =*/ file.filename(),
                     /*path =*/ file,
-                    /*type = will be setted by the Assembly class*/
-                });
+                    /*type = will be set by the Assembly class*/
+                })};
+
+                switch (err) 
+                {
+                    case System::ErrorCode::Bad:
+                        LOGE(System::LogLevel::Normal, "Failed to register '", file.filename(), "' into the VM.");
+                        break;
+                    case System::ErrorCode::Ok:
+                    default:
+                        break;
+                }
+            }
+
+            VM::GetVM().Run({
+            });
         }
     }
     catch (const std::exception& exc)

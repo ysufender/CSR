@@ -1,18 +1,40 @@
 #pragma once
 
+#include <filesystem>
 #include <unordered_map>
 #include <string>
 
 #include "CSRConfig.hpp"
+#include "system.hpp"
 #include "bytemode/board.hpp"
+
+using BoardCollection = std::unordered_map<uchar_t, Board>;
+
+class ROM
+{
+    public:
+        struct ROMIndex
+        {
+            bool isOk;
+            char data;
+        };
+
+        ROM() = default;
+        ROM(ROM&) = delete;
+        void operator=(ROM const&) = delete;
+        void operator=(ROM const&&) = delete;
+
+        char* data = nullptr;
+        systembit_t size = 0;
+        ROMIndex operator[](systembit_t index) const;
+};
 
 class Assembly 
 {
     public:
         enum class AssemblyType
         {
-            Static,
-            Shared,
+            Library,
             Executable
         };
 
@@ -20,17 +42,21 @@ class Assembly
         {
             bool jit;
             std::string name;
-            std::string path;
+            std::filesystem::path path;
             AssemblyType type;
         };
 
-        std::unordered_map<uchar_t, Board> boards;
 
-        Assembly(AssemblySettings&& settings);
+        Assembly(AssemblySettings& settings);
+        Assembly() = delete;
 
+        const System::ErrorCode Load() noexcept;
         const AssemblySettings& Settings() const noexcept;
+        const ROM& Rom() const noexcept;
+        const BoardCollection& Boards() const noexcept;
 
     private:
-        //const ROM rom;
+        ROM rom;
         AssemblySettings settings;
+        BoardCollection boards;
 };

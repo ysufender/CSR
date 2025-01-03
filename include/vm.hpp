@@ -11,6 +11,9 @@ using AssemblyCollection = std::unordered_map<std::string, Assembly>;
 class VM
 {
     public:
+        struct VMSettings
+        {
+        };
 
         VM(VM const&) = delete;
         VM(VM const&&) = delete;
@@ -21,6 +24,7 @@ class VM
 
         const AssemblyCollection& Assemblies() const noexcept;
         const System::ErrorCode AddAssembly(Assembly::AssemblySettings&& settings) noexcept;
+        const System::ErrorCode Run(VMSettings&& settings);
 
     private:
         AssemblyCollection assemblies;
