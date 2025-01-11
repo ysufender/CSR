@@ -47,13 +47,14 @@ class Assembly
         };
 
 
-        Assembly(AssemblySettings& settings);
         Assembly() = delete;
+        Assembly(AssemblySettings&& settings);
 
         const System::ErrorCode Load() noexcept;
         const AssemblySettings& Settings() const noexcept;
         const ROM& Rom() const noexcept;
         const BoardCollection& Boards() const noexcept;
+        const System::ErrorCode Run();
 
     private:
         ROM rom;

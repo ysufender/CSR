@@ -45,7 +45,7 @@ struct System
     static std::ofstream OpenOutFile(const std::filesystem::path& path, const std::ios::openmode mode = std::ios::binary);
 };
 
-class CSRException : std::runtime_error
+class CSRException : public std::runtime_error
 {
     private:
         int _line;

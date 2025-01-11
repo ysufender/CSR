@@ -20,7 +20,11 @@ class VM
         void operator=(VM const&) = delete;
         void operator=(VM const&&) = delete;
 
-        static VM& GetVM() noexcept;
+        static inline VM& GetVM() noexcept
+        {
+            static VM singletonVM { };
+            return singletonVM; 
+        }
 
         const AssemblyCollection& Assemblies() const noexcept;
         const System::ErrorCode AddAssembly(Assembly::AssemblySettings&& settings) noexcept;

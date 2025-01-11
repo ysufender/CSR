@@ -1,6 +1,5 @@
 #include <filesystem>
 #include <fstream>
-#include <string_view>
 
 #include "bytemode/assembly.hpp"
 #include "CSRConfig.hpp"
@@ -10,7 +9,7 @@
 //
 // Assembly Implementation
 //
-Assembly::Assembly(Assembly::AssemblySettings& settings)
+Assembly::Assembly(Assembly::AssemblySettings&& settings)
 {
     this->settings = settings;
 }
@@ -60,6 +59,9 @@ const System::ErrorCode Assembly::Load() noexcept
     this->rom.data = data;
     this->rom.size = static_cast<systembit_t>(length);
 
+    // TODO: Add the initial board, somehow send the first 64 bits from
+    // ROM to it so that it can adjust the RAM size.
+
     return System::ErrorCode::Ok;
 }
 
@@ -76,6 +78,11 @@ const ROM& Assembly::Rom() const noexcept
 const BoardCollection& Assembly::Boards() const noexcept
 {
     return this->boards;
+}
+
+const System::ErrorCode Assembly::Run()
+{
+    return System::ErrorCode::Ok;
 }
 
 //

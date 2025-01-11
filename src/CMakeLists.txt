@@ -2,7 +2,7 @@ add_library(src INTERFACE)
 
 # Add subdirectories here
 add_subdirectory(core)
-#add_subdirectory(bytemode)
+add_subdirectory(bytemode)
 add_subdirectory(extensions)
 # end_sub
 
@@ -12,6 +12,6 @@ target_link_libraries(src
     INTERFACE
         core
         extensions
-        #bytemode
+        bytemode
 )
 # end_link

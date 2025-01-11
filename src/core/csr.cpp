@@ -56,6 +56,11 @@ int csrmain(int argc, char** args)
             });
         }
     }
+    catch (const CSRException& exc)
+    {
+        std::cerr << exc.Stringify();
+        return 1;
+    }
     catch (const std::exception& exc)
     {
         std::cerr << "An unexpected exception occured during process.\n\tProvided information: " 
