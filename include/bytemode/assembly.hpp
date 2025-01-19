@@ -12,6 +12,8 @@ using BoardCollection = std::unordered_map<uchar_t, Board>;
 
 class ROM
 {
+    friend class Assembly;
+
     public:
         struct ROMIndex
         {
@@ -24,9 +26,11 @@ class ROM
         void operator=(ROM const&) = delete;
         void operator=(ROM const&&) = delete;
 
+        ROMIndex operator[](systembit_t index) const;
+
+    private:
         char* data = nullptr;
         systembit_t size = 0;
-        ROMIndex operator[](systembit_t index) const;
 };
 
 class Assembly 
