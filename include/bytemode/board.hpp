@@ -37,7 +37,7 @@ class Board
 
     private:
         ProcessCollection processes;
-        const Assembly& residingAssembly;
+        const Assembly& parent;
         RAM ram;
         //const CPU cpu; 
 };

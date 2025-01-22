@@ -1,10 +1,14 @@
+#include <exception>
 #include <filesystem>
 #include <fstream>
+#include <string>
 
 #include "bytemode/assembly.hpp"
 #include "CSRConfig.hpp"
 #include "extensions/streamextensions.hpp"
+#include "extensions/syntaxextensions.hpp"
 #include "system.hpp"
+#include "vm.hpp"
 
 //
 // Assembly Implementation
@@ -16,7 +20,7 @@ Assembly::Assembly(Assembly::AssemblySettings&& settings)
 
 const System::ErrorCode Assembly::Load() noexcept
 {
-    if (std::filesystem::exists(this->settings.path))
+    if (!std::filesystem::exists(this->settings.path))
         return System::ErrorCode::Bad;
 
     std::string extension { this->settings.path.extension().string() };
@@ -59,8 +63,8 @@ const System::ErrorCode Assembly::Load() noexcept
     this->rom.data = data;
     this->rom.size = static_cast<systembit_t>(length);
 
-    // TODO: Add the initial board, somehow send the first 64 bits from
-    // ROM to it so that it can adjust the RAM size.
+    // If the assembly is not ran, no need to initialize boards,
+    // it might be a shared library.
 
     return System::ErrorCode::Ok;
 }
@@ -80,18 +84,48 @@ const BoardCollection& Assembly::Boards() const noexcept
     return this->boards;
 }
 
+std::string Assembly::Stringify() const noexcept
+{
+    const AssemblySettings& set { this->settings };
+    std::stringstream ss;
+    ss << '[' << set.name << ':' << set.id << ']'; 
+    return rval(ss.str());
+}
+
 const System::ErrorCode Assembly::Run()
 {
+    try_catch(
+        if (this->boards.size() == 0)
+            this->boards.emplace(*this),
+        std::cerr << this->Stringify() << " ROM access error while initializing Board \n";
+        return System::ErrorCode::Bad,
+
+        std::cerr << this->Stringify() << '\n';
+        return System::ErrorCode::Bad
+    );
+
     return System::ErrorCode::Ok;
 }
 
 //
 // ROM Implementation
 //
-ROM::ROMIndex ROM::operator[](systembit_t index) const
+ROM::ROMIndex ROM::operator[](systembit_t index) const noexcept
 {
     if (index >= size || index < 0)
         return {false, 0};
 
     return {true, data[index]};
+}
+
+bool ROM::TryRead(systembit_t index, char& data, bool raise, std::function<void()> failAct) const
+{
+    ROMIndex result { (*this)[index] };
+    if (result.isOk)
+        data = result.data;
+    if (!result.isOk && failAct)
+        failAct();
+    if (!result.isOk && raise)
+        LOGE(System::LogLevel::High, "Cannot access index '", std::to_string(index), "' of ROM");
+    return result.isOk;
 }

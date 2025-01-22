@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <unordered_map>
 #include <string>
 
@@ -8,7 +9,7 @@
 #include "system.hpp"
 #include "bytemode/board.hpp"
 
-using BoardCollection = std::unordered_map<uchar_t, Board>;
+using BoardCollection = std::unordered_map<systembit_t, Board>;
 
 class ROM
 {
@@ -26,7 +27,8 @@ class ROM
         void operator=(ROM const&) = delete;
         void operator=(ROM const&&) = delete;
 
-        ROMIndex operator[](systembit_t index) const;
+        ROMIndex operator[](systembit_t index) const noexcept;
+        bool TryRead(systembit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const;
 
     private:
         char* data = nullptr;
@@ -48,8 +50,8 @@ class Assembly
             std::string name;
             std::filesystem::path path;
             AssemblyType type;
+            systembit_t id;
         };
-
 
         Assembly() = delete;
         Assembly(AssemblySettings&& settings);
@@ -59,6 +61,7 @@ class Assembly
         const ROM& Rom() const noexcept;
         const BoardCollection& Boards() const noexcept;
         const System::ErrorCode Run();
+        std::string Stringify() const noexcept;
 
     private:
         ROM rom;
