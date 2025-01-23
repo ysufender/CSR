@@ -123,7 +123,7 @@ char ROM::operator[](systembit_t index) const noexcept
 char* ROM::operator&(systembit_t index) const noexcept
 {
     if (index >= size || index < 0)
-        return nullptr;
+        LOGE(System::LogLevel::High, "Index '", std::to_string(index), "' of ROM is invalid.");
 
     return data+index;
 }
