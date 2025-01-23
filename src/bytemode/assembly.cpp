@@ -1,3 +1,4 @@
+#include <cassert>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -5,6 +6,7 @@
 
 #include "bytemode/assembly.hpp"
 #include "CSRConfig.hpp"
+#include "extensions/serialization.hpp"
 #include "extensions/streamextensions.hpp"
 #include "extensions/syntaxextensions.hpp"
 #include "system.hpp"
@@ -96,7 +98,7 @@ const System::ErrorCode Assembly::Run()
 {
     try_catch(
         if (this->boards.size() == 0)
-            this->boards.emplace(*this),
+            this->boards.emplace(0, *this),
         std::cerr << this->Stringify() << " ROM access error while initializing Board \n";
         return System::ErrorCode::Bad,
 
@@ -110,22 +112,36 @@ const System::ErrorCode Assembly::Run()
 //
 // ROM Implementation
 //
-ROM::ROMIndex ROM::operator[](systembit_t index) const noexcept
+char ROM::operator[](systembit_t index) const noexcept
 {
     if (index >= size || index < 0)
-        return {false, 0};
+        return 0;
 
-    return {true, data[index]};
+    return data[index];
+}
+
+char* ROM::operator&(systembit_t index) const noexcept
+{
+    if (index >= size || index < 0)
+        return nullptr;
+
+    return data+index;
+}
+
+char* ROM::operator&() const noexcept
+{
+    return this->operator&(0); 
 }
 
 bool ROM::TryRead(systembit_t index, char& data, bool raise, std::function<void()> failAct) const
 {
-    ROMIndex result { (*this)[index] };
-    if (result.isOk)
-        data = result.data;
-    if (!result.isOk && failAct)
+    bool isOk { !(index >= size || index < 0) };
+
+    if (isOk)
+        data = (*this)[index];
+    if (!isOk && failAct)
         failAct();
-    if (!result.isOk && raise)
+    if (!isOk && raise)
         LOGE(System::LogLevel::High, "Cannot access index '", std::to_string(index), "' of ROM");
-    return result.isOk;
+    return isOk;
 }

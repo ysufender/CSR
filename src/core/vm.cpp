@@ -53,8 +53,9 @@ const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) n
 
     settings.id = this->GenerateNewAssemblyID();
     this->assemblies.emplace(settings.name, rval(settings));
-    this->asmIds.emplace(settings.id, this->assemblies.at(settings.name));
-    return System::ErrorCode::Ok;
+    this->asmIds[settings.id] = &this->assemblies.at(settings.name);
+    // Create an asynch system for loading assemblies
+    return this->asmIds.at(settings.id)->Load();
 }
 
 const System::ErrorCode VM::Run(VMSettings&& settings)

@@ -16,18 +16,14 @@ class ROM
     friend class Assembly;
 
     public:
-        struct ROMIndex
-        {
-            bool isOk;
-            char data;
-        };
-
         ROM() = default;
         ROM(ROM&) = delete;
         void operator=(ROM const&) = delete;
         void operator=(ROM const&&) = delete;
 
-        ROMIndex operator[](systembit_t index) const noexcept;
+        char operator[](systembit_t index) const noexcept;
+        char* operator&(systembit_t index) const noexcept;
+        char* operator&() const noexcept;
         bool TryRead(systembit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const;
 
     private:

@@ -1,6 +1,10 @@
 #include "bytemode/board.hpp"
 #include "CSRConfig.hpp"
 #include "bytemode/assembly.hpp"
+#include "extensions/serialization.hpp"
+#include "system.hpp"
+#include <cassert>
+#include <string>
 
 Board::Board(const Assembly& assembly) : parent(assembly)
 {
@@ -10,18 +14,13 @@ Board::Board(const Assembly& assembly) : parent(assembly)
         assembly.Rom().TryRead(i, tmp, true);
 
     // second 32 bits of ROM is stack size
-    systembit_t stackSize;
-    stackSize |= assembly.Rom()[4].data; stackSize <<= 8;
-    stackSize |= assembly.Rom()[5].data; stackSize <<= 8;
-    stackSize |= assembly.Rom()[6].data; stackSize <<= 8;
-    stackSize |= assembly.Rom()[7].data;
+    systembit_t stackSize { IntegerFromBytes<systembit_t>(assembly.Rom()&4) }; 
 
     // third 32 bits of ROM is heap size
-    systembit_t heapSize;
-    heapSize |= assembly.Rom()[8].data; heapSize <<= 8;
-    heapSize |= assembly.Rom()[9].data; heapSize <<= 8;
-    heapSize |= assembly.Rom()[10].data; heapSize <<= 8;
-    heapSize |= assembly.Rom()[11].data;
+    systembit_t heapSize { IntegerFromBytes<systembit_t>(assembly.Rom()&8)};
+
+    std::cout << "Stack Size: " << stackSize << "\nHeap Size: " << heapSize << '\n';
+    CSR_ERR("Error");
 
     this->ram.stackSize = stackSize;
     this->ram.heapSize = heapSize;
