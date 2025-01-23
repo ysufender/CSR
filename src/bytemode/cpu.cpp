@@ -1,0 +1,24 @@
+#include "bytemode/cpu.hpp"
+#include "bytemode/assembly.hpp"
+#include "CSRConfig.hpp"
+#include "extensions/serialization.hpp"
+#include "system.hpp"
+#include <string>
+
+CPU::CPU(Board& board) : board(board)
+{
+    // Check ROM for stack/heap sizes beforehand.
+    char tmp;
+    for (int i = 0; i < 12; i++)
+        board.Assembly().Rom().TryRead(i, tmp, true);
+
+    systembit_t origin { IntegerFromBytes<systembit_t>(&board.Assembly().Rom()) };
+
+    this->pc = origin;
+    LOGD("Origin at: ", std::to_string(origin));
+}
+
+const System::ErrorCode CPU::Cycle() noexcept
+{
+    return System::ErrorCode::Ok;
+}

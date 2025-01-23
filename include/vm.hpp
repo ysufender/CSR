@@ -28,7 +28,8 @@ class VM
             return singletonVM; 
         }
 
-        const AssemblyCollection& Assemblies() const noexcept;
+        inline const AssemblyCollection& Assemblies() const noexcept { return this->assemblies; }
+
         const Assembly& GetAssembly(const std::string& name) const;
         const Assembly& GetAssembly(const std::string&& name) const;
         const Assembly& GetAssembly(systembit_t id) const;

@@ -7,11 +7,6 @@
 #include "system.hpp"
 #include "vm.hpp"
 
-const AssemblyCollection& VM::Assemblies() const noexcept
-{
-    return this->assemblies;
-}
-
 const Assembly& VM::GetAssembly(const std::string& name) const
 {
     if (!this->assemblies.contains(name))

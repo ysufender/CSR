@@ -71,21 +71,6 @@ const System::ErrorCode Assembly::Load() noexcept
     return System::ErrorCode::Ok;
 }
 
-const Assembly::AssemblySettings& Assembly::Settings() const noexcept
-{
-    return this->settings;
-}
-
-const ROM& Assembly::Rom() const noexcept
-{
-    return this->rom;
-}
-
-const BoardCollection& Assembly::Boards() const noexcept
-{
-    return this->boards;
-}
-
 std::string Assembly::Stringify() const noexcept
 {
     const AssemblySettings& set { this->settings };
@@ -96,6 +81,7 @@ std::string Assembly::Stringify() const noexcept
 
 const System::ErrorCode Assembly::Run()
 {
+    // initialize the initial board.
     try_catch(
         if (this->boards.size() == 0)
             this->boards.emplace(0, *this),
@@ -133,15 +119,15 @@ char* ROM::operator&() const noexcept
     return this->operator&(0); 
 }
 
-bool ROM::TryRead(systembit_t index, char& data, bool raise, std::function<void()> failAct) const
+System::ErrorCode ROM::TryRead(systembit_t index, char& data, bool raise, std::function<void()> failAct) const
 {
-    bool isOk { !(index >= size || index < 0) };
+    System::ErrorCode isOk { !(index >= size || index < 0) ? System::ErrorCode::Ok : System::ErrorCode::Bad };
 
-    if (isOk)
+    if (isOk == System::ErrorCode::Ok)
         data = (*this)[index];
-    if (!isOk && failAct)
+    if (!(isOk == System::ErrorCode::Ok) && failAct)
         failAct();
-    if (!isOk && raise)
+    if (!(isOk == System::ErrorCode::Ok) && raise)
         LOGE(System::LogLevel::High, "Cannot access index '", std::to_string(index), "' of ROM");
     return isOk;
 }

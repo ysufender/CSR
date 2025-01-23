@@ -24,7 +24,7 @@ class ROM
         char operator[](systembit_t index) const noexcept;
         char* operator&(systembit_t index) const noexcept;
         char* operator&() const noexcept;
-        bool TryRead(systembit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const;
+        System::ErrorCode TryRead(systembit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const;
 
     private:
         char* data = nullptr;
@@ -53,9 +53,9 @@ class Assembly
         Assembly(AssemblySettings&& settings);
 
         const System::ErrorCode Load() noexcept;
-        const AssemblySettings& Settings() const noexcept;
-        const ROM& Rom() const noexcept;
-        const BoardCollection& Boards() const noexcept;
+        inline const AssemblySettings& Settings() const noexcept { return this->settings; }
+        inline const ROM& Rom() const noexcept { return this->rom; }
+        inline const BoardCollection& Boards() const noexcept { return this->boards; }
         const System::ErrorCode Run();
         std::string Stringify() const noexcept;
 
