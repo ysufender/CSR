@@ -37,7 +37,7 @@ int csrmain(int argc, char** args)
                     System::ErrorCode err { VM::GetVM().AddAssembly({
                         // /*jit =*/ flags.GetFlag<CLIParser::FlagType::Bool>("jit"), 
                         /*jit =*/ false,
-                        /*name =*/ file.filename(),
+                        /*name =*/ file.filename().generic_string(),
                         /*path =*/ file,
                         /*type = will be set by the Assembly class*/
                     })};
@@ -45,7 +45,7 @@ int csrmain(int argc, char** args)
                     switch (err) 
                     {
                         case System::ErrorCode::Bad:
-                            LOGE(System::LogLevel::Normal, "Failed to register '", file.filename(), "' into the VM.");
+                            LOGE(System::LogLevel::Normal, "Failed to register '", file.filename().generic_string(), "' into the VM.");
                         case System::ErrorCode::Ok:
                         default:
                             break;

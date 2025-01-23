@@ -14,6 +14,13 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     #add_compile_options("-O0")
 endif("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
 
+message(STATUS "Checking CXX compiler.")
+get_filename_component(CXX_COMPILER_NAME ${CMAKE_CXX_COMPILER} NAME)
+if("${CXX_COMPILER_NAME}" STREQUAL "x86_64-w64-mingw32-g++")
+    message(STATUS "Using ${CXX_COMPILER_NAME}, linking libstdc++ statically.")
+    add_link_options("-static" "-static-libstdc++" "-static-libgcc")
+endif("${CXX_COMPILER_NAME}" STREQUAL "x86_64-w64-mingw32-g++")
+
 #
 # CLI Arguments 
 # 

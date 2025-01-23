@@ -28,12 +28,24 @@
                 "CMAKE_BUILD_TYPE": "Debug",
                 "OUTPUT_PATH": "Debug"
             }
+        },
+        {
+            "name": "Debug-MinGW",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-g++",
+                "OUTPUT_PATH": "Debug-MinGW"
+            }
         }
     ],
     "buildPresets": [
         {
             "name": "Debug",
             "configurePreset": "Debug"
+        },
+        {
+            "name": "Debug-MinGW",
+            "configurePreset": "Debug-MinGW"
         }
     ]
 }

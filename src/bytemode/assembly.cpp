@@ -35,7 +35,7 @@ const System::ErrorCode Assembly::Load() noexcept
     {
         LOGW(
                 "The file (", 
-                this->settings.path, 
+                this->settings.path.generic_string(), 
                 ") you provided is a static library and can't be handled by the VM."
             );
         return System::ErrorCode::Bad;
@@ -44,7 +44,7 @@ const System::ErrorCode Assembly::Load() noexcept
     {
         LOGW(
             "The file (",
-            this->settings.path,
+            this->settings.path.generic_string(),
             ") you provided has an unrecognized extension and can't be handled by the VM"
         );
         return System::ErrorCode::Bad;
