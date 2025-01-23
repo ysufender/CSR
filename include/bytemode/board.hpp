@@ -19,8 +19,11 @@ class RAM
         void operator=(RAM const&) = delete;
         void operator=(RAM const&&) = delete;
 
-        const char Read(const systembit_t index) const;
-        bool Write(const systembit_t index);
+        char Read(const systembit_t index) const;
+        bool Write(const systembit_t index, char value) noexcept;
+
+        systembit_t Allocate(const systembit_t size);
+        bool Deallocate(const systembit_t address, const systembit_t size);
 
     private:
         char* allocationMap = nullptr;
