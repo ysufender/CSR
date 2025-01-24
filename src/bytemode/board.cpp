@@ -4,7 +4,7 @@
 #include "bytemode/board.hpp"
 #include "CSRConfig.hpp"
 #include "bytemode/assembly.hpp"
-#include "extensions/serialization.hpp"
+#include "extensions/converters.hpp"
 #include "system.hpp"
 
 //

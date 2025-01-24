@@ -1,7 +1,7 @@
 #include "bytemode/cpu.hpp"
 #include "bytemode/assembly.hpp"
 #include "CSRConfig.hpp"
-#include "extensions/serialization.hpp"
+#include "extensions/converters.hpp"
 #include "system.hpp"
 #include <string>
 

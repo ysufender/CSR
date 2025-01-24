@@ -5,12 +5,13 @@
 
 #include "CSRConfig.hpp"
 #include "bytemode/assembly.hpp"
+#include "message.hpp"
 #include "system.hpp"
 
 using AssemblyCollection = std::unordered_map<std::string, Assembly>;
 using AssemblyIDCollection = std::unordered_map<systembit_t, Assembly*>;
 
-class VM
+class VM : IMessageObject
 {
     public:
         struct VMSettings
@@ -28,7 +29,12 @@ class VM
             return singletonVM; 
         }
 
-        inline const AssemblyCollection& Assemblies() const noexcept { return this->assemblies; }
+        inline const AssemblyCollection& Assemblies() const noexcept 
+        { return this->assemblies; }
+
+        const System::ErrorCode DispatchMessages() noexcept override;
+        const System::ErrorCode ReceiveMessage(const Message&& message) noexcept override;
+        const System::ErrorCode SendMessage(const Message&& message) const noexcept override;
 
         const Assembly& GetAssembly(const std::string& name) const;
         const Assembly& GetAssembly(const std::string&& name) const;

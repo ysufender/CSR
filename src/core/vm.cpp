@@ -1,12 +1,80 @@
 #include <string>
 #include <limits>
 
-#include "CSRConfig.hpp"
 #include "extensions/syntaxextensions.hpp"
+#include "extensions/converters.hpp"
 #include "bytemode/assembly.hpp"
+#include "CSRConfig.hpp"
+#include "message.hpp"
 #include "system.hpp"
 #include "vm.hpp"
 
+//
+// IMessageObject Implementation
+//
+const System::ErrorCode VM::DispatchMessages() noexcept
+{
+    // 1- sender might request a redirect
+    // 2- sender might request a target shutdown 
+    // 2- sender might request a self shutdown 
+
+    while (!this->messagePool.empty())
+    {
+        const Message& message { this->messagePool.front() };
+        this->messagePool.pop();
+    }
+    
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode VM::ReceiveMessage(const Message&& message) noexcept
+{
+    // message.type must either be AtoA or AtoV
+    if (message.type != MessageType::AtoA && message.type != MessageType::AtoV)
+        return System::ErrorCode::Bad;
+
+    // data must be either 
+    //      [targetId(4bytes), senderId(4bytes), message...] 
+    //      or 
+    //      [senderId(4bytes), message...]
+    // check the first 4bytes to verify that sender/target exists.
+    systembit_t id { IntegerFromBytes<systembit_t>(message.data) };
+    if (!this->asmIds.contains(id))
+        return System::ErrorCode::Bad;
+
+    if (message.type == MessageType::AtoA)
+    {
+        // additionally check the second 4bytes to verify that sender exists.
+        systembit_t id { IntegerFromBytes<systembit_t>(message.data+4) };
+        if (!this->asmIds.contains(id))
+            return System::ErrorCode::Bad;
+    }
+
+    this->messagePool.push(message);
+
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode VM::SendMessage(const Message&& message) const noexcept
+{
+    // message.type must be VtoA
+    if (message.type != MessageType::VtoA)
+        return System::ErrorCode::Bad;
+
+    // data must be [targetId(4bytes), data...]
+    // check the first 4bytes to verify that target exists
+    systembit_t id { IntegerFromBytes<systembit_t>(message.data) };
+    if (!this->asmIds.contains(id))
+        return System::ErrorCode::Bad;
+
+    //this->asmIds.at(id).ReceiveMessage(rval(message));
+
+    return System::ErrorCode::Ok;
+}
+
+//
+// VM Implementation
+//
 const Assembly& VM::GetAssembly(const std::string& name) const
 {
     if (!this->assemblies.contains(name))
@@ -31,10 +99,8 @@ const Assembly& VM::GetAssembly(systembit_t id) const
 systembit_t VM::GenerateNewAssemblyID() const
 {
     systembit_t id { static_cast<systembit_t>(this->assemblies.size()) };
-
     while (this->asmIds.contains(id))
         id++;
-
     return id;
 }
 
@@ -57,10 +123,14 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
 {
     System::ErrorCode code = System::ErrorCode::Ok;
 
-    for (auto& [name, assembly] : this->assemblies)
+    while (true)
     {
-        System::ErrorCode assemblyCode { assembly.Run() };
-        code = assemblyCode == System::ErrorCode::Bad ? assemblyCode : code;
+        // Dispatch Messages
+        code = (code == System::ErrorCode::Bad ? code : this->DispatchMessages());
+
+        // Run the assemblies
+        for (auto& [name, assembly] : this->assemblies)
+            code = (code == System::ErrorCode::Bad ? code : assembly.Run());
     }
 
     return code;

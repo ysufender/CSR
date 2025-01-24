@@ -6,7 +6,7 @@
 
 #include "bytemode/assembly.hpp"
 #include "CSRConfig.hpp"
-#include "extensions/serialization.hpp"
+#include "extensions/converters.hpp"
 #include "extensions/streamextensions.hpp"
 #include "extensions/syntaxextensions.hpp"
 #include "system.hpp"
