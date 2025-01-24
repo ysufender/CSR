@@ -6,6 +6,7 @@
 #include <string>
 
 #include "CSRConfig.hpp"
+#include "message.hpp"
 #include "system.hpp"
 #include "bytemode/board.hpp"
 
@@ -31,7 +32,7 @@ class ROM
         systembit_t size = 0;
 };
 
-class Assembly 
+class Assembly : IMessageObject
 {
     public:
         enum class AssemblyType
@@ -52,10 +53,20 @@ class Assembly
         Assembly() = delete;
         Assembly(AssemblySettings&& settings);
 
+        inline const AssemblySettings& Settings() const noexcept 
+        { return this->settings; }
+
+        inline const ROM& Rom() const noexcept 
+        { return this->rom; }
+
+        inline const BoardCollection& Boards() const noexcept 
+        { return this->boards; }
+
+        const System::ErrorCode DispatchMessages() noexcept override;
+        const System::ErrorCode ReceiveMessage(const Message message) noexcept override;
+        const System::ErrorCode SendMessage(const Message message) const noexcept override;
+
         const System::ErrorCode Load() noexcept;
-        inline const AssemblySettings& Settings() const noexcept { return this->settings; }
-        inline const ROM& Rom() const noexcept { return this->rom; }
-        inline const BoardCollection& Boards() const noexcept { return this->boards; }
         const System::ErrorCode Run();
         std::string Stringify() const noexcept;
 

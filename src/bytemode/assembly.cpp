@@ -1,5 +1,4 @@
 #include <cassert>
-#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -9,8 +8,112 @@
 #include "extensions/converters.hpp"
 #include "extensions/streamextensions.hpp"
 #include "extensions/syntaxextensions.hpp"
+#include "message.hpp"
 #include "system.hpp"
 #include "vm.hpp"
+
+//
+// IMessageObject Implementation
+//
+const System::ErrorCode Assembly::DispatchMessages() noexcept
+{
+    // TODO
+
+    LOGE(System::LogLevel::Medium, "Assembly::DispatchMessages has not been implemented yet");
+    while (!this->messagePool.empty())
+    {
+        const Message& message { this->messagePool.front() };
+        this->messagePool.pop();
+    }
+    
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode Assembly::ReceiveMessage(const Message message) noexcept
+{
+    // message.type must be BtoB, BtoA or VtoA
+    if (
+        message.type != MessageType::BtoB &&
+        message.type != MessageType::BtoA &&
+        message.type != MessageType::VtoA
+    )
+        return System::ErrorCode::Bad;
+
+    // data must be
+    //      [targetId(4bytes), senderID(4bytes), message...]
+    //      or
+    //      [senderId(4byte), message...]
+    //      or
+    //      [targetId(4bytes), message...]
+    // check the first 4bytes to verify the sender/target
+
+    if (!this->boards.contains(IntegerFromBytes<systembit_t>(message.data)))
+        return System::ErrorCode::Bad;
+
+    if (message.type == MessageType::BtoB)
+    {
+        // additionally check the second 4bytes for the sender
+        if (!this->boards.contains(IntegerFromBytes<systembit_t>(message.data+4)))
+            return System::ErrorCode::Bad;
+    }
+
+    this->messagePool.push(message);
+
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode Assembly::SendMessage(const Message message) const noexcept
+{
+    // message.type must be AtoA, AtoB, AtoV
+    if (
+        message.type != MessageType::AtoA &&
+        message.type != MessageType::AtoB &&
+        message.type != MessageType::AtoV 
+    )
+        return System::ErrorCode::Bad;
+    
+    // data must be
+    //      [targetId(4bytes), senderID(4bytes), message...]
+    //      or
+    //      [targetId(4byte), message...]
+    //      or
+    //      [senderId(4bytes), message...]
+
+    switch (message.type)
+    {
+        case MessageType::AtoA:
+        {
+            if (IntegerFromBytes<systembit_t>(message.data+4) != this->settings.id)
+                return System::ErrorCode::Bad;
+
+            VM::GetVM().ReceiveMessage(message);
+        } break;
+        
+        case MessageType::AtoB:
+        {
+            systembit_t id { IntegerFromBytes<systembit_t>(message.data) };
+            if (!this->boards.contains(id))
+                return System::ErrorCode::Bad;
+
+            // TODO
+            this->boards.at(id).ReceiveMessage(message);
+        } break;
+
+        case MessageType::AtoV:
+        {
+            if (IntegerFromBytes<systembit_t>(message.data) != this->settings.id)
+                return System::ErrorCode::Bad;
+
+            VM::GetVM().ReceiveMessage(message);
+        } break;
+        
+        default:
+            return System::ErrorCode::Bad;
+    }
+
+    return System::ErrorCode::Ok;
+}
+
 
 //
 // Assembly Implementation

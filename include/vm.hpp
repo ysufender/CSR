@@ -33,8 +33,8 @@ class VM : IMessageObject
         { return this->assemblies; }
 
         const System::ErrorCode DispatchMessages() noexcept override;
-        const System::ErrorCode ReceiveMessage(const Message&& message) noexcept override;
-        const System::ErrorCode SendMessage(const Message&& message) const noexcept override;
+        const System::ErrorCode ReceiveMessage(const Message message) noexcept override;
+        const System::ErrorCode SendMessage(const Message message) const noexcept override;
 
         const Assembly& GetAssembly(const std::string& name) const;
         const Assembly& GetAssembly(const std::string&& name) const;

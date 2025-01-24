@@ -14,10 +14,13 @@
 //
 const System::ErrorCode VM::DispatchMessages() noexcept
 {
+    // TODO
     // 1- sender might request a redirect
     // 2- sender might request a target shutdown 
     // 2- sender might request a self shutdown 
+    // TODO
 
+    LOGE(System::LogLevel::Medium, "VM::DispatchMessages has not been implemented yet");
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
@@ -27,26 +30,24 @@ const System::ErrorCode VM::DispatchMessages() noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode VM::ReceiveMessage(const Message&& message) noexcept
+const System::ErrorCode VM::ReceiveMessage(const Message message) noexcept
 {
     // message.type must either be AtoA or AtoV
     if (message.type != MessageType::AtoA && message.type != MessageType::AtoV)
         return System::ErrorCode::Bad;
 
-    // data must be either 
-    //      [targetId(4bytes), senderId(4bytes), message...] 
-    //      or 
+    // data must be either
+    //      [targetId(4bytes), senderID(4bytes), message...]
+    //      or
     //      [senderId(4bytes), message...]
     // check the first 4bytes to verify that sender/target exists.
-    systembit_t id { IntegerFromBytes<systembit_t>(message.data) };
-    if (!this->asmIds.contains(id))
+    if (!this->asmIds.contains(IntegerFromBytes<systembit_t>(message.data)))
         return System::ErrorCode::Bad;
 
     if (message.type == MessageType::AtoA)
     {
         // additionally check the second 4bytes to verify that sender exists.
-        systembit_t id { IntegerFromBytes<systembit_t>(message.data+4) };
-        if (!this->asmIds.contains(id))
+        if (!this->asmIds.contains(IntegerFromBytes<systembit_t>(message.data+4)))
             return System::ErrorCode::Bad;
     }
 
@@ -55,19 +56,19 @@ const System::ErrorCode VM::ReceiveMessage(const Message&& message) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode VM::SendMessage(const Message&& message) const noexcept
+const System::ErrorCode VM::SendMessage(const Message message) const noexcept
 {
     // message.type must be VtoA
     if (message.type != MessageType::VtoA)
         return System::ErrorCode::Bad;
 
-    // data must be [targetId(4bytes), data...]
+    // data must be [targetId(4bytes), message...]
     // check the first 4bytes to verify that target exists
     systembit_t id { IntegerFromBytes<systembit_t>(message.data) };
     if (!this->asmIds.contains(id))
         return System::ErrorCode::Bad;
 
-    //this->asmIds.at(id).ReceiveMessage(rval(message));
+    this->asmIds.at(id)->ReceiveMessage(message);
 
     return System::ErrorCode::Ok;
 }

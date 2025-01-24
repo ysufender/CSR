@@ -31,7 +31,6 @@ struct System
 
     enum class LogLevel
     {
-        Normal,
         Low,
         Medium,
         High

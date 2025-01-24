@@ -34,8 +34,6 @@ void System::LogError(std::string_view message, LogLevel level, std::string_view
     switch (level)
     {
         case System::LogLevel::Low:
-            std::cout << "ERROR ";
-        case System::LogLevel::Normal:
             break;
         case System::LogLevel::Medium:
             std::cout << "IMPORTANT ERROR ";
