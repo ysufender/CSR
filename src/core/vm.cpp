@@ -56,7 +56,7 @@ const System::ErrorCode VM::ReceiveMessage(const Message message) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode VM::SendMessage(const Message message) const noexcept
+const System::ErrorCode VM::SendMessage(const Message message) noexcept
 {
     // message.type must be VtoA
     if (message.type != MessageType::VtoA)
@@ -107,16 +107,16 @@ systembit_t VM::GenerateNewAssemblyID() const
 
 const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
 {
-    if(this->assemblies.contains(settings.name))
+    if (this->assemblies.contains(settings.name))
         return System::ErrorCode::Bad;
 
-    if(this->assemblies.size() >= std::numeric_limits<systembit_t>::max())
+    if (this->assemblies.size() >= std::numeric_limits<systembit_t>::max())
         return System::ErrorCode::Bad;
 
     settings.id = this->GenerateNewAssemblyID();
     this->assemblies.emplace(settings.name, rval(settings));
     this->asmIds[settings.id] = &this->assemblies.at(settings.name);
-    // Create an asynch system for loading assemblies
+    // Create an async system for loading assemblies
     return this->asmIds.at(settings.id)->Load();
 }
 

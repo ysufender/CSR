@@ -1,7 +1,11 @@
 #include <cassert>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
+#include <limits>
 #include <string>
+#include <tuple>
+#include <utility>
 
 #include "bytemode/assembly.hpp"
 #include "CSRConfig.hpp"
@@ -32,13 +36,6 @@ const System::ErrorCode Assembly::DispatchMessages() noexcept
 const System::ErrorCode Assembly::ReceiveMessage(const Message message) noexcept
 {
     // message.type must be BtoB, BtoA or VtoA
-    if (
-        message.type != MessageType::BtoB &&
-        message.type != MessageType::BtoA &&
-        message.type != MessageType::VtoA
-    )
-        return System::ErrorCode::Bad;
-
     // data must be
     //      [targetId(4bytes), senderID(4bytes), message...]
     //      or
@@ -47,31 +44,46 @@ const System::ErrorCode Assembly::ReceiveMessage(const Message message) noexcept
     //      [targetId(4bytes), message...]
     // check the first 4bytes to verify the sender/target
 
-    if (!this->boards.contains(IntegerFromBytes<systembit_t>(message.data)))
-        return System::ErrorCode::Bad;
-
-    if (message.type == MessageType::BtoB)
+    switch (message.type)
     {
-        // additionally check the second 4bytes for the sender
-        if (!this->boards.contains(IntegerFromBytes<systembit_t>(message.data+4)))
+        case MessageType::BtoB:
+        // [targetId(4bytes), senderID(4bytes), message...]
+        {
+            systembit_t target { IntegerFromBytes<systembit_t>(message.data) };
+            systembit_t sender { IntegerFromBytes<systembit_t>(message.data+4) };
+
+            if (!this->boards.contains(target) || !this->boards.contains(sender))
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        case MessageType::BtoA:
+        // [senderId(4byte), message...]
+        {
+            if (!this->boards.contains(IntegerFromBytes<systembit_t>(message.data)))
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        case MessageType::VtoA:
+        // [targetId(4bytes), message...]
+        {
+            if (IntegerFromBytes<systembit_t>(message.data) != this->settings.id)
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        default:
             return System::ErrorCode::Bad;
     }
 
     this->messagePool.push(message);
-
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Assembly::SendMessage(const Message message) const noexcept
+const System::ErrorCode Assembly::SendMessage(const Message message) noexcept
 {
     // message.type must be AtoA, AtoB, AtoV
-    if (
-        message.type != MessageType::AtoA &&
-        message.type != MessageType::AtoB &&
-        message.type != MessageType::AtoV 
-    )
-        return System::ErrorCode::Bad;
-    
     // data must be
     //      [targetId(4bytes), senderID(4bytes), message...]
     //      or
@@ -182,18 +194,60 @@ std::string Assembly::Stringify() const noexcept
     return rval(ss.str());
 }
 
-const System::ErrorCode Assembly::Run()
+systembit_t Assembly::GenerateNewBoardID() const
+{
+    systembit_t id { static_cast<systembit_t>(this->boards.size()) };
+    while (this->boards.contains(id))
+        id++;
+    return id;
+}
+
+systembit_t Assembly::AddBoard()
+{
+    if (this->boards.size() >= std::numeric_limits<systembit_t>::max())
+        LOGE(System::LogLevel::High, "Implement Assembly::AddBoard Error");
+    
+    systembit_t id { this->GenerateNewBoardID() };
+    this->boards.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(id),
+        std::forward_as_tuple(*this, id)
+    );
+
+    return id;
+}
+
+const System::ErrorCode Assembly::Run() noexcept
 {
     // initialize the initial board.
     try_catch(
         if (this->boards.size() == 0)
-            this->boards.emplace(0, *this),
-        std::cerr << this->Stringify() << " ROM access error while initializing Board \n";
+            this->boards.emplace(
+                std::piecewise_construct, 
+                std::forward_as_tuple(0), 
+                std::forward_as_tuple(*this, 0)
+            ),
+        LOGE(System::LogLevel::Medium, this->Stringify(), " ROM access error while initializing Board.");
         return System::ErrorCode::Bad,
 
         std::cerr << this->Stringify() << '\n';
         return System::ErrorCode::Bad
     );
+
+    System::ErrorCode code { this->DispatchMessages() };
+
+    if (code == System::ErrorCode::Bad)
+    {
+        this->SendMessage({
+            .type = MessageType::AtoV,
+            .data = "Failed to dispatch messages",
+        });
+
+        return System::ErrorCode::Bad;
+    }
+
+    for (auto& [id, board] : this->boards)
+        break;
 
     return System::ErrorCode::Ok;
 }

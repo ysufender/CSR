@@ -40,7 +40,7 @@ void System::LogError(std::string_view message, LogLevel level, std::string_view
             break;
         case System::LogLevel::High:
             std::cout  << "ALERT " << file.substr(idx, file.size() - idx) << ':' << line << '\n';
-            throw CSR_ERR(message.data());
+            throw CSRException{message.data(), file.data(), line};
             break;
     }
 

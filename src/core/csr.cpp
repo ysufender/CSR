@@ -45,7 +45,7 @@ int csrmain(int argc, char** args)
                     switch (err) 
                     {
                         case System::ErrorCode::Bad:
-                            LOGE(System::LogLevel::Normal, "Failed to register '", file.filename().generic_string(), "' into the VM.");
+                            LOGE(System::LogLevel::Medium, "Failed to register '", file.filename().generic_string(), "' into the VM.");
                         case System::ErrorCode::Ok:
                         default:
                             break;

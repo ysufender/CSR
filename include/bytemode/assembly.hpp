@@ -64,10 +64,13 @@ class Assembly : IMessageObject
 
         const System::ErrorCode DispatchMessages() noexcept override;
         const System::ErrorCode ReceiveMessage(const Message message) noexcept override;
-        const System::ErrorCode SendMessage(const Message message) const noexcept override;
+        const System::ErrorCode SendMessage(const Message message) noexcept override;
 
         const System::ErrorCode Load() noexcept;
-        const System::ErrorCode Run();
+        const System::ErrorCode Run() noexcept;
+        systembit_t AddBoard();
+
+        systembit_t GenerateNewBoardID() const;
         std::string Stringify() const noexcept;
 
     private:

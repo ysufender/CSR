@@ -64,7 +64,7 @@ class IMessageObject
     public: 
         virtual const System::ErrorCode DispatchMessages() noexcept = 0;
         virtual const System::ErrorCode ReceiveMessage(const Message message) noexcept = 0;
-        virtual const System::ErrorCode SendMessage(const Message message) const noexcept = 0;
+        virtual const System::ErrorCode SendMessage(const Message message) noexcept = 0;
 
     protected:
         MessagePool messagePool { };

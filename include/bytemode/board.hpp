@@ -5,6 +5,7 @@
 #include "CSRConfig.hpp"
 #include "bytemode/process.hpp"
 #include "bytemode/cpu.hpp"
+#include "message.hpp"
 #include "system.hpp"
 
 using ProcessCollection = std::unordered_map<uchar_t, Process>;
@@ -13,13 +14,16 @@ class Assembly;
 
 class RAM
 {
-    friend class Board;
-
     public:
         RAM() = default;
-        RAM(RAM&) = delete;
-        void operator=(RAM const&) = delete;
-        void operator=(RAM const&&) = delete;
+
+        RAM(
+            systembit_t stackSize,
+            systembit_t heapSize,
+            char* allocationMap,
+            char* data
+        ) : stackSize(stackSize), heapSize(heapSize), allocationMap(allocationMap), data(data)
+        { }
 
         char Read(const systembit_t address) const;
         System::ErrorCode Write(const systembit_t address, char value) noexcept;
@@ -37,18 +41,26 @@ class RAM
         systembit_t heapSize = 0;
 };
 
-class Board
+class Board : IMessageObject
 {
     public:
         Board() = delete;
-        Board(const Assembly& assembly);
+        Board(Board&) = delete;
+        Board(Board&&) = delete;
+        Board(class Assembly& assembly, systembit_t id);
 
         inline class RAM& RAM() { return this->ram; }
         inline const class Assembly& Assembly() { return this->parent; }
 
+        const System::ErrorCode DispatchMessages() noexcept; 
+        const System::ErrorCode ReceiveMessage(const Message message) noexcept; 
+        const System::ErrorCode SendMessage(const Message message) noexcept; 
+
+        const systembit_t id;
+
     private:
         ProcessCollection processes;
-        const class Assembly& parent;
+        class Assembly& parent;
         class RAM ram;
         CPU cpu; 
 };

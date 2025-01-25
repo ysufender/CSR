@@ -5,15 +5,16 @@
 #include "CSRConfig.hpp"
 #include "bytemode/assembly.hpp"
 #include "extensions/converters.hpp"
+#include "message.hpp"
 #include "system.hpp"
 
 //
 // Board Implementation
 //
-Board::Board(const class Assembly& assembly) : parent(assembly), cpu(*this)
+Board::Board(class Assembly& assembly, systembit_t id) 
+    : parent(assembly), cpu(*this), id(id)
 {
     // CPU will be initialized beforehand, so it checks the ROM.
-
 
     // second 32 bits of ROM is stack size
     systembit_t stackSize { IntegerFromBytes<systembit_t>(assembly.Rom()&4) }; 
@@ -24,17 +25,135 @@ Board::Board(const class Assembly& assembly) : parent(assembly), cpu(*this)
     LOGD("Stack Size: ", std::to_string(stackSize));
     LOGD("Heap Size: ", std::to_string(heapSize));
 
-    this->ram.stackSize = stackSize;
-    this->ram.heapSize = heapSize;
-
-    this->ram.data = new char[stackSize + heapSize];
+    char* data = new char[stackSize + heapSize];
 
     // allocation map will hold 1 bit for each cell. 
     // so each byte refers to 8 cells. heap size must
     // be multiple of 8
-    this->ram.allocationMap= new char[heapSize/8];
+    char* allocationMap= new char[heapSize/8];
+
+    // Create RAM
+    this->ram = {
+        stackSize,
+        heapSize,
+        allocationMap,
+        data
+    };
 
     // CPU is already created. 
+
+    LOGD("Board with ID '", std::to_string(this->id), "' has been created.");
+}
+
+const System::ErrorCode Board::DispatchMessages() noexcept
+{
+    // TODO
+
+    LOGE(System::LogLevel::Medium, "Board::DispatchMessages has not been implemented yet");
+    while (!this->messagePool.empty())
+    {
+        const Message& message { this->messagePool.front() };
+        this->messagePool.pop();
+    }
+    
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode Board::ReceiveMessage(const Message message) noexcept
+{
+    // message.type must be PtoP, PtoB, AtoB
+    // message.data must be
+    //      [targetId(1byte), senderID(1byte), message...]
+    //      or
+    //      [senderID(1byte), message...]
+    //      or
+    //      [targetId(4byte), message...]
+
+    switch (message.type)
+    {
+        case MessageType::PtoP:
+        // [targetId(1byte), senderID(1byte), message...]
+        {
+            systembit_t target { IntegerFromBytes<systembit_t>(message.data) };
+            systembit_t sender { IntegerFromBytes<systembit_t>(message.data+4) };
+
+            if (!this->processes.contains(target) || !this->processes.contains(sender))
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        case MessageType::PtoB:
+        // [senderID(1byte), message...]
+        {
+            if (!this->processes.contains(IntegerFromBytes<systembit_t>(message.data)))  
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        case MessageType::AtoB:
+        // [targetId(4byte), message...]
+        {
+            if (!this->processes.contains(IntegerFromBytes<systembit_t>(message.data)))
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        default:
+            return System::ErrorCode::Bad;
+    }
+
+    this->messagePool.push(message);
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode Board::SendMessage(const Message message) noexcept
+{
+    // message.type must be BtoP, BtoB, BtoA
+    // message.data must be
+    //      [targetId(1byte), message...]
+    //      or
+    //      [targetId(4bytes), senderID(4bytes), message...]
+    //      or
+    //      [senderId(4byte), message...]
+
+    switch (message.type)
+    {
+        case MessageType::BtoP:
+        // [targetId(1byte), message...]
+        {
+            systembit_t id { IntegerFromBytes<uchar_t>(message.data) };
+            if (!this->processes.contains(id))  
+                return System::ErrorCode::Bad;
+
+            this->processes.at(id).ReceiveMessage(message);
+        }
+        break;
+
+        case MessageType::BtoB:
+        // [targetId(4bytes), senderID(4bytes), message...]
+        {
+            if (IntegerFromBytes<systembit_t>(message.data+4) != this->id)
+                return System::ErrorCode::Bad;
+
+            this->parent.ReceiveMessage(message);
+        }
+        break;
+
+        case MessageType::BtoA:
+        // [senderId(4byte), message...]
+        {
+            if (IntegerFromBytes<systembit_t>(message.data)) 
+                return System::ErrorCode::Bad;
+
+            this->parent.ReceiveMessage(message);
+        }
+        break;
+
+        default:
+            return System::ErrorCode::Bad;
+    }
+
+    return System::ErrorCode::Ok;
 }
 
 //
