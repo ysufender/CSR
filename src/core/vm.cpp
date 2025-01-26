@@ -1,5 +1,7 @@
+#include <exception>
 #include <string>
 #include <limits>
+#include <string_view>
 
 #include "extensions/syntaxextensions.hpp"
 #include "extensions/converters.hpp"
@@ -17,23 +19,33 @@ const System::ErrorCode VM::DispatchMessages() noexcept
     // TODO
     // 1- sender might request a redirect
     // 2- sender might request a target shutdown 
-    // 2- sender might request a self shutdown 
+    // 3- sender might request a self shutdown 
     // TODO
 
-    LOGE(System::LogLevel::Medium, "VM::DispatchMessages has not been implemented yet");
+    //LOGE(System::LogLevel::Medium, "VM::DispatchMessages has not been implemented yet");
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
+
+        if (message.type() == MessageType::AtoV && std::string_view{message.data()+4, message.data()+8} == "Shut")
+        {
+            LOGD("Received Shutdown signal from ", this->asmIds.at(*reinterpret_cast<systembit_t*>(message.data()))->Stringify());
+            this->RemoveAssembly(*reinterpret_cast<systembit_t*>(message.data()));
+        }
+    
         this->messagePool.pop();
     }
     
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode VM::ReceiveMessage(const Message message) noexcept
+const System::ErrorCode VM::ReceiveMessage(Message message) noexcept
 {
-    // message.type must either be AtoA or AtoV
-    if (message.type != MessageType::AtoA && message.type != MessageType::AtoV)
+    if (!this->settings.strictMessages)
+        return System::ErrorCode::Ok;
+
+    // message.type() must either be AtoA or AtoV
+    if (message.type() != MessageType::AtoA && message.type() != MessageType::AtoV)
         return System::ErrorCode::Bad;
 
     // data must be either
@@ -41,13 +53,13 @@ const System::ErrorCode VM::ReceiveMessage(const Message message) noexcept
     //      or
     //      [senderId(4bytes), message...]
     // check the first 4bytes to verify that sender/target exists.
-    if (!this->asmIds.contains(IntegerFromBytes<systembit_t>(message.data)))
+    if (!this->asmIds.contains(IntegerFromBytes<systembit_t>(message.data())))
         return System::ErrorCode::Bad;
 
-    if (message.type == MessageType::AtoA)
+    if (message.type() == MessageType::AtoA)
     {
         // additionally check the second 4bytes to verify that sender exists.
-        if (!this->asmIds.contains(IntegerFromBytes<systembit_t>(message.data+4)))
+        if (!this->asmIds.contains(IntegerFromBytes<systembit_t>(message.data()+4)))
             return System::ErrorCode::Bad;
     }
 
@@ -56,15 +68,18 @@ const System::ErrorCode VM::ReceiveMessage(const Message message) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode VM::SendMessage(const Message message) noexcept
+const System::ErrorCode VM::SendMessage(Message message) noexcept
 {
-    // message.type must be VtoA
-    if (message.type != MessageType::VtoA)
+    if (!this->settings.strictMessages)
+        return System::ErrorCode::Ok;
+
+    // message.type() must be VtoA
+    if (message.type() != MessageType::VtoA)
         return System::ErrorCode::Bad;
 
     // data must be [targetId(4bytes), message...]
     // check the first 4bytes to verify that target exists
-    systembit_t id { IntegerFromBytes<systembit_t>(message.data) };
+    systembit_t id { IntegerFromBytes<systembit_t>(message.data()) };
     if (!this->asmIds.contains(id))
         return System::ErrorCode::Bad;
 
@@ -120,19 +135,35 @@ const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) n
     return this->asmIds.at(settings.id)->Load();
 }
 
+const System::ErrorCode VM::RemoveAssembly(systembit_t id) noexcept
+{
+    if (!this->asmIds.contains(id))  
+        return System::ErrorCode::Bad;
+
+    this->assemblies.erase(this->asmIds.at(id)->Settings().name);
+    Assembly* assembly { this->asmIds.at(id) };
+
+    return System::ErrorCode::Ok;
+}
+
 const System::ErrorCode VM::Run(VMSettings&& settings)
 {
-    System::ErrorCode code = System::ErrorCode::Ok;
+    try_catch(
+        this->settings = settings;
+        System::ErrorCode code = System::ErrorCode::Ok;
 
-    while (true)
-    {
-        // Dispatch Messages
-        code = (code == System::ErrorCode::Bad ? code : this->DispatchMessages());
+        while (!this->assemblies.empty())
+        {
+            // Dispatch Messages
+            code = (code == System::ErrorCode::Bad ? code : this->DispatchMessages());
 
-        // Run the assemblies
-        for (auto& [name, assembly] : this->assemblies)
-            code = (code == System::ErrorCode::Bad ? code : assembly.Run());
-    }
+            // Run the assemblies
+            for (auto& [name, assembly] : this->assemblies)
+                code = (code == System::ErrorCode::Bad ? code : assembly.Run());
+        }
 
-    return code;
+        return code;,
+        return System::ErrorCode::Bad;,
+        return System::ErrorCode::Bad;
+    )
 }

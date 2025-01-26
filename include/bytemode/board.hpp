@@ -53,8 +53,10 @@ class Board : IMessageObject
         inline const class Assembly& Assembly() { return this->parent; }
 
         const System::ErrorCode DispatchMessages() noexcept; 
-        const System::ErrorCode ReceiveMessage(const Message message) noexcept; 
-        const System::ErrorCode SendMessage(const Message message) noexcept; 
+        const System::ErrorCode ReceiveMessage(Message message) noexcept; 
+        const System::ErrorCode SendMessage(Message message) noexcept; 
+
+        const System::ErrorCode AddProcess() noexcept;
 
         const systembit_t id;
 
@@ -63,4 +65,6 @@ class Board : IMessageObject
         class Assembly& parent;
         class RAM ram;
         CPU cpu; 
+
+        uchar_t GenerateNewProcessID() const;
 };

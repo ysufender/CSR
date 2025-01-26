@@ -1,7 +1,8 @@
+#include <bitset>
 #include <cassert>
 #include <filesystem>
+#include <cstring>
 #include <fstream>
-#include <initializer_list>
 #include <limits>
 #include <string>
 #include <tuple>
@@ -23,19 +24,37 @@ const System::ErrorCode Assembly::DispatchMessages() noexcept
 {
     // TODO
 
-    LOGE(System::LogLevel::Medium, "Assembly::DispatchMessages has not been implemented yet");
+    //LOGE(System::LogLevel::Medium, "Assembly::DispatchMessages has not been implemented yet");
+
+    // Send Shutdown Signal to VM
+    {
+        char* data { new char[8] };
+        char* id { BytesFromInteger<systembit_t, char>(this->settings.id) };
+        const char* shutm { "Shut" };
+        std::memcpy(data, id, sizeof(systembit_t));
+        std::memcpy(data+4, shutm, 4);
+        delete id;
+
+        System::ErrorCode code { this->SendMessage({
+            MessageType::AtoV,
+            data,
+        })};
+
+        if (code != System::ErrorCode::Ok)
+            LOGE(System::LogLevel::High, "Error, couldn't send shutdown signal to VM");
+    }
+
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
         this->messagePool.pop();
     }
-    
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Assembly::ReceiveMessage(const Message message) noexcept
+const System::ErrorCode Assembly::ReceiveMessage(Message message) noexcept
 {
-    // message.type must be BtoB, BtoA or VtoA
+    // message.type() must be BtoB, BtoA or VtoA
     // data must be
     //      [targetId(4bytes), senderID(4bytes), message...]
     //      or
@@ -44,13 +63,16 @@ const System::ErrorCode Assembly::ReceiveMessage(const Message message) noexcept
     //      [targetId(4bytes), message...]
     // check the first 4bytes to verify the sender/target
 
-    switch (message.type)
+    if (!VM::GetVM().GetSettings().strictMessages)
+        return System::ErrorCode::Ok;
+
+    switch (message.type())
     {
         case MessageType::BtoB:
         // [targetId(4bytes), senderID(4bytes), message...]
         {
-            systembit_t target { IntegerFromBytes<systembit_t>(message.data) };
-            systembit_t sender { IntegerFromBytes<systembit_t>(message.data+4) };
+            systembit_t target { IntegerFromBytes<systembit_t>(message.data()) };
+            systembit_t sender { IntegerFromBytes<systembit_t>(message.data()+4) };
 
             if (!this->boards.contains(target) || !this->boards.contains(sender))
                 return System::ErrorCode::Bad;
@@ -60,7 +82,7 @@ const System::ErrorCode Assembly::ReceiveMessage(const Message message) noexcept
         case MessageType::BtoA:
         // [senderId(4byte), message...]
         {
-            if (!this->boards.contains(IntegerFromBytes<systembit_t>(message.data)))
+            if (!this->boards.contains(IntegerFromBytes<systembit_t>(message.data())))
                 return System::ErrorCode::Bad;
         }
         break;
@@ -68,7 +90,7 @@ const System::ErrorCode Assembly::ReceiveMessage(const Message message) noexcept
         case MessageType::VtoA:
         // [targetId(4bytes), message...]
         {
-            if (IntegerFromBytes<systembit_t>(message.data) != this->settings.id)
+            if (IntegerFromBytes<systembit_t>(message.data()) != this->settings.id)
                 return System::ErrorCode::Bad;
         }
         break;
@@ -81,9 +103,9 @@ const System::ErrorCode Assembly::ReceiveMessage(const Message message) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Assembly::SendMessage(const Message message) noexcept
+const System::ErrorCode Assembly::SendMessage(Message message) noexcept
 {
-    // message.type must be AtoA, AtoB, AtoV
+    // message.type() must be AtoA, AtoB, AtoV
     // data must be
     //      [targetId(4bytes), senderID(4bytes), message...]
     //      or
@@ -91,11 +113,14 @@ const System::ErrorCode Assembly::SendMessage(const Message message) noexcept
     //      or
     //      [senderId(4bytes), message...]
 
-    switch (message.type)
+    if (!VM::GetVM().GetSettings().strictMessages)
+        return System::ErrorCode::Ok;
+
+    switch (message.type())
     {
         case MessageType::AtoA:
         {
-            if (IntegerFromBytes<systembit_t>(message.data+4) != this->settings.id)
+            if (IntegerFromBytes<systembit_t>(message.data()+4) != this->settings.id)
                 return System::ErrorCode::Bad;
 
             VM::GetVM().ReceiveMessage(message);
@@ -103,7 +128,7 @@ const System::ErrorCode Assembly::SendMessage(const Message message) noexcept
         
         case MessageType::AtoB:
         {
-            systembit_t id { IntegerFromBytes<systembit_t>(message.data) };
+            systembit_t id { IntegerFromBytes<systembit_t>(message.data()) };
             if (!this->boards.contains(id))
                 return System::ErrorCode::Bad;
 
@@ -113,7 +138,7 @@ const System::ErrorCode Assembly::SendMessage(const Message message) noexcept
 
         case MessageType::AtoV:
         {
-            if (IntegerFromBytes<systembit_t>(message.data) != this->settings.id)
+            if (*reinterpret_cast<systembit_t*>(message.data()) != this->settings.id)
                 return System::ErrorCode::Bad;
 
             VM::GetVM().ReceiveMessage(message);
@@ -122,6 +147,7 @@ const System::ErrorCode Assembly::SendMessage(const Message message) noexcept
         default:
             return System::ErrorCode::Bad;
     }
+
 
     return System::ErrorCode::Ok;
 }
@@ -202,10 +228,10 @@ systembit_t Assembly::GenerateNewBoardID() const
     return id;
 }
 
-systembit_t Assembly::AddBoard()
+const System::ErrorCode Assembly::AddBoard() noexcept
 {
     if (this->boards.size() >= std::numeric_limits<systembit_t>::max())
-        LOGE(System::LogLevel::High, "Implement Assembly::AddBoard Error");
+        return System::ErrorCode::Bad;
     
     systembit_t id { this->GenerateNewBoardID() };
     this->boards.emplace(
@@ -214,7 +240,7 @@ systembit_t Assembly::AddBoard()
         std::forward_as_tuple(*this, id)
     );
 
-    return id;
+    return System::ErrorCode::Ok;
 }
 
 const System::ErrorCode Assembly::Run() noexcept
@@ -226,12 +252,12 @@ const System::ErrorCode Assembly::Run() noexcept
                 std::piecewise_construct, 
                 std::forward_as_tuple(0), 
                 std::forward_as_tuple(*this, 0)
-            ),
+            );,
         LOGE(System::LogLevel::Medium, this->Stringify(), " ROM access error while initializing Board.");
-        return System::ErrorCode::Bad,
+        return System::ErrorCode::Bad;,
 
         std::cerr << this->Stringify() << '\n';
-        return System::ErrorCode::Bad
+        return System::ErrorCode::Bad;
     );
 
     System::ErrorCode code { this->DispatchMessages() };
@@ -239,8 +265,8 @@ const System::ErrorCode Assembly::Run() noexcept
     if (code == System::ErrorCode::Bad)
     {
         this->SendMessage({
-            .type = MessageType::AtoV,
-            .data = "Failed to dispatch messages",
+            MessageType::AtoV,
+            new char[28] {"Failed to dispatch messages"},
         });
 
         return System::ErrorCode::Bad;

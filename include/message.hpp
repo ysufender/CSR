@@ -1,6 +1,6 @@
 #pragma once
 
-#include <queue>
+#include <vector>
 
 #include "system.hpp"
 
@@ -34,37 +34,50 @@ enum class MessageType : char
         // data is [targetId(4bytes), message...]
 };
 
-struct Message
+class Message
 {
-    const MessageType type;
-    const char* data;
+    public:
+        Message() = delete;
+        Message(Message& other);
+        Message(Message&& other);
+        Message(MessageType type, char* data);
+
+        ~Message();
+
+        inline const MessageType type() const { return _type; }
+        inline char* const data() const { return _data; }
+
+    private:
+        MessageType _type = MessageType::PtoP;
+        char* _data = nullptr;
+
 };
 
 class MessagePool
 {
     public:
         inline const Message& front() const 
-        { return this->_underlyingQueue.front(); }
+        { return this->_underlyingVec.at(this->_underlyingVec.size()-1); }
 
         inline void pop() noexcept
-        { this->_underlyingQueue.pop(); }
+        { this->_underlyingVec.pop_back(); }
 
         bool empty() const noexcept
-        { return this->_underlyingQueue.empty(); }
+        { return this->_underlyingVec.empty(); }
 
-        void push(const Message message) noexcept
-        { this->_underlyingQueue.push(message); }
+        void push(Message message) noexcept
+        { this->_underlyingVec.emplace_back(message); }
 
     private:
-        std::queue<Message> _underlyingQueue { };
+        std::vector<Message> _underlyingVec { };
 };
 
 class IMessageObject
 {
     public: 
         virtual const System::ErrorCode DispatchMessages() noexcept = 0;
-        virtual const System::ErrorCode ReceiveMessage(const Message message) noexcept = 0;
-        virtual const System::ErrorCode SendMessage(const Message message) noexcept = 0;
+        virtual const System::ErrorCode ReceiveMessage(Message message) noexcept = 0;
+        virtual const System::ErrorCode SendMessage(Message message) noexcept = 0;
 
     protected:
         MessagePool messagePool { };

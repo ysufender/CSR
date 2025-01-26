@@ -63,18 +63,19 @@ class Assembly : IMessageObject
         { return this->boards; }
 
         const System::ErrorCode DispatchMessages() noexcept override;
-        const System::ErrorCode ReceiveMessage(const Message message) noexcept override;
-        const System::ErrorCode SendMessage(const Message message) noexcept override;
+        const System::ErrorCode ReceiveMessage(Message message) noexcept override;
+        const System::ErrorCode SendMessage(Message message) noexcept override;
 
         const System::ErrorCode Load() noexcept;
         const System::ErrorCode Run() noexcept;
-        systembit_t AddBoard();
+        const System::ErrorCode AddBoard() noexcept;
 
-        systembit_t GenerateNewBoardID() const;
         std::string Stringify() const noexcept;
 
     private:
         ROM rom;
         AssemblySettings settings;
         BoardCollection boards;
+
+        systembit_t GenerateNewBoardID() const;
 };

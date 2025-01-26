@@ -16,6 +16,7 @@ class VM : IMessageObject
     public:
         struct VMSettings
         {
+            bool strictMessages;
         };
 
         VM(VM const&) = delete;
@@ -40,11 +41,18 @@ class VM : IMessageObject
         const Assembly& GetAssembly(const std::string&& name) const;
         const Assembly& GetAssembly(systembit_t id) const;
         const System::ErrorCode AddAssembly(Assembly::AssemblySettings&& settings) noexcept;
+        const System::ErrorCode RemoveAssembly(systembit_t id) noexcept;
+
+        inline const VMSettings& GetSettings() const noexcept
+        { return this->settings; }
+
         const System::ErrorCode Run(VMSettings&& settings);
 
     private:
         AssemblyCollection assemblies;
         AssemblyIDCollection asmIds;
+
+        VMSettings settings;
 
         systembit_t GenerateNewAssemblyID() const;
 

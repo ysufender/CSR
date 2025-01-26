@@ -10,13 +10,13 @@
 
 #define try_catch(expr, catchcsr, catchother) \
     try { \
-        expr; \
+        expr \
     } \
     catch (const CSRException& exc) { \
         std::cerr << exc.Stringify(); \
-        catchcsr; \
+        catchcsr \
     } \
     catch (const std::exception& exc) { \
         std::cerr << "An unexpected exception occured during process.\n\tProvided information: " << exc.what() << '\n'; \
-        catchother;  \
+        catchother  \
     }

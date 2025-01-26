@@ -15,7 +15,6 @@ CPU::CPU(Board& board) : board(board)
     systembit_t origin { IntegerFromBytes<systembit_t>(&board.Assembly().Rom()) };
 
     this->pc = origin;
-    LOGD("Origin at: ", std::to_string(origin));
 }
 
 const System::ErrorCode CPU::Cycle() noexcept

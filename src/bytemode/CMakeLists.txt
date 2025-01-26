@@ -1,5 +1,6 @@
 add_library(bytemode
     STATIC
+        process.cpp
         assembly.cpp        
         board.cpp
         cpu.cpp

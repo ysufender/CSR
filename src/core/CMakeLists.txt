@@ -3,6 +3,7 @@ add_library(core
         csr.cpp
         system.cpp
         vm.cpp
+        message.cpp
 )
 
 target_link_libraries(core

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bitset>
 #include <cmath>
 #include <type_traits>
 
@@ -9,8 +10,8 @@ template<std::integral T, typename U>
 T IntegerFromBytes(const U* bytes) noexcept
 {
     // bytes must be in big endian order
-
     std::make_unsigned_t<T> ures { 0 };
+
     for (char i = 0; i < sizeof(T); i++)
     {
         ures <<= sizeof(uchar_t);
@@ -24,11 +25,11 @@ template<std::integral T, typename U>
 char* BytesFromInteger(const T integer) noexcept
 {
     // bytes will be in big endian order
-
-    std::make_unsigned<T> uinteger { reinterpret_cast<std::make_unsigned<T>>(integer) };
-    char* bytes { new char[sizeof(uinteger)] };
+    std::make_unsigned_t<T> uinteger { reinterpret_cast<std::make_unsigned_t<T>>(integer) };
+    char* bytes { new char[sizeof(uinteger)] { 0 } };
 
     for (char i = 0; i < sizeof(T); i++)
         bytes[i] |= (uinteger >> (sizeof(T)-i-1));
+
     return bytes;
 }

@@ -1,5 +1,8 @@
 #include <cassert>
+#include <limits>
 #include <string>
+#include <tuple>
+#include <utility>
 
 #include "bytemode/board.hpp"
 #include "CSRConfig.hpp"
@@ -7,6 +10,128 @@
 #include "extensions/converters.hpp"
 #include "message.hpp"
 #include "system.hpp"
+#include "vm.hpp"
+
+//
+// IMessageObject Implementation
+//
+const System::ErrorCode Board::DispatchMessages() noexcept
+{
+    // TODO
+
+    LOGE(System::LogLevel::Medium, "Board::DispatchMessages has not been implemented yet");
+    while (!this->messagePool.empty())
+    {
+        const Message& message { this->messagePool.front() };
+        this->messagePool.pop();
+    }
+
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
+{
+    // message.type() must be PtoP, PtoB, AtoB
+    // message.data() must be
+    //      [targetId(1byte), senderID(1byte), message...]
+    //      or
+    //      [senderID(1byte), message...]
+    //      or
+    //      [targetId(4byte), message...]
+
+    if (!VM::GetVM().GetSettings().strictMessages)
+        return System::ErrorCode::Ok;
+
+    switch (message.type())
+    {
+        case MessageType::PtoP:
+        // [targetId(1byte), senderID(1byte), message...]
+        {
+            systembit_t target { IntegerFromBytes<systembit_t>(message.data()) };
+            systembit_t sender { IntegerFromBytes<systembit_t>(message.data()+4) };
+
+            if (!this->processes.contains(target) || !this->processes.contains(sender))
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        case MessageType::PtoB:
+        // [senderID(1byte), message...]
+        {
+            if (!this->processes.contains(IntegerFromBytes<systembit_t>(message.data())))  
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        case MessageType::AtoB:
+            // [targetId(4byte), message...]
+            {
+                if (!this->processes.contains(IntegerFromBytes<systembit_t>(message.data())))
+                    return System::ErrorCode::Bad;
+            }
+            break;
+
+        default:
+            return System::ErrorCode::Bad;
+    }
+
+    this->messagePool.push(message);
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode Board::SendMessage(Message message) noexcept
+{
+    // message.type() must be BtoP, BtoB, BtoA
+    // message.data() must be
+    //      [targetId(1byte), message...]
+    //      or
+    //      [targetId(4bytes), senderID(4bytes), message...]
+    //      or
+    //      [senderId(4byte), message...]
+
+    if (!VM::GetVM().GetSettings().strictMessages)
+        return System::ErrorCode::Ok;
+
+    switch (message.type())
+    {
+        case MessageType::BtoP:
+        // [targetId(1byte), message...]
+        {
+            systembit_t id { IntegerFromBytes<uchar_t>(message.data()) };
+            if (!this->processes.contains(id))  
+                return System::ErrorCode::Bad;
+
+            this->processes.at(id).ReceiveMessage(message);
+        }
+        break;
+
+        case MessageType::BtoB:
+        // [targetId(4bytes), senderID(4bytes), message...]
+        {
+            if (IntegerFromBytes<systembit_t>(message.data()+4) != this->id)
+                return System::ErrorCode::Bad;
+
+            this->parent.ReceiveMessage(message);
+        }
+        break;
+
+        case MessageType::BtoA:
+        // [senderId(4byte), message...]
+        {
+            if (IntegerFromBytes<systembit_t>(message.data())) 
+                return System::ErrorCode::Bad;
+
+            this->parent.ReceiveMessage(message);
+        }
+        break;
+
+        default:
+            return System::ErrorCode::Bad;
+    }
+
+    return System::ErrorCode::Ok;
+}
+
 
 //
 // Board Implementation
@@ -22,9 +147,6 @@ Board::Board(class Assembly& assembly, systembit_t id)
     // third 32 bits of ROM is heap size
     systembit_t heapSize { IntegerFromBytes<systembit_t>(assembly.Rom()&8)};
     
-    LOGD("Stack Size: ", std::to_string(stackSize));
-    LOGD("Heap Size: ", std::to_string(heapSize));
-
     char* data = new char[stackSize + heapSize];
 
     // allocation map will hold 1 bit for each cell. 
@@ -41,117 +163,28 @@ Board::Board(class Assembly& assembly, systembit_t id)
     };
 
     // CPU is already created. 
-
-    LOGD("Board with ID '", std::to_string(this->id), "' has been created.");
 }
 
-const System::ErrorCode Board::DispatchMessages() noexcept
-{
-    // TODO
 
-    LOGE(System::LogLevel::Medium, "Board::DispatchMessages has not been implemented yet");
-    while (!this->messagePool.empty())
-    {
-        const Message& message { this->messagePool.front() };
-        this->messagePool.pop();
-    }
-    
-    return System::ErrorCode::Ok;
+uchar_t Board::GenerateNewProcessID() const
+{
+    uchar_t id { static_cast<uchar_t>(this->processes.size()) };
+    while (this->processes.contains(id))
+        id++;
+    return id;
 }
 
-const System::ErrorCode Board::ReceiveMessage(const Message message) noexcept
+const System::ErrorCode Board::AddProcess() noexcept
 {
-    // message.type must be PtoP, PtoB, AtoB
-    // message.data must be
-    //      [targetId(1byte), senderID(1byte), message...]
-    //      or
-    //      [senderID(1byte), message...]
-    //      or
-    //      [targetId(4byte), message...]
+    if (this->processes.size() >= std::numeric_limits<uchar_t>::max())
+        return System::ErrorCode::Bad;
 
-    switch (message.type)
-    {
-        case MessageType::PtoP:
-        // [targetId(1byte), senderID(1byte), message...]
-        {
-            systembit_t target { IntegerFromBytes<systembit_t>(message.data) };
-            systembit_t sender { IntegerFromBytes<systembit_t>(message.data+4) };
-
-            if (!this->processes.contains(target) || !this->processes.contains(sender))
-                return System::ErrorCode::Bad;
-        }
-        break;
-
-        case MessageType::PtoB:
-        // [senderID(1byte), message...]
-        {
-            if (!this->processes.contains(IntegerFromBytes<systembit_t>(message.data)))  
-                return System::ErrorCode::Bad;
-        }
-        break;
-
-        case MessageType::AtoB:
-        // [targetId(4byte), message...]
-        {
-            if (!this->processes.contains(IntegerFromBytes<systembit_t>(message.data)))
-                return System::ErrorCode::Bad;
-        }
-        break;
-
-        default:
-            return System::ErrorCode::Bad;
-    }
-
-    this->messagePool.push(message);
-    return System::ErrorCode::Ok;
-}
-
-const System::ErrorCode Board::SendMessage(const Message message) noexcept
-{
-    // message.type must be BtoP, BtoB, BtoA
-    // message.data must be
-    //      [targetId(1byte), message...]
-    //      or
-    //      [targetId(4bytes), senderID(4bytes), message...]
-    //      or
-    //      [senderId(4byte), message...]
-
-    switch (message.type)
-    {
-        case MessageType::BtoP:
-        // [targetId(1byte), message...]
-        {
-            systembit_t id { IntegerFromBytes<uchar_t>(message.data) };
-            if (!this->processes.contains(id))  
-                return System::ErrorCode::Bad;
-
-            this->processes.at(id).ReceiveMessage(message);
-        }
-        break;
-
-        case MessageType::BtoB:
-        // [targetId(4bytes), senderID(4bytes), message...]
-        {
-            if (IntegerFromBytes<systembit_t>(message.data+4) != this->id)
-                return System::ErrorCode::Bad;
-
-            this->parent.ReceiveMessage(message);
-        }
-        break;
-
-        case MessageType::BtoA:
-        // [senderId(4byte), message...]
-        {
-            if (IntegerFromBytes<systembit_t>(message.data)) 
-                return System::ErrorCode::Bad;
-
-            this->parent.ReceiveMessage(message);
-        }
-        break;
-
-        default:
-            return System::ErrorCode::Bad;
-    }
+    uchar_t id { this->GenerateNewProcessID() };
+    this->processes.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(id),
+        std::forward_as_tuple(*this, id)
+    );
 
     return System::ErrorCode::Ok;
 }
