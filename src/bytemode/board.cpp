@@ -185,7 +185,7 @@ const System::ErrorCode Board::AddProcess() noexcept
 char RAM::Read(const systembit_t address) const
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0)
-        LOGE(System::LogLevel::High, "Attempt to read out of bounds memory '", std::to_string(address), "'");
+        CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
     
     return this->data[address];
 }
@@ -193,7 +193,7 @@ char RAM::Read(const systembit_t address) const
 const char* RAM::ReadSome(const systembit_t address, const systembit_t size) const
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
-        LOGE(System::LogLevel::High, "Attempt to read out of bounds memory '", std::to_string(address), "'");
+        CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
 
     return this->data+address;
 }
@@ -209,7 +209,7 @@ System::ErrorCode RAM::Write(const systembit_t address, char value) noexcept
 System::ErrorCode RAM::WriteSome(const systembit_t address, const systembit_t size, char* values) noexcept
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
-        LOGE(System::LogLevel::High, "Attempt to read out of bounds memory '", std::to_string(address), "'");
+        CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
 
     System::ErrorCode status = System::ErrorCode::Ok;
     for(systembit_t i = 0; i < size; i++)
@@ -239,7 +239,7 @@ systembit_t RAM::Allocate(const systembit_t size)
             break;
     }
     if (counter != 0)
-        LOGE(System::LogLevel::High, "Couldn't allocate memory on heap, board is out of memory.");
+        CRASH(System::ErrorCode::HeapOverflow, "Couldn't allocate memory on heap, board is out of memory.");
     for (systembit_t i = 0; i < size; i++)
     {
         systembit_t index { i/8 };
@@ -251,6 +251,9 @@ systembit_t RAM::Allocate(const systembit_t size)
 
 System::ErrorCode RAM::Deallocate(const systembit_t address, const systembit_t size) noexcept
 {
+    if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
+        CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
+
     for (systembit_t i = 0; i < size; i++)
     {
         systembit_t index { i/8 };

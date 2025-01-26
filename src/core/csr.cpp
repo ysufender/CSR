@@ -14,6 +14,8 @@
 
 int csrmain(int argc, char** args)
 {
+    System::ErrorCode errc;
+
     try
     {
         CLIParser::Flags flags { SetUpCLI(args, argc) };
@@ -32,7 +34,7 @@ int csrmain(int argc, char** args)
             std::vector<std::string> files { flags.GetFlag<CLIParser::FlagType::StringList>("exe") };
 
             if (files.size() == 0)
-                LOGE(System::LogLevel::High, "CSR must have at least one file to execute.");
+                CRASH(System::ErrorCode::NoSourceFile, "CSR must have at least one file to execute.");
 
             for (const std::filesystem::path& file : files)
             {
@@ -47,22 +49,26 @@ int csrmain(int argc, char** args)
                 switch (err) 
                 {
                     case System::ErrorCode::Bad:
-                        LOGE(System::LogLevel::Medium, "Failed to register '", file.filename().generic_string(), "' into the VM.");
-                    case System::ErrorCode::Ok:
+                        LOGE(System::LogLevel::Medium, "Can't register assembly '", file.filename().generic_string(), "', it already exists.");
+                        break;
+                    case System::ErrorCode::SourceFileNotFound:
+                        LOGE(System::LogLevel::Medium, "File at given path '", file.generic_string(), "' can't be found.");
+                        break;
+                    case System::ErrorCode::UnsupportedFileType:
                     default:
                         break;
                 }
             }
 
-            VM::GetVM().Run({
-                .strictMessages = flags.GetFlag<CLIParser::FlagType::Bool>("no-strict-messages"),
+            errc = VM::GetVM().Run({
+                .strictMessages = !flags.GetFlag<CLIParser::FlagType::Bool>("no-strict-messages"),
             });
         } 
     }
     catch (const CSRException& exc)
     {
         std::cerr << exc.Stringify();
-        return 1;
+        return static_cast<int>(exc.GetCode());
     }
     catch (const std::exception& exc)
     {
@@ -73,7 +79,8 @@ int csrmain(int argc, char** args)
         return 1;
     }
     std::cout << std::endl;
-    return 0;
+
+    return static_cast<int>(errc);
 }
 
 void PrintHeader() noexcept
@@ -107,7 +114,7 @@ CLIParser::Flags SetUpCLI(char **args, int argc)
     parser.Separator();
     parser.AddFlag<FlagType::Bool>("jit", "Mark this execution as JIT target.");
     parser.AddFlag<FlagType::Bool>("no-new", "Do not create a new instance of CSR, use an already running one.");
-    parser.AddFlag<FlagType::Bool>("no-strict-messages", "Strictly verifies messages in each checkpoint.", true);
+    parser.AddFlag<FlagType::Bool>("no-strict-messages", "Strictly verifies messages in each checkpoint.");
     parser.Separator();
     parser.AddFlag<FlagType::StringList>("exe", "Executable files to execute.");
 

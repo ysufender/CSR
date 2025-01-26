@@ -1,4 +1,3 @@
-#include <bitset>
 #include <cassert>
 #include <filesystem>
 #include <cstring>
@@ -43,7 +42,7 @@ const System::ErrorCode Assembly::DispatchMessages() noexcept
         })};
 
         if (code != System::ErrorCode::Ok)
-            LOGE(System::LogLevel::High, "Error, couldn't send shutdown signal to VM");
+            CRASH(System::ErrorCode::MessageSendError, "Error, couldn't send shutdown signal to VM");
     }
 
     while (!this->messagePool.empty())
@@ -166,7 +165,7 @@ Assembly::Assembly(Assembly::AssemblySettings&& settings)
 const System::ErrorCode Assembly::Load() noexcept
 {
     if (!std::filesystem::exists(this->settings.path))
-        return System::ErrorCode::Bad;
+        return System::ErrorCode::SourceFileNotFound;
 
     std::string extension { this->settings.path.extension().string() };
 
@@ -181,7 +180,7 @@ const System::ErrorCode Assembly::Load() noexcept
                 this->settings.path.generic_string(), 
                 ") you provided is a static library and can't be handled by the VM."
             );
-        return System::ErrorCode::Bad;
+        return System::ErrorCode::UnsupportedFileType;
     }
     else 
     {
@@ -190,7 +189,7 @@ const System::ErrorCode Assembly::Load() noexcept
             this->settings.path.generic_string(),
             ") you provided has an unrecognized extension and can't be handled by the VM"
         );
-        return System::ErrorCode::Bad;
+        return System::ErrorCode::UnsupportedFileType;
     }
 
     std::ifstream bytecode { System::OpenInFile(this->settings.path) };
@@ -294,7 +293,7 @@ char ROM::operator[](systembit_t index) const noexcept
 const char* ROM::operator&(systembit_t index) const noexcept
 {
     if (index >= size || index < 0)
-        LOGE(System::LogLevel::High, "Index '", std::to_string(index), "' of ROM is invalid.");
+        CRASH(System::ErrorCode::ROMAccessError, "Index '", std::to_string(index), "' of ROM is invalid.");
 
     return data+index;
 }
@@ -313,7 +312,7 @@ System::ErrorCode ROM::TryRead(systembit_t index, char& data, bool raise, std::f
     if (!(isOk == System::ErrorCode::Ok) && failAct)
         failAct();
     if (!(isOk == System::ErrorCode::Ok) && raise)
-        LOGE(System::LogLevel::High, "Cannot access index '", std::to_string(index), "' of ROM");
+        CRASH(System::ErrorCode::ROMAccessError, "Cannot access index '", std::to_string(index), "' of ROM");
     return isOk;
 }
 

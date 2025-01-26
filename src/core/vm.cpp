@@ -93,21 +93,21 @@ const System::ErrorCode VM::SendMessage(Message message) noexcept
 const Assembly& VM::GetAssembly(const std::string& name) const
 {
     if (!this->assemblies.contains(name))
-        LOGE(System::LogLevel::High, "Assembly with given name '", name, "' couldn't be found.");
+        CRASH(System::ErrorCode::InvalidAssemblySpecifier, "Assembly with given name '", name, "' couldn't be found.");
     return this->assemblies.at(name);
 }
 
 const Assembly& VM::GetAssembly(const std::string&& name) const
 {
     if (!this->assemblies.contains(name))
-        LOGE(System::LogLevel::High, "Assembly with given name '", name, "' couldn't be found.");
+        CRASH(System::ErrorCode::InvalidAssemblySpecifier, "Assembly with given name '", name, "' couldn't be found.");
     return this->assemblies.at(name);
 }
 
 const Assembly& VM::GetAssembly(systembit_t id) const
 {
     if (!this->asmIds.contains(id))
-        LOGE(System::LogLevel::High, "Assembly with given id'", std::to_string(id), "' couldn't be found.");
+        CRASH(System::ErrorCode::InvalidAssemblySpecifier, "Assembly with given id'", std::to_string(id), "' couldn't be found.");
     return *(this->asmIds.at(id));
 }
 
@@ -138,7 +138,7 @@ const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) n
         return code;
 
     this->RemoveAssembly(settings.id);
-    return System::ErrorCode::Bad;
+    return code;
 }
 
 const System::ErrorCode VM::RemoveAssembly(systembit_t id) noexcept
