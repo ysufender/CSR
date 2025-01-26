@@ -214,12 +214,19 @@ const System::ErrorCode Assembly::Load() noexcept
     return System::ErrorCode::Ok;
 }
 
-std::string Assembly::Stringify() const noexcept
+const std::string& Assembly::Stringify() const noexcept
 {
+    static std::string stringified { };
+
+    if (stringified.size() != 0)
+        return stringified;
+
     const AssemblySettings& set { this->settings };
     std::stringstream ss;
     ss << '[' << set.name << ':' << set.id << ']'; 
-    return rval(ss.str());
+
+    stringified = ss.str();
+    return stringified;
 }
 
 systembit_t Assembly::GenerateNewBoardID() const
@@ -250,30 +257,22 @@ const System::ErrorCode Assembly::Run() noexcept
     // initialize the initial board.
     try_catch(
         if (this->boards.size() == 0)
-            this->boards.emplace(
-                std::piecewise_construct, 
-                std::forward_as_tuple(0), 
-                std::forward_as_tuple(*this, 0)
-            );,
+        {
+            LOGD("Initializing initial board...");
+            this->AddBoard();
+        },
 
         LOGE(System::LogLevel::Medium, this->Stringify(), " ROM access error while initializing Board.");
         return System::ErrorCode::Bad;,
 
-        std::cerr << this->Stringify() << '\n';
+        std::cerr << "Unexpected error in " << this->Stringify() << '\n';
         return System::ErrorCode::Bad;
     );
 
     System::ErrorCode code { this->DispatchMessages() };
 
     if (code == System::ErrorCode::Bad)
-    {
-        this->SendMessage({
-            MessageType::AtoV,
-            new char[28] {"Failed to dispatch messages"},
-        });
-
         return System::ErrorCode::Bad;
-    }
 
     for (auto& [id, board] : this->boards)
         break;

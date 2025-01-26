@@ -72,7 +72,7 @@ class Assembly : IMessageObject
         const System::ErrorCode Run() noexcept;
         const System::ErrorCode AddBoard() noexcept;
 
-        std::string Stringify() const noexcept;
+        const std::string& Stringify() const noexcept;
 
     private:
         ROM rom;

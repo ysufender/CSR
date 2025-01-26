@@ -15,18 +15,14 @@ class Assembly;
 class RAM
 {
     public:
-        RAM() = default;
-        RAM(systembit_t stackSize, systembit_t heapSize);
-
-        RAM(
-            systembit_t stackSize,
-            systembit_t heapSize,
-            char* allocationMap,
-            char* data
-        ) : stackSize(stackSize), heapSize(heapSize), allocationMap(allocationMap), data(data)
+        RAM() : allocationMap(nullptr), data(nullptr), stackSize(0), heapSize(0)
         { }
 
+        RAM(systembit_t stackSize, systembit_t heapSize);
+
         ~RAM();
+
+        void operator=(RAM&& other);
 
         char Read(const systembit_t address) const;
         System::ErrorCode Write(const systembit_t address, char value) noexcept;
@@ -38,10 +34,10 @@ class RAM
         System::ErrorCode Deallocate(const systembit_t address, const systembit_t size) noexcept;
 
     private:
-        char* allocationMap = nullptr;
-        char* data = nullptr;
-        systembit_t stackSize = 0;
-        systembit_t heapSize = 0;
+        char* allocationMap;
+        char* data;
+        systembit_t stackSize;
+        systembit_t heapSize;
 };
 
 class Board : IMessageObject

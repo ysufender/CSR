@@ -41,7 +41,7 @@ if [ $memtest == true ]; then
     echo "                MEMTEST                  "
     echo "-----------------------------------------"
     echo
-    valgrind -s --leak-check=yes "$prog" "$@"  
+    valgrind --leak-check=yes "$prog" "$@"  
 else
     echo "-----------------------------------------"
     echo

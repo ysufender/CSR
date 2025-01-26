@@ -156,7 +156,6 @@ Board::Board(class Assembly& assembly, systembit_t id)
     // CPU is already created. 
 }
 
-
 uchar_t Board::GenerateNewProcessID() const
 {
     uchar_t id { static_cast<uchar_t>(this->processes.size()) };
@@ -283,10 +282,23 @@ RAM::RAM(systembit_t stackSize, systembit_t heapSize)
     this->allocationMap = new char[heapSize/8];
 }
 
+void RAM::operator=(RAM&& other)
+{
+    this->stackSize = other.stackSize;
+    this->heapSize = other.heapSize;
+    this->data = other.data;
+    this->allocationMap = other.allocationMap;
+
+    other.stackSize = 0;
+    other.heapSize = 0;
+    other.data = nullptr;
+    other.allocationMap = nullptr;
+}
+
 RAM::~RAM()
 {
-    if (this->data != nullptr)
+    if (this->data)
         delete[] this->data;
-    if (this->allocationMap != nullptr)
+    if (this->allocationMap)
         delete[] this->allocationMap;
 }
