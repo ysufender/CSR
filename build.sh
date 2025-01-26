@@ -5,6 +5,7 @@ set -e
 refresh=false
 generate=false
 windows=false
+memtest=false
 
 while test $# -gt 0; do
     case "$1" in
@@ -20,6 +21,10 @@ while test $# -gt 0; do
             windows=true
             shift
             ;;
+        -m|--memtest)
+            memtest=true
+            shift
+            ;;
         *)
             break
     esac
@@ -33,7 +38,17 @@ fi
 preset="Debug"
 
 if [ $windows == true ]; then
+    echo "[BUILD_SCRIPT] Building for Windows"
     preset="Debug-MinGW" 
+
+    if [ $memtest == true ]; then
+        echo "[BUILD_SCRIPT] MemTest is only supported for linux builds"
+        exit 1
+    fi
+fi
+
+if [ $memtest == true ]; then
+    preset="MemTest" 
 fi
 
 if [ -d build/Debug ]; then

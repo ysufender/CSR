@@ -18,7 +18,7 @@
                 "CMAKE_CXX_STANDART_REQUIRED": true,
 
                 "ENABLE_JIT": "OFF",
-                "OUTPUT_PATH": ""
+                "OUTPUT_PATH": "Unspecified"
             }
         },
         {
@@ -31,10 +31,18 @@
         },
         {
             "name": "Debug-MinGW",
-            "inherits": "default",
+            "inherits": "Debug",
             "cacheVariables": {
                 "CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-g++",
                 "OUTPUT_PATH": "Debug-MinGW"
+            }
+        },
+        {
+            "name": "MemTest",
+            "inherits": "Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MemTest",
+                "OUTPUT_PATH": "MemTest"
             }
         }
     ],
@@ -46,6 +54,10 @@
         {
             "name": "Debug-MinGW",
             "configurePreset": "Debug-MinGW"
+        },
+        {
+            "name": "MemTest",
+            "configurePreset": "MemTest"
         }
     ]
 }

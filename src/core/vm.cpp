@@ -131,8 +131,15 @@ const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) n
     settings.id = this->GenerateNewAssemblyID();
     this->assemblies.emplace(settings.name, rval(settings));
     this->asmIds[settings.id] = &this->assemblies.at(settings.name);
+
     // Create an async system for loading assemblies
-    return this->asmIds.at(settings.id)->Load();
+    System::ErrorCode code { this->asmIds.at(settings.id)->Load() };
+
+    if (code == System::ErrorCode::Ok)
+        return code;
+
+    this->RemoveAssembly(settings.id);
+    return System::ErrorCode::Bad;
 }
 
 const System::ErrorCode VM::RemoveAssembly(systembit_t id) noexcept
@@ -161,9 +168,10 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
             for (auto& [name, assembly] : this->assemblies)
                 code = (code == System::ErrorCode::Bad ? code : assembly.Run());
         }
-
         return code;,
+
         return System::ErrorCode::Bad;,
+
         return System::ErrorCode::Bad;
     )
 }

@@ -16,6 +16,7 @@ class RAM
 {
     public:
         RAM() = default;
+        RAM(systembit_t stackSize, systembit_t heapSize);
 
         RAM(
             systembit_t stackSize,
@@ -25,10 +26,12 @@ class RAM
         ) : stackSize(stackSize), heapSize(heapSize), allocationMap(allocationMap), data(data)
         { }
 
+        ~RAM();
+
         char Read(const systembit_t address) const;
         System::ErrorCode Write(const systembit_t address, char value) noexcept;
 
-        char* ReadSome(const systembit_t address, const systembit_t size) const;
+        const char* ReadSome(const systembit_t address, const systembit_t size) const;
         System::ErrorCode WriteSome(const systembit_t address, const systembit_t size, char* values) noexcept;
 
         systembit_t Allocate(const systembit_t size);

@@ -147,19 +147,10 @@ Board::Board(class Assembly& assembly, systembit_t id)
     // third 32 bits of ROM is heap size
     systembit_t heapSize { IntegerFromBytes<systembit_t>(assembly.Rom()&8)};
     
-    char* data = new char[stackSize + heapSize];
-
-    // allocation map will hold 1 bit for each cell. 
-    // so each byte refers to 8 cells. heap size must
-    // be multiple of 8
-    char* allocationMap= new char[heapSize/8];
-
     // Create RAM
     this->ram = {
         stackSize,
         heapSize,
-        allocationMap,
-        data
     };
 
     // CPU is already created. 
@@ -200,7 +191,7 @@ char RAM::Read(const systembit_t address) const
     return this->data[address];
 }
 
-char* RAM::ReadSome(const systembit_t address, const systembit_t size) const
+const char* RAM::ReadSome(const systembit_t address, const systembit_t size) const
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
         LOGE(System::LogLevel::High, "Attempt to read out of bounds memory '", std::to_string(address), "'");
@@ -279,4 +270,23 @@ System::ErrorCode RAM::Deallocate(const systembit_t address, const systembit_t s
     }
 
     return System::ErrorCode::Ok;
+}
+
+RAM::RAM(systembit_t stackSize, systembit_t heapSize)
+    : stackSize(stackSize), heapSize(heapSize)
+{
+    this->data = new char[stackSize+heapSize];
+
+    // allocation map will hold 1 bit for each cell. 
+    // so each byte refers to 8 cells. heap size must
+    // be multiple of 8
+    this->allocationMap = new char[heapSize/8];
+}
+
+RAM::~RAM()
+{
+    if (this->data != nullptr)
+        delete[] this->data;
+    if (this->allocationMap != nullptr)
+        delete[] this->allocationMap;
 }

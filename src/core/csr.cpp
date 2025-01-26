@@ -1,10 +1,13 @@
+#include <cassert>
 #include <exception>
 #include <filesystem>
 #include <iostream>
 #include <ostream>
+#include <string>
 
-#include "CLIParser.hpp"
+#include "extensions/stringextensions.hpp"
 #include "CSRConfig.hpp"
+#include "CLIParser.hpp"
 #include "system.hpp"
 #include "csr.hpp"
 #include "vm.hpp"

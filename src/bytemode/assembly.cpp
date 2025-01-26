@@ -31,9 +31,11 @@ const System::ErrorCode Assembly::DispatchMessages() noexcept
         char* data { new char[8] };
         char* id { BytesFromInteger<systembit_t, char>(this->settings.id) };
         const char* shutm { "Shut" };
+
         std::memcpy(data, id, sizeof(systembit_t));
         std::memcpy(data+4, shutm, 4);
-        delete id;
+
+        delete[] id;
 
         System::ErrorCode code { this->SendMessage({
             MessageType::AtoV,
@@ -253,6 +255,7 @@ const System::ErrorCode Assembly::Run() noexcept
                 std::forward_as_tuple(0), 
                 std::forward_as_tuple(*this, 0)
             );,
+
         LOGE(System::LogLevel::Medium, this->Stringify(), " ROM access error while initializing Board.");
         return System::ErrorCode::Bad;,
 
@@ -289,7 +292,7 @@ char ROM::operator[](systembit_t index) const noexcept
     return data[index];
 }
 
-char* ROM::operator&(systembit_t index) const noexcept
+const char* ROM::operator&(systembit_t index) const noexcept
 {
     if (index >= size || index < 0)
         LOGE(System::LogLevel::High, "Index '", std::to_string(index), "' of ROM is invalid.");
@@ -297,7 +300,7 @@ char* ROM::operator&(systembit_t index) const noexcept
     return data+index;
 }
 
-char* ROM::operator&() const noexcept
+const char* ROM::operator&() const noexcept
 {
     return this->operator&(0); 
 }
@@ -313,4 +316,9 @@ System::ErrorCode ROM::TryRead(systembit_t index, char& data, bool raise, std::f
     if (!(isOk == System::ErrorCode::Ok) && raise)
         LOGE(System::LogLevel::High, "Cannot access index '", std::to_string(index), "' of ROM");
     return isOk;
+}
+
+ROM::~ROM()
+{
+    delete[] this->data;
 }

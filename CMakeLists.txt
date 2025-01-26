@@ -6,19 +6,44 @@ project(CSR
     LANGUAGES CXX
 )
 
+if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    message(
+        FATAL_ERROR 
+        "Sorry this project is meant to be compiled with a GNU compiler.
+        You can still compile it but I've never tested it with anything other
+        than g++.
+        
+        If you still want to continue, you can remove this check in CSR/CMakeLists.txt"
+    )
+endif(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDART_REQUIRED TRUE)
 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     #add_compile_options("-O0")
+elseif("${CMAKE_BUILD_TYPE}" STREQUAL "MemTest")
+    message(STATUS "Building in MemTest mode.")
+    add_compile_options(
+        "-g"
+        "-O0"
+    )
 endif("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
 
+#
+# Link libstdc++ statically if compiling with mingw. because it
+# requires the dlls otherwise.
+#
 message(STATUS "Checking CXX compiler.")
 get_filename_component(CXX_COMPILER_NAME ${CMAKE_CXX_COMPILER} NAME)
 if("${CXX_COMPILER_NAME}" STREQUAL "x86_64-w64-mingw32-g++")
     message(STATUS "Using ${CXX_COMPILER_NAME}, linking libstdc++ statically.")
-    add_link_options("-static" "-static-libstdc++" "-static-libgcc")
+    add_link_options(
+        "-static" 
+        "-static-libstdc++" 
+        "-static-libgcc"
+    )
 endif("${CXX_COMPILER_NAME}" STREQUAL "x86_64-w64-mingw32-g++")
 
 #
