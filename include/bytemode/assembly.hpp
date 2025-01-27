@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <unordered_map>
 #include <string>
 
@@ -22,15 +23,13 @@ class ROM
         void operator=(ROM const&) = delete;
         void operator=(ROM const&&) = delete;
 
-        ~ROM();
-
         char operator[](sysbit_t index) const noexcept;
         const char* operator&(sysbit_t index) const noexcept;
         const char* operator&() const noexcept;
-        System::ErrorCode TryRead(sysbit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const;
+        System::ErrorCode TryRead(sysbit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const noexcept;
 
     private:
-        char* data = nullptr;
+        std::unique_ptr<char[]> data = nullptr;
         sysbit_t size = 0;
 };
 

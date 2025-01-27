@@ -34,7 +34,7 @@ const System::ErrorCode Process::ReceiveMessage(Message message) noexcept
 
     // message.data() must be
     //      [targetId(1byte), message...]
-    if (IntegerFromBytes<uchar_t>(message.data()) != this->id)
+    if (IntegerFromBytes<uchar_t>(message.data().get()) != this->id)
         return System::ErrorCode::Bad;
 
     this->messagePool.push(message);
@@ -54,7 +54,7 @@ const System::ErrorCode Process::SendMessage(Message message) noexcept
     if (message.type() != MessageType::PtoP && message.type() != MessageType::PtoB)
         return System::ErrorCode::Bad;
 
-    const char* senderOffset { message.type() == MessageType::PtoP ? message.data()+1 : message.data() };
+    const char* senderOffset { message.type() == MessageType::PtoP ? message.data().get()+1 : message.data().get() };
     
     if (IntegerFromBytes<uchar_t>(senderOffset) != this->id)
         return System::ErrorCode::Bad;

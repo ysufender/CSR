@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include "system.hpp"
@@ -40,16 +41,14 @@ class Message
         Message() = delete;
         Message(Message& other);
         Message(Message&& other);
-        Message(MessageType type, char* data);
-
-        ~Message();
+        Message(MessageType type, std::unique_ptr<char[]> data);
 
         inline const MessageType type() const { return _type; }
-        inline char* const data() const { return _data; }
+        inline const std::unique_ptr<char[]>& data() const { return _data; }
 
     private:
         MessageType _type = MessageType::PtoP;
-        char* _data = nullptr;
+        std::unique_ptr<char[]> _data = nullptr;
 
 };
 

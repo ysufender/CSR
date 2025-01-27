@@ -34,8 +34,8 @@ const System::ErrorCode VM::DispatchMessages() noexcept
         {
             if (message.data()[4] == 0)
             {
-                LOGD("Received Shutdown signal from ", this->asmIds.at(IntegerFromBytes<sysbit_t>(message.data()))->Stringify());
-                code = this->RemoveAssembly(IntegerFromBytes<sysbit_t>(message.data()));
+                LOGD("Received Shutdown signal from ", this->asmIds.at(IntegerFromBytes<sysbit_t>(message.data().get()))->Stringify());
+                code = this->RemoveAssembly(IntegerFromBytes<sysbit_t>(message.data().get()));
             }
         }
         else
@@ -72,13 +72,13 @@ const System::ErrorCode VM::ReceiveMessage(Message message) noexcept
     //      or
     //      [senderId(4bytes), message...]
     // check the first 4bytes to verify that sender/target exists.
-    if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data())))
+    if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data().get())))
         return System::ErrorCode::Bad;
 
     if (message.type() == MessageType::AtoA)
     {
         // additionally check the second 4bytes to verify that sender exists.
-        if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data()+4)))
+        if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data().get()+4)))
             return System::ErrorCode::Bad;
     }
 
@@ -98,7 +98,7 @@ const System::ErrorCode VM::SendMessage(Message message) noexcept
 
     // data must be [targetId(4bytes), message...]
     // check the first 4bytes to verify that target exists
-    sysbit_t id { IntegerFromBytes<sysbit_t>(message.data()) };
+    sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
     if (!this->asmIds.contains(id))
         return System::ErrorCode::Bad;
 
@@ -149,7 +149,7 @@ const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) n
 
     settings.id = this->GenerateNewAssemblyID();
     this->assemblies.emplace(settings.name, rval(settings));
-    this->asmIds[settings.id] = &this->assemblies.at(settings.name);
+    this->asmIds.emplace(settings.id, &this->assemblies.at(settings.name));
 
     // Create an async system for loading assemblies
     System::ErrorCode code { this->asmIds.at(settings.id)->Load() };
@@ -167,7 +167,7 @@ const System::ErrorCode VM::RemoveAssembly(sysbit_t id) noexcept
         return System::ErrorCode::InvalidSpecifier;
 
     this->assemblies.erase(this->asmIds.at(id)->Settings().name);
-    Assembly* assembly { this->asmIds.at(id) };
+    this->asmIds.erase(id);
 
     return System::ErrorCode::Ok;
 }

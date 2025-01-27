@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -9,6 +10,7 @@
 #include "CSRConfig.hpp"
 #include "bytemode/assembly.hpp"
 #include "extensions/converters.hpp"
+#include "extensions/syntaxextensions.hpp"
 #include "message.hpp"
 #include "system.hpp"
 #include "vm.hpp"
@@ -48,8 +50,8 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
         case MessageType::PtoP:
         // [targetId(1byte), senderID(1byte), message...]
         {
-            sysbit_t target { IntegerFromBytes<sysbit_t>(message.data()) };
-            sysbit_t sender { IntegerFromBytes<sysbit_t>(message.data()+4) };
+            sysbit_t target { IntegerFromBytes<sysbit_t>(message.data().get()) };
+            sysbit_t sender { IntegerFromBytes<sysbit_t>(message.data().get()+4) };
 
             if (!this->processes.contains(target) || !this->processes.contains(sender))
                 return System::ErrorCode::Bad;
@@ -59,7 +61,7 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
         case MessageType::PtoB:
         // [senderID(1byte), message...]
         {
-            if (!this->processes.contains(IntegerFromBytes<sysbit_t>(message.data())))  
+            if (!this->processes.contains(IntegerFromBytes<sysbit_t>(message.data().get())))  
                 return System::ErrorCode::Bad;
         }
         break;
@@ -67,7 +69,7 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
         case MessageType::AtoB:
             // [targetId(4byte), message...]
             {
-                if (!this->processes.contains(IntegerFromBytes<sysbit_t>(message.data())))
+                if (!this->processes.contains(IntegerFromBytes<sysbit_t>(message.data().get())))
                     return System::ErrorCode::Bad;
             }
             break;
@@ -98,7 +100,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
         case MessageType::BtoP:
         // [targetId(1byte), message...]
         {
-            sysbit_t id { IntegerFromBytes<uchar_t>(message.data()) };
+            sysbit_t id { IntegerFromBytes<uchar_t>(message.data().get()) };
             if (!this->processes.contains(id))  
                 return System::ErrorCode::Bad;
 
@@ -109,7 +111,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
         case MessageType::BtoB:
         // [targetId(4bytes), senderID(4bytes), message...]
         {
-            if (IntegerFromBytes<sysbit_t>(message.data()+4) != this->id)
+            if (IntegerFromBytes<sysbit_t>(message.data().get()+4) != this->id)
                 return System::ErrorCode::Bad;
 
             this->parent.ReceiveMessage(message);
@@ -119,7 +121,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
         case MessageType::BtoA:
         // [senderId(4byte), message...]
         {
-            if (IntegerFromBytes<sysbit_t>(message.data())) 
+            if (IntegerFromBytes<sysbit_t>(message.data().get())) 
                 return System::ErrorCode::Bad;
 
             this->parent.ReceiveMessage(message);
@@ -191,17 +193,17 @@ const System::ErrorCode Board::Run() noexcept
     // Send Shutdown Signal to Assembly
     if (this->processes.size() == 0)
     {
-        char* data { new char[5] };
+        std::unique_ptr<char[]> data { new char[5] };
         char* id { BytesFromInteger<sysbit_t, char>(this->id) };
 
-        std::memcpy(data, id, sizeof(sysbit_t));
+        std::memcpy(data.get(), id, sizeof(sysbit_t));
         data[4] = 0;
 
         delete[] id;
 
         System::ErrorCode code { this->SendMessage({
             MessageType::BtoA,
-            data,
+            rval(data),
         })};
 
         if (code != System::ErrorCode::Ok)

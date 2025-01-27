@@ -9,6 +9,7 @@
 #include "system.hpp"
 
 using AssemblyCollection = std::unordered_map<std::string, Assembly>;
+// We won't need to deallocate so no smart pointer
 using AssemblyIDCollection = std::unordered_map<sysbit_t, Assembly*>;
 
 class VM : IMessageObject

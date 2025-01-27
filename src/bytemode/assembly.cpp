@@ -3,6 +3,7 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -34,7 +35,7 @@ const System::ErrorCode Assembly::DispatchMessages() noexcept
         {
             if (message.data()[4] == 0)
             {
-                sysbit_t id { IntegerFromBytes<sysbit_t>(message.data()) };
+                sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
                 LOGD(
                     this->Stringify(), 
                     " received Shutdown signal from board, id:",
@@ -82,8 +83,8 @@ const System::ErrorCode Assembly::ReceiveMessage(Message message) noexcept
         case MessageType::BtoB:
         // [targetId(4bytes), senderID(4bytes), message...]
         {
-            sysbit_t target { IntegerFromBytes<sysbit_t>(message.data()) };
-            sysbit_t sender { IntegerFromBytes<sysbit_t>(message.data()+4) };
+            sysbit_t target { IntegerFromBytes<sysbit_t>(message.data().get()) };
+            sysbit_t sender { IntegerFromBytes<sysbit_t>(message.data().get()+4) };
 
             if (!this->boards.contains(target) || !this->boards.contains(sender))
                 return System::ErrorCode::Bad;
@@ -93,7 +94,7 @@ const System::ErrorCode Assembly::ReceiveMessage(Message message) noexcept
         case MessageType::BtoA:
         // [senderId(4byte), message...]
         {
-            if (!this->boards.contains(IntegerFromBytes<sysbit_t>(message.data())))
+            if (!this->boards.contains(IntegerFromBytes<sysbit_t>(message.data().get())))
                 return System::ErrorCode::Bad;
         }
         break;
@@ -101,7 +102,7 @@ const System::ErrorCode Assembly::ReceiveMessage(Message message) noexcept
         case MessageType::VtoA:
         // [targetId(4bytes), message...]
         {
-            if (IntegerFromBytes<sysbit_t>(message.data()) != this->settings.id)
+            if (IntegerFromBytes<sysbit_t>(message.data().get()) != this->settings.id)
                 return System::ErrorCode::Bad;
         }
         break;
@@ -131,7 +132,7 @@ const System::ErrorCode Assembly::SendMessage(Message message) noexcept
     {
         case MessageType::AtoA:
         {
-            if (IntegerFromBytes<sysbit_t>(message.data()+4) != this->settings.id)
+            if (IntegerFromBytes<sysbit_t>(message.data().get()+4) != this->settings.id)
                 return System::ErrorCode::Bad;
 
             VM::GetVM().ReceiveMessage(message);
@@ -139,7 +140,7 @@ const System::ErrorCode Assembly::SendMessage(Message message) noexcept
         
         case MessageType::AtoB:
         {
-            sysbit_t id { IntegerFromBytes<sysbit_t>(message.data()) };
+            sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
             if (!this->boards.contains(id))
                 return System::ErrorCode::Bad;
 
@@ -148,7 +149,7 @@ const System::ErrorCode Assembly::SendMessage(Message message) noexcept
 
         case MessageType::AtoV:
         {
-            if (IntegerFromBytes<sysbit_t>(message.data()) != this->settings.id)
+            if (IntegerFromBytes<sysbit_t>(message.data().get()) != this->settings.id)
                 return System::ErrorCode::Bad;
 
             VM::GetVM().ReceiveMessage(message);
@@ -209,11 +210,11 @@ const System::ErrorCode Assembly::Load() noexcept
     });
     bytecode.seekg(0, std::ios::beg);
 
-    char* data { new char[length] };
-    bytecode.read(data, length);
+    std::unique_ptr<char[]> data { new char[length] };
+    bytecode.read(data.get(), length);
     bytecode.close();
 
-    this->rom.data = data;
+    this->rom.data = rval(data);
     this->rom.size = static_cast<sysbit_t>(length);
 
     // If the assembly is not ran, no need to initialize boards,
@@ -295,17 +296,17 @@ const System::ErrorCode Assembly::Run() noexcept
     // Send Shutdown Signal to VM
     if (this->boards.size() == 0)
     {
-        char* data { new char[5] };
+        std::unique_ptr<char[]> data { new char[5] };
         char* id { BytesFromInteger<sysbit_t, char>(this->settings.id) };
 
-        std::memcpy(data, id, sizeof(sysbit_t));
+        std::memcpy(data.get(), id, sizeof(sysbit_t));
         data[4] = 0;
 
         delete[] id;
 
         System::ErrorCode code { this->SendMessage({
             MessageType::AtoV,
-            data,
+            rval(data),
         })};
 
         if (code != System::ErrorCode::Ok)
@@ -357,7 +358,7 @@ const char* ROM::operator&(sysbit_t index) const noexcept
     if (index >= size || index < 0)
         CRASH(System::ErrorCode::ROMAccessError, "Index '", std::to_string(index), "' of ROM is invalid.");
 
-    return data+index;
+    return data.get()+index;
 }
 
 const char* ROM::operator&() const noexcept
@@ -365,7 +366,7 @@ const char* ROM::operator&() const noexcept
     return this->operator&(0); 
 }
 
-System::ErrorCode ROM::TryRead(sysbit_t index, char& data, bool raise, std::function<void()> failAct) const
+System::ErrorCode ROM::TryRead(sysbit_t index, char& data, bool raise, std::function<void()> failAct) const noexcept
 {
     System::ErrorCode isOk { !(index >= size || index < 0) ? System::ErrorCode::Ok : System::ErrorCode::Bad };
 
@@ -374,11 +375,9 @@ System::ErrorCode ROM::TryRead(sysbit_t index, char& data, bool raise, std::func
     if (!(isOk == System::ErrorCode::Ok) && failAct)
         failAct();
     if (!(isOk == System::ErrorCode::Ok) && raise)
-        CRASH(System::ErrorCode::ROMAccessError, "Cannot access index '", std::to_string(index), "' of ROM");
+    {
+        LOGE(System::LogLevel::Medium, "Cannot access index '", std::to_string(index), "' of ROM");
+        return System::ErrorCode::ROMAccessError;
+    }
     return isOk;
-}
-
-ROM::~ROM()
-{
-    delete[] this->data;
 }
