@@ -12,7 +12,7 @@ CPU::CPU(Board& board) : board(board)
     for (int i = 0; i < 12; i++)
         board.Assembly().Rom().TryRead(i, tmp, true);
 
-    systembit_t origin { IntegerFromBytes<systembit_t>(&board.Assembly().Rom()) };
+    sysbit_t origin { IntegerFromBytes<sysbit_t>(&board.Assembly().Rom()) };
 
     this->pc = origin;
 }

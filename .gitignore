@@ -1,11 +1,14 @@
 .vscode/
 build/
-.clangd
 .editorconfig
 .cache/
+test/
+
+.clangd
 
 *.jef
 *.stc
 *.shd
+*.jasm
 *.jo
 *.project.gf

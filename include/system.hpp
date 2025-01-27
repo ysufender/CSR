@@ -15,7 +15,7 @@
     #define LOGD(...)
 #endif
 
-#define LOG(...) std::cout << Extensions::String::Concat({__VA_ARGS__}) << '\n'
+#define LOG(...) System::LogInternal(Extensions::String::Concat({__VA_ARGS__}), __FILE__, __LINE__)
 #define LOGW(...) System::LogWarning(Extensions::String::Concat({__VA_ARGS__}), __FILE__, __LINE__)
 #define LOGE(level, ...) System::LogError(Extensions::String::Concat({__VA_ARGS__}), level, __FILE__, __LINE__, System::ErrorCode::Bad)
 #define CRASH(code, ...) System::LogError(Extensions::String::Concat({__VA_ARGS__}), System::LogLevel::High, __FILE__, __LINE__, code)
@@ -28,6 +28,7 @@ struct System
     {
         Ok,
         Bad,
+        UnhandledException,
         ROMAccessError,
         RAMAccessError,
         SourceFileNotFound,
@@ -35,7 +36,7 @@ struct System
         HeapOverflow,
         StackOverflow,
         NoSourceFile,
-        InvalidAssemblySpecifier,
+        InvalidSpecifier,
         FileIOError,
         MessageSendError,
     };
@@ -53,6 +54,24 @@ struct System
 
     static std::ifstream OpenInFile(const std::filesystem::path& path, const std::ios::openmode mode = std::ios::binary);
     static std::ofstream OpenOutFile(const std::filesystem::path& path, const std::ios::openmode mode = std::ios::binary);
+
+    private:
+        System() = delete;
+        System(System&) = delete;
+        System(const System&) = delete;
+        System(System&&) = delete;
+        System(const System&&) = delete;
+        ~System() = delete;
+
+        void operator=(System&) = delete;
+        void operator=(const System&) = delete;
+        void operator=(System&&) = delete;
+        void operator=(const System&&) = delete;
+
+        void* operator new(size_t) = delete;
+        void* operator new[](size_t) = delete;
+        void operator delete(void*) = delete;
+        void operator delete[](void*) = delete;
 };
 
 class CSRException : public std::runtime_error

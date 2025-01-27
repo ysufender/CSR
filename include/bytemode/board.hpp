@@ -18,26 +18,26 @@ class RAM
         RAM() : allocationMap(nullptr), data(nullptr), stackSize(0), heapSize(0)
         { }
 
-        RAM(systembit_t stackSize, systembit_t heapSize);
+        RAM(sysbit_t stackSize, sysbit_t heapSize);
 
         ~RAM();
 
         void operator=(RAM&& other);
 
-        char Read(const systembit_t address) const;
-        System::ErrorCode Write(const systembit_t address, char value) noexcept;
+        char Read(const sysbit_t address) const;
+        System::ErrorCode Write(const sysbit_t address, char value) noexcept;
 
-        const char* ReadSome(const systembit_t address, const systembit_t size) const;
-        System::ErrorCode WriteSome(const systembit_t address, const systembit_t size, char* values) noexcept;
+        const char* ReadSome(const sysbit_t address, const sysbit_t size) const;
+        System::ErrorCode WriteSome(const sysbit_t address, const sysbit_t size, char* values) noexcept;
 
-        systembit_t Allocate(const systembit_t size);
-        System::ErrorCode Deallocate(const systembit_t address, const systembit_t size) noexcept;
+        sysbit_t Allocate(const sysbit_t size);
+        System::ErrorCode Deallocate(const sysbit_t address, const sysbit_t size) noexcept;
 
     private:
         char* allocationMap;
         char* data;
-        systembit_t stackSize;
-        systembit_t heapSize;
+        sysbit_t stackSize;
+        sysbit_t heapSize;
 };
 
 class Board : IMessageObject
@@ -46,7 +46,7 @@ class Board : IMessageObject
         Board() = delete;
         Board(Board&) = delete;
         Board(Board&&) = delete;
-        Board(class Assembly& assembly, systembit_t id);
+        Board(class Assembly& assembly, sysbit_t id);
 
         inline class RAM& RAM() { return this->ram; }
         inline const class Assembly& Assembly() { return this->parent; }
@@ -56,8 +56,10 @@ class Board : IMessageObject
         const System::ErrorCode SendMessage(Message message) noexcept; 
 
         const System::ErrorCode AddProcess() noexcept;
+        
+        const System::ErrorCode Run() noexcept;
 
-        const systembit_t id;
+        const sysbit_t id;
 
     private:
         ProcessCollection processes;

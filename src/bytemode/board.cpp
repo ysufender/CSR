@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <tuple>
@@ -47,8 +48,8 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
         case MessageType::PtoP:
         // [targetId(1byte), senderID(1byte), message...]
         {
-            systembit_t target { IntegerFromBytes<systembit_t>(message.data()) };
-            systembit_t sender { IntegerFromBytes<systembit_t>(message.data()+4) };
+            sysbit_t target { IntegerFromBytes<sysbit_t>(message.data()) };
+            sysbit_t sender { IntegerFromBytes<sysbit_t>(message.data()+4) };
 
             if (!this->processes.contains(target) || !this->processes.contains(sender))
                 return System::ErrorCode::Bad;
@@ -58,7 +59,7 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
         case MessageType::PtoB:
         // [senderID(1byte), message...]
         {
-            if (!this->processes.contains(IntegerFromBytes<systembit_t>(message.data())))  
+            if (!this->processes.contains(IntegerFromBytes<sysbit_t>(message.data())))  
                 return System::ErrorCode::Bad;
         }
         break;
@@ -66,7 +67,7 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
         case MessageType::AtoB:
             // [targetId(4byte), message...]
             {
-                if (!this->processes.contains(IntegerFromBytes<systembit_t>(message.data())))
+                if (!this->processes.contains(IntegerFromBytes<sysbit_t>(message.data())))
                     return System::ErrorCode::Bad;
             }
             break;
@@ -97,7 +98,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
         case MessageType::BtoP:
         // [targetId(1byte), message...]
         {
-            systembit_t id { IntegerFromBytes<uchar_t>(message.data()) };
+            sysbit_t id { IntegerFromBytes<uchar_t>(message.data()) };
             if (!this->processes.contains(id))  
                 return System::ErrorCode::Bad;
 
@@ -108,7 +109,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
         case MessageType::BtoB:
         // [targetId(4bytes), senderID(4bytes), message...]
         {
-            if (IntegerFromBytes<systembit_t>(message.data()+4) != this->id)
+            if (IntegerFromBytes<sysbit_t>(message.data()+4) != this->id)
                 return System::ErrorCode::Bad;
 
             this->parent.ReceiveMessage(message);
@@ -118,7 +119,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
         case MessageType::BtoA:
         // [senderId(4byte), message...]
         {
-            if (IntegerFromBytes<systembit_t>(message.data())) 
+            if (IntegerFromBytes<sysbit_t>(message.data())) 
                 return System::ErrorCode::Bad;
 
             this->parent.ReceiveMessage(message);
@@ -136,16 +137,16 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
 //
 // Board Implementation
 //
-Board::Board(class Assembly& assembly, systembit_t id) 
+Board::Board(class Assembly& assembly, sysbit_t id) 
     : parent(assembly), cpu(*this), id(id)
 {
     // CPU will be initialized beforehand, so it checks the ROM.
 
     // second 32 bits of ROM is stack size
-    systembit_t stackSize { IntegerFromBytes<systembit_t>(assembly.Rom()&4) }; 
+    sysbit_t stackSize { IntegerFromBytes<sysbit_t>(assembly.Rom()&4) }; 
 
     // third 32 bits of ROM is heap size
-    systembit_t heapSize { IntegerFromBytes<systembit_t>(assembly.Rom()&8)};
+    sysbit_t heapSize { IntegerFromBytes<sysbit_t>(assembly.Rom()&8)};
     
     // Create RAM
     this->ram = {
@@ -179,10 +180,41 @@ const System::ErrorCode Board::AddProcess() noexcept
     return System::ErrorCode::Ok;
 }
 
+const System::ErrorCode Board::Run() noexcept
+{
+    // Dispatch messages
+    System::ErrorCode code { this->DispatchMessages() }; 
+
+    if (code != System::ErrorCode::Ok)
+        return code;
+
+    // Send Shutdown Signal to Assembly
+    if (this->processes.size() == 0)
+    {
+        char* data { new char[5] };
+        char* id { BytesFromInteger<sysbit_t, char>(this->id) };
+
+        std::memcpy(data, id, sizeof(sysbit_t));
+        data[4] = 0;
+
+        delete[] id;
+
+        System::ErrorCode code { this->SendMessage({
+            MessageType::BtoA,
+            data,
+        })};
+
+        if (code != System::ErrorCode::Ok)
+            CRASH(System::ErrorCode::MessageSendError, "Error, couldn't send shutdown signal to");
+    }
+
+    return System::ErrorCode::Ok;
+}
+
 //
 // RAM Implementation
 //
-char RAM::Read(const systembit_t address) const
+char RAM::Read(const sysbit_t address) const
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0)
         CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
@@ -190,7 +222,7 @@ char RAM::Read(const systembit_t address) const
     return this->data[address];
 }
 
-const char* RAM::ReadSome(const systembit_t address, const systembit_t size) const
+const char* RAM::ReadSome(const sysbit_t address, const sysbit_t size) const
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
         CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
@@ -198,7 +230,7 @@ const char* RAM::ReadSome(const systembit_t address, const systembit_t size) con
     return this->data+address;
 }
 
-System::ErrorCode RAM::Write(const systembit_t address, char value) noexcept
+System::ErrorCode RAM::Write(const sysbit_t address, char value) noexcept
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0)
         return System::ErrorCode::Ok;
@@ -206,24 +238,24 @@ System::ErrorCode RAM::Write(const systembit_t address, char value) noexcept
     return System::ErrorCode::Ok;
 }
 
-System::ErrorCode RAM::WriteSome(const systembit_t address, const systembit_t size, char* values) noexcept
+System::ErrorCode RAM::WriteSome(const sysbit_t address, const sysbit_t size, char* values) noexcept
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
         CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
 
     System::ErrorCode status = System::ErrorCode::Ok;
-    for(systembit_t i = 0; i < size; i++)
+    for(sysbit_t i = 0; i < size; i++)
         status = status == System::ErrorCode::Ok ? this->Write(address+i, values[i]) : status;
     return status;
 }
 
-systembit_t RAM::Allocate(const systembit_t size)
+sysbit_t RAM::Allocate(const sysbit_t size)
 {
-    systembit_t counter { size };
-    systembit_t allocationAddress { 0 };
-    for (systembit_t i = 0; i < this->heapSize/8; i++)
+    sysbit_t counter { size };
+    sysbit_t allocationAddress { 0 };
+    for (sysbit_t i = 0; i < this->heapSize/8; i++)
     {
-        systembit_t index { i/8 };
+        sysbit_t index { i/8 };
         char offset { static_cast<char>(i - index/8) };
 
         const bool flag = (static_cast<uchar_t>(this->allocationMap[index]) >> (8 - offset)) & 1;
@@ -240,31 +272,31 @@ systembit_t RAM::Allocate(const systembit_t size)
     }
     if (counter != 0)
         CRASH(System::ErrorCode::HeapOverflow, "Couldn't allocate memory on heap, board is out of memory.");
-    for (systembit_t i = 0; i < size; i++)
+    for (sysbit_t i = 0; i < size; i++)
     {
-        systembit_t index { i/8 };
+        sysbit_t index { i/8 };
         char offset { static_cast<char>(i - index*8) };
         this->allocationMap[index] |= (uchar_t{1} << (8-offset));
     }
     return allocationAddress;
 }
 
-System::ErrorCode RAM::Deallocate(const systembit_t address, const systembit_t size) noexcept
+System::ErrorCode RAM::Deallocate(const sysbit_t address, const sysbit_t size) noexcept
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
         CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
 
-    for (systembit_t i = 0; i < size; i++)
+    for (sysbit_t i = 0; i < size; i++)
     {
-        systembit_t index { i/8 };
+        sysbit_t index { i/8 };
         char offset { static_cast<char>(i - index*8) }; 
         const bool flag = (static_cast<uchar_t>(this->allocationMap[index]) >> (8 - offset)) & 1;
         if (!flag)
             return System::ErrorCode::Bad;
     }
-    for (systembit_t i = 0; i < size; i++)
+    for (sysbit_t i = 0; i < size; i++)
     {
-        systembit_t index { i/8 };
+        sysbit_t index { i/8 };
         char offset { static_cast<char>(i - index*8) }; 
 
         data[address+offset+index*8] = 0;
@@ -274,7 +306,7 @@ System::ErrorCode RAM::Deallocate(const systembit_t address, const systembit_t s
     return System::ErrorCode::Ok;
 }
 
-RAM::RAM(systembit_t stackSize, systembit_t heapSize)
+RAM::RAM(sysbit_t stackSize, sysbit_t heapSize)
     : stackSize(stackSize), heapSize(heapSize)
 {
     this->data = new char[stackSize+heapSize];

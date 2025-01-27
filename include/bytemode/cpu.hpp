@@ -16,14 +16,14 @@ class CPU
     private: 
         Board& board;
 
-        systembit_t eax = 0;
-        systembit_t ebx = 0;
-        systembit_t ecx = 0;
-        systembit_t edx = 0;
-        systembit_t esi = 0;
-        systembit_t edi = 0;
-        systembit_t pc = 0;
-        systembit_t sp = 0;
+        sysbit_t eax = 0;
+        sysbit_t ebx = 0;
+        sysbit_t ecx = 0;
+        sysbit_t edx = 0;
+        sysbit_t esi = 0;
+        sysbit_t edi = 0;
+        sysbit_t pc = 0;
+        sysbit_t sp = 0;
 
         uchar_t al = 0;
         uchar_t bl = 0;

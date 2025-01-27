@@ -10,7 +10,7 @@
 #include "system.hpp"
 #include "bytemode/board.hpp"
 
-using BoardCollection = std::unordered_map<systembit_t, Board>;
+using BoardCollection = std::unordered_map<sysbit_t, Board>;
 
 class ROM
 {
@@ -24,14 +24,14 @@ class ROM
 
         ~ROM();
 
-        char operator[](systembit_t index) const noexcept;
-        const char* operator&(systembit_t index) const noexcept;
+        char operator[](sysbit_t index) const noexcept;
+        const char* operator&(sysbit_t index) const noexcept;
         const char* operator&() const noexcept;
-        System::ErrorCode TryRead(systembit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const;
+        System::ErrorCode TryRead(sysbit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const;
 
     private:
         char* data = nullptr;
-        systembit_t size = 0;
+        sysbit_t size = 0;
 };
 
 class Assembly : IMessageObject
@@ -49,7 +49,7 @@ class Assembly : IMessageObject
             std::string name;
             std::filesystem::path path;
             AssemblyType type;
-            systembit_t id;
+            sysbit_t id;
         };
 
         Assembly() = delete;
@@ -71,6 +71,7 @@ class Assembly : IMessageObject
         const System::ErrorCode Load() noexcept;
         const System::ErrorCode Run() noexcept;
         const System::ErrorCode AddBoard() noexcept;
+        const System::ErrorCode RemoveBoard(sysbit_t id) noexcept;
 
         const std::string& Stringify() const noexcept;
 
@@ -79,5 +80,5 @@ class Assembly : IMessageObject
         AssemblySettings settings;
         BoardCollection boards;
 
-        systembit_t GenerateNewBoardID() const;
+        sysbit_t GenerateNewBoardID() const;
 };

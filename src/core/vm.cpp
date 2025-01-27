@@ -1,6 +1,5 @@
 #include <string>
 #include <limits>
-#include <string_view>
 
 #include "extensions/syntaxextensions.hpp"
 #include "extensions/converters.hpp"
@@ -21,16 +20,37 @@ const System::ErrorCode VM::DispatchMessages() noexcept
     // 3- sender might request a self shutdown 
     // TODO
 
-    //LOGE(System::LogLevel::Medium, "VM::DispatchMessages has not been implemented yet");
+    // Note: messages are already verified quite a lot of times by this point
+    // so there is no need to check again. Unless --no-strict-messages is set
+    // in CLI
+
+    LOGE(System::LogLevel::Medium, "VM::DispatchMessages has not been implemented yet");
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
+        System::ErrorCode code { System::ErrorCode::Ok };
 
-        if (message.type() == MessageType::AtoV && std::string_view{message.data()+4, message.data()+8} == "Shut")
+        if (message.type() == MessageType::AtoV)
         {
-            LOGD("Received Shutdown signal from ", this->asmIds.at(*reinterpret_cast<systembit_t*>(message.data()))->Stringify());
-            this->RemoveAssembly(*reinterpret_cast<systembit_t*>(message.data()));
+            if (message.data()[4] == 0)
+            {
+                LOGD("Received Shutdown signal from ", this->asmIds.at(IntegerFromBytes<sysbit_t>(message.data()))->Stringify());
+                code = this->RemoveAssembly(IntegerFromBytes<sysbit_t>(message.data()));
+            }
         }
+        else
+            LOGE(
+                System::LogLevel::Low, 
+                "Unhandled message, type: ",
+                std::to_string(static_cast<int>(message.type()))
+            );
+
+        if (code != System::ErrorCode::Ok)
+            LOGE(
+                System::LogLevel::Medium,
+                "Message dispatch exited with code ", std::to_string(static_cast<int>(code)),
+                ". Message type: ", std::to_string(static_cast<int>(message.type()))
+            );
     
         this->messagePool.pop();
     }
@@ -52,13 +72,13 @@ const System::ErrorCode VM::ReceiveMessage(Message message) noexcept
     //      or
     //      [senderId(4bytes), message...]
     // check the first 4bytes to verify that sender/target exists.
-    if (!this->asmIds.contains(IntegerFromBytes<systembit_t>(message.data())))
+    if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data())))
         return System::ErrorCode::Bad;
 
     if (message.type() == MessageType::AtoA)
     {
         // additionally check the second 4bytes to verify that sender exists.
-        if (!this->asmIds.contains(IntegerFromBytes<systembit_t>(message.data()+4)))
+        if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data()+4)))
             return System::ErrorCode::Bad;
     }
 
@@ -78,7 +98,7 @@ const System::ErrorCode VM::SendMessage(Message message) noexcept
 
     // data must be [targetId(4bytes), message...]
     // check the first 4bytes to verify that target exists
-    systembit_t id { IntegerFromBytes<systembit_t>(message.data()) };
+    sysbit_t id { IntegerFromBytes<sysbit_t>(message.data()) };
     if (!this->asmIds.contains(id))
         return System::ErrorCode::Bad;
 
@@ -93,27 +113,27 @@ const System::ErrorCode VM::SendMessage(Message message) noexcept
 const Assembly& VM::GetAssembly(const std::string& name) const
 {
     if (!this->assemblies.contains(name))
-        CRASH(System::ErrorCode::InvalidAssemblySpecifier, "Assembly with given name '", name, "' couldn't be found.");
+        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given name '", name, "' couldn't be found.");
     return this->assemblies.at(name);
 }
 
 const Assembly& VM::GetAssembly(const std::string&& name) const
 {
     if (!this->assemblies.contains(name))
-        CRASH(System::ErrorCode::InvalidAssemblySpecifier, "Assembly with given name '", name, "' couldn't be found.");
+        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given name '", name, "' couldn't be found.");
     return this->assemblies.at(name);
 }
 
-const Assembly& VM::GetAssembly(systembit_t id) const
+const Assembly& VM::GetAssembly(sysbit_t id) const
 {
     if (!this->asmIds.contains(id))
-        CRASH(System::ErrorCode::InvalidAssemblySpecifier, "Assembly with given id'", std::to_string(id), "' couldn't be found.");
+        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given id'", std::to_string(id), "' couldn't be found.");
     return *(this->asmIds.at(id));
 }
 
-systembit_t VM::GenerateNewAssemblyID() const
+sysbit_t VM::GenerateNewAssemblyID() const
 {
-    systembit_t id { static_cast<systembit_t>(this->assemblies.size()) };
+    sysbit_t id { static_cast<sysbit_t>(this->assemblies.size()) };
     while (this->asmIds.contains(id))
         id++;
     return id;
@@ -124,7 +144,7 @@ const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) n
     if (this->assemblies.contains(settings.name))
         return System::ErrorCode::Bad;
 
-    if (this->assemblies.size() >= std::numeric_limits<systembit_t>::max())
+    if (this->assemblies.size() >= std::numeric_limits<sysbit_t>::max())
         return System::ErrorCode::Bad;
 
     settings.id = this->GenerateNewAssemblyID();
@@ -141,10 +161,10 @@ const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) n
     return code;
 }
 
-const System::ErrorCode VM::RemoveAssembly(systembit_t id) noexcept
+const System::ErrorCode VM::RemoveAssembly(sysbit_t id) noexcept
 {
     if (!this->asmIds.contains(id))  
-        return System::ErrorCode::Bad;
+        return System::ErrorCode::InvalidSpecifier;
 
     this->assemblies.erase(this->asmIds.at(id)->Settings().name);
     Assembly* assembly { this->asmIds.at(id) };
@@ -154,23 +174,48 @@ const System::ErrorCode VM::RemoveAssembly(systembit_t id) noexcept
 
 const System::ErrorCode VM::Run(VMSettings&& settings)
 {
-    try_catch(
-        this->settings = settings;
-        System::ErrorCode code = System::ErrorCode::Ok;
+    this->settings = settings;
+    System::ErrorCode code = System::ErrorCode::Ok;
 
-        while (!this->assemblies.empty())
+    while (!this->assemblies.empty())
+    {
+        // Dispatch Messages
+        code = this->DispatchMessages();
+
+        if (code != System::ErrorCode::Ok)
+            LOGE(
+                System::LogLevel::Medium, 
+                "Error while dispatching messages. Error code: ", 
+                std::to_string(static_cast<int>(code))
+            );
+
+        // Run the assemblies
+        for (auto& [name, assembly] : this->assemblies)
         {
-            // Dispatch Messages
-            code = (code == System::ErrorCode::Bad ? code : this->DispatchMessages());
+            try_catch(
+                code = assembly.Run();
+                
+                if (code != System::ErrorCode::Ok)
+                    LOGE(
+                        System::LogLevel::Low,
+                        "Error while running assembly ", assembly.Stringify(),
+                        " Error code: ", std::to_string(static_cast<int>(code))
+                    );,
 
-            // Run the assemblies
-            for (auto& [name, assembly] : this->assemblies)
-                code = (code == System::ErrorCode::Bad ? code : assembly.Run());
+                LOGE(
+                    System::LogLevel::Low, 
+                    "Error while running assembly ", 
+                    assembly.Stringify()
+                );,
+
+                LOGE(
+                    System::LogLevel::Medium, 
+                    "Fatal unexpected error while running",
+                    assembly.Stringify()
+                );
+            )
         }
-        return code;,
+    }
 
-        return System::ErrorCode::Bad;,
-
-        return System::ErrorCode::Bad;
-    )
+    return code;
 }

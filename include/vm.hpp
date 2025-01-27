@@ -9,7 +9,7 @@
 #include "system.hpp"
 
 using AssemblyCollection = std::unordered_map<std::string, Assembly>;
-using AssemblyIDCollection = std::unordered_map<systembit_t, Assembly*>;
+using AssemblyIDCollection = std::unordered_map<sysbit_t, Assembly*>;
 
 class VM : IMessageObject
 {
@@ -39,9 +39,9 @@ class VM : IMessageObject
 
         const Assembly& GetAssembly(const std::string& name) const;
         const Assembly& GetAssembly(const std::string&& name) const;
-        const Assembly& GetAssembly(systembit_t id) const;
+        const Assembly& GetAssembly(sysbit_t id) const;
         const System::ErrorCode AddAssembly(Assembly::AssemblySettings&& settings) noexcept;
-        const System::ErrorCode RemoveAssembly(systembit_t id) noexcept;
+        const System::ErrorCode RemoveAssembly(sysbit_t id) noexcept;
 
         inline const VMSettings& GetSettings() const noexcept
         { return this->settings; }
@@ -54,7 +54,7 @@ class VM : IMessageObject
 
         VMSettings settings;
 
-        systembit_t GenerateNewAssemblyID() const;
+        sysbit_t GenerateNewAssemblyID() const;
 
         VM() { }
 };
