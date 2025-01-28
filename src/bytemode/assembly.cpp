@@ -225,17 +225,14 @@ const System::ErrorCode Assembly::Load() noexcept
 
 const std::string& Assembly::Stringify() const noexcept
 {
-    static std::string stringified { };
+    if (reprStr.size() != 0)
+        return reprStr;
 
-    if (stringified.size() != 0)
-        return stringified;
-
-    const AssemblySettings& set { this->settings };
     std::stringstream ss;
-    ss << '[' << set.name << ':' << set.id << ']'; 
+    ss << '[' << this->settings.name << ':' << this->settings.id << ']'; 
 
-    stringified = ss.str();
-    return stringified;
+    reprStr = ss.str();
+    return reprStr;
 }
 
 sysbit_t Assembly::GenerateNewBoardID() const
@@ -366,7 +363,7 @@ const char* ROM::operator&() const noexcept
     return this->operator&(0); 
 }
 
-System::ErrorCode ROM::TryRead(sysbit_t index, char& data, bool raise, std::function<void()> failAct) const noexcept
+const System::ErrorCode ROM::TryRead(sysbit_t index, char& data, bool raise, std::function<void()> failAct) const noexcept
 {
     System::ErrorCode isOk { !(index >= size || index < 0) ? System::ErrorCode::Ok : System::ErrorCode::Bad };
 

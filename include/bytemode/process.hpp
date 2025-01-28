@@ -12,7 +12,8 @@ class Process : IMessageObject
         Process() = delete;
         Process(Process&) = delete;
         Process(Process&&) = delete;
-        Process(Board& parent, uchar_t id);
+        inline Process(Board& parent, uchar_t id) : parent(parent), id(id)
+        { }
 
         // TODO: Implement IMessageObject for Process
         const System::ErrorCode DispatchMessages() noexcept override;

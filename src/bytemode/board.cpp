@@ -2,6 +2,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -135,7 +136,6 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
     return System::ErrorCode::Ok;
 }
 
-
 //
 // Board Implementation
 //
@@ -154,6 +154,7 @@ Board::Board(class Assembly& assembly, sysbit_t id)
     this->ram = {
         stackSize,
         heapSize,
+        *this
     };
 
     // CPU is already created. 
@@ -207,10 +208,26 @@ const System::ErrorCode Board::Run() noexcept
         })};
 
         if (code != System::ErrorCode::Ok)
-            CRASH(System::ErrorCode::MessageSendError, "Error, couldn't send shutdown signal to");
+            CRASH(
+                System::ErrorCode::MessageSendError, 
+                "Error in ", this->Stringify(),
+                ". Couldn't send shutdown signal to ", this->Assembly().Stringify()
+            );
     }
 
     return System::ErrorCode::Ok;
+}
+
+const std::string& Board::Stringify() const noexcept
+{
+    if (reprStr.size() != 0)
+        return reprStr;
+
+    std::stringstream ss;
+    ss << this->parent.Stringify() << '[' << this->id << ']';
+
+    reprStr = ss.str();
+    return reprStr;
 }
 
 //
@@ -219,7 +236,11 @@ const System::ErrorCode Board::Run() noexcept
 char RAM::Read(const sysbit_t address) const
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0)
-        CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
+        CRASH(
+            System::ErrorCode::RAMAccessError, 
+            "Error in ", this->board.Stringify(),
+            " Attempt to read out of bounds memory ", std::to_string(address)
+        );
     
     return this->data[address];
 }
@@ -227,27 +248,51 @@ char RAM::Read(const sysbit_t address) const
 const char* RAM::ReadSome(const sysbit_t address, const sysbit_t size) const
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
-        CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
+        CRASH(
+            System::ErrorCode::RAMAccessError, 
+            "Error in ", this->board.Stringify(),
+            " Attempt to read out of bounds memory ", std::to_string(address)
+        );
 
-    return this->data+address;
+    return this->data.get()+address;
 }
 
-System::ErrorCode RAM::Write(const sysbit_t address, char value) noexcept
+const System::ErrorCode RAM::Write(const sysbit_t address, char value) noexcept
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0)
-        return System::ErrorCode::Ok;
+        return System::ErrorCode::RAMAccessError;
     this->data[address] = value; 
     return System::ErrorCode::Ok;
 }
 
-System::ErrorCode RAM::WriteSome(const sysbit_t address, const sysbit_t size, char* values) noexcept
+const System::ErrorCode RAM::WriteSome(const sysbit_t address, const sysbit_t size, const char* values) noexcept
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
-        CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
+        CRASH(
+            System::ErrorCode::RAMAccessError, 
+            "Error in ", this->board.Stringify(),
+            ". Attempt to read out of bounds memory ",
+            std::to_string(address)
+        );
 
     System::ErrorCode status = System::ErrorCode::Ok;
     for(sysbit_t i = 0; i < size; i++)
-        status = status == System::ErrorCode::Ok ? this->Write(address+i, values[i]) : status;
+    {
+        status = this->Write(address+i, values[i]);
+
+        if (status != System::ErrorCode::Ok)
+        {
+            LOGE(
+                System::LogLevel::Medium,
+                "Error in ",
+                this->board.Stringify(), 
+                ". Can't write to RAM address ", std::to_string(address),
+                ". Error code: ", std::to_string(static_cast<int>(status))
+            );
+            break;
+        }
+            
+    }
     return status;
 }
 
@@ -273,7 +318,11 @@ sysbit_t RAM::Allocate(const sysbit_t size)
             break;
     }
     if (counter != 0)
-        CRASH(System::ErrorCode::HeapOverflow, "Couldn't allocate memory on heap, board is out of memory.");
+        CRASH(
+            System::ErrorCode::HeapOverflow, 
+            "Error in ", this->board.Stringify(),
+            ". Couldn't allocate memory on heap, board is out of memory."
+        );
     for (sysbit_t i = 0; i < size; i++)
     {
         sysbit_t index { i/8 };
@@ -283,10 +332,14 @@ sysbit_t RAM::Allocate(const sysbit_t size)
     return allocationAddress;
 }
 
-System::ErrorCode RAM::Deallocate(const sysbit_t address, const sysbit_t size) noexcept
+const System::ErrorCode RAM::Deallocate(const sysbit_t address, const sysbit_t size) noexcept
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
-        CRASH(System::ErrorCode::RAMAccessError, "Attempt to read out of bounds memory '", std::to_string(address), "'");
+        CRASH(
+            System::ErrorCode::RAMAccessError, 
+            "Error in ", this->board.Stringify(),
+            ". Attempt to read out of bounds memory ", std::to_string(address)
+        );
 
     for (sysbit_t i = 0; i < size; i++)
     {
@@ -308,34 +361,10 @@ System::ErrorCode RAM::Deallocate(const sysbit_t address, const sysbit_t size) n
     return System::ErrorCode::Ok;
 }
 
-RAM::RAM(sysbit_t stackSize, sysbit_t heapSize)
-    : stackSize(stackSize), heapSize(heapSize)
-{
-    this->data = new char[stackSize+heapSize];
-
-    // allocation map will hold 1 bit for each cell. 
-    // so each byte refers to 8 cells. heap size must
-    // be multiple of 8
-    this->allocationMap = new char[heapSize/8];
-}
-
 void RAM::operator=(RAM&& other)
 {
     this->stackSize = other.stackSize;
     this->heapSize = other.heapSize;
-    this->data = other.data;
-    this->allocationMap = other.allocationMap;
-
-    other.stackSize = 0;
-    other.heapSize = 0;
-    other.data = nullptr;
-    other.allocationMap = nullptr;
-}
-
-RAM::~RAM()
-{
-    if (this->data)
-        delete[] this->data;
-    if (this->allocationMap)
-        delete[] this->allocationMap;
+    this->data = rval(other.data);
+    this->allocationMap = rval(other.allocationMap);
 }

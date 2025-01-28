@@ -26,7 +26,7 @@ class ROM
         char operator[](sysbit_t index) const noexcept;
         const char* operator&(sysbit_t index) const noexcept;
         const char* operator&() const noexcept;
-        System::ErrorCode TryRead(sysbit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const noexcept;
+        const System::ErrorCode TryRead(sysbit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const noexcept;
 
     private:
         std::unique_ptr<char[]> data = nullptr;
@@ -78,6 +78,8 @@ class Assembly : IMessageObject
         ROM rom;
         AssemblySettings settings;
         BoardCollection boards;
+
+        mutable std::string reprStr;
 
         sysbit_t GenerateNewBoardID() const;
 };

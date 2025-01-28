@@ -8,26 +8,33 @@ class Board;
 class CPU
 {
     public:
+        struct State
+        {
+            sysbit_t eax;
+            sysbit_t ebx;
+            sysbit_t ecx;
+            sysbit_t edx;
+            sysbit_t esi;
+            sysbit_t edi;
+
+            sysbit_t pc;
+            sysbit_t sp;
+
+            uchar_t al;
+            uchar_t bl;
+            uchar_t cl;
+            uchar_t dl;
+            uchar_t fl;
+        };
+
         CPU() = delete;
         CPU(Board& board);
         
         const System::ErrorCode Cycle() noexcept;
+        const System::ErrorCode DumpState(State& dumpTo);
+        const System::ErrorCode LoadState(const State& loadFrom);
 
     private: 
         Board& board;
-
-        sysbit_t eax = 0;
-        sysbit_t ebx = 0;
-        sysbit_t ecx = 0;
-        sysbit_t edx = 0;
-        sysbit_t esi = 0;
-        sysbit_t edi = 0;
-        sysbit_t pc = 0;
-        sysbit_t sp = 0;
-
-        uchar_t al = 0;
-        uchar_t bl = 0;
-        uchar_t cl = 0;
-        uchar_t dl = 0;
-        uchar_t fl = 0;
+        State state;
 };

@@ -1,7 +1,7 @@
-#include "bytemode/process.hpp"
-#include "CSRConfig.hpp"
 #include "extensions/converters.hpp"
+#include "bytemode/process.hpp"
 #include "bytemode/board.hpp"
+#include "CSRConfig.hpp"
 #include "message.hpp"
 #include "system.hpp"
 #include "vm.hpp"
@@ -62,9 +62,3 @@ const System::ErrorCode Process::SendMessage(Message message) noexcept
     this->parent.ReceiveMessage(message);
     return System::ErrorCode::Ok;
 }
-
-//
-// Process Implementation
-//
-Process::Process(Board& parent, uchar_t id) : parent(parent), id(id)
-{ }
