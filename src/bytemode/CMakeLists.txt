@@ -4,6 +4,7 @@ add_library(bytemode
         assembly.cpp        
         board.cpp
         cpu.cpp
+        ram.cpp
 )
 
 target_link_libraries(bytemode

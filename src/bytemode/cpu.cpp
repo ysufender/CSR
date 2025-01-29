@@ -1,16 +1,23 @@
+#include <cassert>
+#include <string>
+
 #include "extensions/converters.hpp"
 #include "bytemode/assembly.hpp"
 #include "bytemode/cpu.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
-#include <string>
 
 CPU::CPU(Board& board) : board(board), state()
 {
     // Check ROM for stack/heap sizes beforehand.
     char tmp;
+    System::ErrorCode code;
     for (int i = 0; i < 12; i++)
-        board.Assembly().Rom().TryRead(i, tmp, true);
+    {
+        code = board.Assembly().Rom().TryRead(i, tmp);
+        if (code != System::ErrorCode::Ok)
+            CRASH(code, "Error while initializing CPU for ", this->board.Stringify());
+    }
 
     this->state.pc = IntegerFromBytes<sysbit_t>(&board.Assembly().Rom());
 }
@@ -21,10 +28,17 @@ const System::ErrorCode CPU::Cycle() noexcept
     System::ErrorCode code { this->board.Assembly().Rom().TryRead(this->state.pc, op) };
 
     if (code != System::ErrorCode::Ok)
+    {
         LOGE(
             System::LogLevel::Medium, 
-            "In assembly ", this->board.Assembly().Stringify(),
+            "In ", this->board.Stringify(),
+            ", error while trying to read the instructions from ROM. Exit code: ",
+            std::to_string(static_cast<int>(code))
         );
+        return code;
+    }
+
+    LOGD("CPU read op-code: ", std::to_string(op));
 
     return System::ErrorCode::Ok;
 }

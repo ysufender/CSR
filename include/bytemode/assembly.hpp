@@ -18,7 +18,9 @@ class ROM
     friend class Assembly;
 
     public:
-        ROM() = default;
+        ROM(const Assembly& assembly) : assembly(assembly)
+        { }
+
         ROM(ROM&) = delete;
         void operator=(ROM const&) = delete;
         void operator=(ROM const&&) = delete;
@@ -26,11 +28,12 @@ class ROM
         char operator[](sysbit_t index) const noexcept;
         const char* operator&(sysbit_t index) const noexcept;
         const char* operator&() const noexcept;
-        const System::ErrorCode TryRead(sysbit_t index, char& data, bool raise = false, std::function<void()> failAct = { }) const noexcept;
+        const System::ErrorCode TryRead(sysbit_t index, char& data, std::function<void()> failAct = { }) const noexcept;
 
     private:
         std::unique_ptr<char[]> data = nullptr;
         sysbit_t size = 0;
+        const Assembly& assembly;
 };
 
 class Assembly : IMessageObject
@@ -75,7 +78,7 @@ class Assembly : IMessageObject
         const std::string& Stringify() const noexcept;
 
     private:
-        ROM rom;
+        ROM rom { *this };
         AssemblySettings settings;
         BoardCollection boards;
 

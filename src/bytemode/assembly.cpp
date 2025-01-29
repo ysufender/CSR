@@ -363,18 +363,22 @@ const char* ROM::operator&() const noexcept
     return this->operator&(0); 
 }
 
-const System::ErrorCode ROM::TryRead(sysbit_t index, char& data, bool raise, std::function<void()> failAct) const noexcept
+const System::ErrorCode ROM::TryRead(sysbit_t index, char& data, std::function<void()> failAct) const noexcept
 {
-    System::ErrorCode isOk { !(index >= size || index < 0) ? System::ErrorCode::Ok : System::ErrorCode::Bad };
+    System::ErrorCode isOk { index >= size || index < 0 };
 
     if (isOk == System::ErrorCode::Ok)
-        data = (*this)[index];
-    if (!(isOk == System::ErrorCode::Ok) && failAct)
-        failAct();
-    if (!(isOk == System::ErrorCode::Ok) && raise)
     {
-        LOGE(System::LogLevel::Medium, "Cannot access index '", std::to_string(index), "' of ROM");
-        return System::ErrorCode::ROMAccessError;
+        data = (*this)[index];
+        return System::ErrorCode::Ok;
     }
-    return isOk;
+
+    LOGE(
+        System::LogLevel::Medium, 
+        "Cannot access index '", std::to_string(index), "' of ROM ",
+        this->assembly.Stringify()
+    );
+    if (failAct)
+        failAct();
+    return System::ErrorCode::ROMAccessError;
 }

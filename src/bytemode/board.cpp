@@ -1,5 +1,9 @@
+#include <bit>
+#include <bitset>
 #include <cassert>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -7,14 +11,110 @@
 #include <tuple>
 #include <utility>
 
+#include "extensions/syntaxextensions.hpp"
+#include "extensions/converters.hpp"
+#include "bytemode/assembly.hpp"
 #include "bytemode/board.hpp"
 #include "CSRConfig.hpp"
-#include "bytemode/assembly.hpp"
-#include "extensions/converters.hpp"
-#include "extensions/syntaxextensions.hpp"
 #include "message.hpp"
 #include "system.hpp"
 #include "vm.hpp"
+
+//
+// Board Implementation
+//
+Board::Board(class Assembly& assembly, sysbit_t id) 
+    : parent(assembly), cpu(*this), id(id)
+{
+    // CPU will be initialized beforehand, so it checks the ROM.
+     
+    // second 32 bits of ROM is stack size
+    sysbit_t stackSize { IntegerFromBytes<sysbit_t>(assembly.Rom()&4) }; 
+
+    // third 32 bits of ROM is heap size
+    sysbit_t heapSize { IntegerFromBytes<sysbit_t>(assembly.Rom()&8)};
+    
+    // Create RAM
+    this->ram = {
+        stackSize,
+        heapSize,
+        *this
+    };
+
+    // CPU is already created. 
+}
+
+uchar_t Board::GenerateNewProcessID() const
+{
+    uchar_t id { static_cast<uchar_t>(this->processes.size()) };
+    while (this->processes.contains(id))
+        id++;
+    return id;
+}
+
+const System::ErrorCode Board::AddProcess() noexcept
+{
+    if (this->processes.size() >= std::numeric_limits<uchar_t>::max())
+        return System::ErrorCode::Bad;
+
+    uchar_t id { this->GenerateNewProcessID() };
+    this->processes.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(id),
+        std::forward_as_tuple(*this, id)
+    );
+
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode Board::Run() noexcept
+{
+    // Dispatch messages
+    System::ErrorCode code { this->DispatchMessages() }; 
+
+    if (code != System::ErrorCode::Ok)
+        return code;
+
+    this->cpu.Cycle();
+
+    // Send Shutdown Signal to Assembly
+    if (this->processes.size() == 0)
+    {
+        std::unique_ptr<char[]> data { new char[5] };
+        char* id { BytesFromInteger<sysbit_t, char>(this->id) };
+
+        std::memcpy(data.get(), id, sizeof(sysbit_t));
+        data[4] = 0;
+
+        delete[] id;
+
+        System::ErrorCode code { this->SendMessage({
+            MessageType::BtoA,
+            rval(data),
+        })};
+
+        if (code != System::ErrorCode::Ok)
+            CRASH(
+                System::ErrorCode::MessageSendError, 
+                "Error in ", this->Stringify(),
+                ". Couldn't send shutdown signal to ", this->Assembly().Stringify()
+            );
+    }
+
+    return System::ErrorCode::Ok;
+}
+
+const std::string& Board::Stringify() const noexcept
+{
+    if (reprStr.size() != 0)
+        return reprStr;
+
+    std::stringstream ss;
+    ss << this->parent.Stringify() << '[' << this->id << ']';
+
+    reprStr = ss.str();
+    return reprStr;
+}
 
 //
 // IMessageObject Implementation
@@ -136,235 +236,4 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
     return System::ErrorCode::Ok;
 }
 
-//
-// Board Implementation
-//
-Board::Board(class Assembly& assembly, sysbit_t id) 
-    : parent(assembly), cpu(*this), id(id)
-{
-    // CPU will be initialized beforehand, so it checks the ROM.
 
-    // second 32 bits of ROM is stack size
-    sysbit_t stackSize { IntegerFromBytes<sysbit_t>(assembly.Rom()&4) }; 
-
-    // third 32 bits of ROM is heap size
-    sysbit_t heapSize { IntegerFromBytes<sysbit_t>(assembly.Rom()&8)};
-    
-    // Create RAM
-    this->ram = {
-        stackSize,
-        heapSize,
-        *this
-    };
-
-    // CPU is already created. 
-}
-
-uchar_t Board::GenerateNewProcessID() const
-{
-    uchar_t id { static_cast<uchar_t>(this->processes.size()) };
-    while (this->processes.contains(id))
-        id++;
-    return id;
-}
-
-const System::ErrorCode Board::AddProcess() noexcept
-{
-    if (this->processes.size() >= std::numeric_limits<uchar_t>::max())
-        return System::ErrorCode::Bad;
-
-    uchar_t id { this->GenerateNewProcessID() };
-    this->processes.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(id),
-        std::forward_as_tuple(*this, id)
-    );
-
-    return System::ErrorCode::Ok;
-}
-
-const System::ErrorCode Board::Run() noexcept
-{
-    // Dispatch messages
-    System::ErrorCode code { this->DispatchMessages() }; 
-
-    if (code != System::ErrorCode::Ok)
-        return code;
-
-    // Send Shutdown Signal to Assembly
-    if (this->processes.size() == 0)
-    {
-        std::unique_ptr<char[]> data { new char[5] };
-        char* id { BytesFromInteger<sysbit_t, char>(this->id) };
-
-        std::memcpy(data.get(), id, sizeof(sysbit_t));
-        data[4] = 0;
-
-        delete[] id;
-
-        System::ErrorCode code { this->SendMessage({
-            MessageType::BtoA,
-            rval(data),
-        })};
-
-        if (code != System::ErrorCode::Ok)
-            CRASH(
-                System::ErrorCode::MessageSendError, 
-                "Error in ", this->Stringify(),
-                ". Couldn't send shutdown signal to ", this->Assembly().Stringify()
-            );
-    }
-
-    return System::ErrorCode::Ok;
-}
-
-const std::string& Board::Stringify() const noexcept
-{
-    if (reprStr.size() != 0)
-        return reprStr;
-
-    std::stringstream ss;
-    ss << this->parent.Stringify() << '[' << this->id << ']';
-
-    reprStr = ss.str();
-    return reprStr;
-}
-
-//
-// RAM Implementation
-//
-char RAM::Read(const sysbit_t address) const
-{
-    if (address >= (this->stackSize+this->heapSize) || address < 0)
-        CRASH(
-            System::ErrorCode::RAMAccessError, 
-            "Error in ", this->board.Stringify(),
-            " Attempt to read out of bounds memory ", std::to_string(address)
-        );
-    
-    return this->data[address];
-}
-
-const char* RAM::ReadSome(const sysbit_t address, const sysbit_t size) const
-{
-    if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
-        CRASH(
-            System::ErrorCode::RAMAccessError, 
-            "Error in ", this->board.Stringify(),
-            " Attempt to read out of bounds memory ", std::to_string(address)
-        );
-
-    return this->data.get()+address;
-}
-
-const System::ErrorCode RAM::Write(const sysbit_t address, char value) noexcept
-{
-    if (address >= (this->stackSize+this->heapSize) || address < 0)
-        return System::ErrorCode::RAMAccessError;
-    this->data[address] = value; 
-    return System::ErrorCode::Ok;
-}
-
-const System::ErrorCode RAM::WriteSome(const sysbit_t address, const sysbit_t size, const char* values) noexcept
-{
-    if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
-        CRASH(
-            System::ErrorCode::RAMAccessError, 
-            "Error in ", this->board.Stringify(),
-            ". Attempt to read out of bounds memory ",
-            std::to_string(address)
-        );
-
-    System::ErrorCode status = System::ErrorCode::Ok;
-    for(sysbit_t i = 0; i < size; i++)
-    {
-        status = this->Write(address+i, values[i]);
-
-        if (status != System::ErrorCode::Ok)
-        {
-            LOGE(
-                System::LogLevel::Medium,
-                "Error in ",
-                this->board.Stringify(), 
-                ". Can't write to RAM address ", std::to_string(address),
-                ". Error code: ", std::to_string(static_cast<int>(status))
-            );
-            break;
-        }
-            
-    }
-    return status;
-}
-
-sysbit_t RAM::Allocate(const sysbit_t size)
-{
-    sysbit_t counter { size };
-    sysbit_t allocationAddress { 0 };
-    for (sysbit_t i = 0; i < this->heapSize/8; i++)
-    {
-        sysbit_t index { i/8 };
-        char offset { static_cast<char>(i - index/8) };
-
-        const bool flag = (static_cast<uchar_t>(this->allocationMap[index]) >> (8 - offset)) & 1;
-        if (flag)
-        {
-            counter = size;
-            allocationAddress = 0;
-            continue;
-        }
-        allocationAddress = allocationAddress == 0 ? i : allocationAddress; 
-        counter--;
-        if (counter == 0)
-            break;
-    }
-    if (counter != 0)
-        CRASH(
-            System::ErrorCode::HeapOverflow, 
-            "Error in ", this->board.Stringify(),
-            ". Couldn't allocate memory on heap, board is out of memory."
-        );
-    for (sysbit_t i = 0; i < size; i++)
-    {
-        sysbit_t index { i/8 };
-        char offset { static_cast<char>(i - index*8) };
-        this->allocationMap[index] |= (uchar_t{1} << (8-offset));
-    }
-    return allocationAddress;
-}
-
-const System::ErrorCode RAM::Deallocate(const sysbit_t address, const sysbit_t size) noexcept
-{
-    if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
-        CRASH(
-            System::ErrorCode::RAMAccessError, 
-            "Error in ", this->board.Stringify(),
-            ". Attempt to read out of bounds memory ", std::to_string(address)
-        );
-
-    for (sysbit_t i = 0; i < size; i++)
-    {
-        sysbit_t index { i/8 };
-        char offset { static_cast<char>(i - index*8) }; 
-        const bool flag = (static_cast<uchar_t>(this->allocationMap[index]) >> (8 - offset)) & 1;
-        if (!flag)
-            return System::ErrorCode::Bad;
-    }
-    for (sysbit_t i = 0; i < size; i++)
-    {
-        sysbit_t index { i/8 };
-        char offset { static_cast<char>(i - index*8) }; 
-
-        data[address+offset+index*8] = 0;
-        allocationMap[index] |= ~((uchar_t{1} << (8 - offset))); 
-    }
-
-    return System::ErrorCode::Ok;
-}
-
-void RAM::operator=(RAM&& other)
-{
-    this->stackSize = other.stackSize;
-    this->heapSize = other.heapSize;
-    this->data = rval(other.data);
-    this->allocationMap = rval(other.allocationMap);
-}
