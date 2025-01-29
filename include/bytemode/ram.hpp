@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bytemode/slice.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
 
@@ -28,12 +29,12 @@ class RAM
             // be multiple of 8
         }
 
-        void operator=(RAM&& other);
+        RAM& operator=(RAM&& other);
 
         char Read(const sysbit_t address) const;
         const System::ErrorCode Write(const sysbit_t address, char value) noexcept;
 
-        const char* ReadSome(const sysbit_t address, const sysbit_t size) const;
+        const Slice ReadSome(const sysbit_t address, const sysbit_t size) const;
         const System::ErrorCode WriteSome(const sysbit_t address, const sysbit_t size, const char* values) noexcept;
 
         sysbit_t Allocate(const sysbit_t size);

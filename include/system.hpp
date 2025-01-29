@@ -39,6 +39,7 @@ struct System
         InvalidSpecifier,
         FileIOError,
         MessageSendError,
+        IndexOutOfBounds,
     };
 
     enum class LogLevel
@@ -63,10 +64,10 @@ struct System
         System(const System&&) = delete;
         ~System() = delete;
 
-        void operator=(System&) = delete;
-        void operator=(const System&) = delete;
-        void operator=(System&&) = delete;
-        void operator=(const System&&) = delete;
+        System& operator=(System&) = delete;
+        System& operator=(const System&) = delete;
+        System& operator=(System&&) = delete;
+        System& operator=(const System&&) = delete;
 
         void* operator new(size_t) = delete;
         void* operator new[](size_t) = delete;
@@ -88,14 +89,14 @@ class CSRException : public std::runtime_error
     public:
         CSRException(std::string message, std::string file, int line, System::ErrorCode errCode);
         
-        inline const int GetLine() const noexcept { return _line; }
-        inline const System::ErrorCode GetCode() const noexcept { return _errCode; }
-        inline const std::string& GetFile() const noexcept { return _file; }
-        inline const std::string& GetMsg() const noexcept { return _message; }
+        const int GetLine() const noexcept { return _line; }
+        const System::ErrorCode GetCode() const noexcept { return _errCode; }
+        const std::string& GetFile() const noexcept { return _file; }
+        const std::string& GetMsg() const noexcept { return _message; }
 
-        inline const std::string& Stringify() const noexcept { return _fullStr; }
+        const std::string& Stringify() const noexcept { return _fullStr; }
 
-        friend inline std::ostream& operator<<(std::ostream& out, const CSRException& exc)
+        friend std::ostream& operator<<(std::ostream& out, const CSRException& exc)
         {
             out << exc.Stringify();
             return out;

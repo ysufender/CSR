@@ -7,6 +7,13 @@
 #include "CSRConfig.hpp"
 #include "system.hpp"
 
+constexpr OperationFunction ops[] = {
+    nullptr, nullptr, nullptr, nullptr,
+    nullptr, nullptr, nullptr, nullptr,
+    nullptr, nullptr, nullptr, nullptr,
+    ALU::MoveReg
+};
+
 CPU::CPU(Board& board) : board(board), state()
 {
     // Check ROM for stack/heap sizes beforehand.
@@ -20,6 +27,16 @@ CPU::CPU(Board& board) : board(board), state()
     }
 
     this->state.pc = IntegerFromBytes<sysbit_t>(&board.Assembly().Rom());
+}
+
+const CPU::State& CPU::DumpState(State& dumpTo) noexcept
+{
+    return (dumpTo = this->state);
+}
+
+const CPU::State& CPU::LoadState(const State& loadFrom) noexcept
+{
+    return (this->state = loadFrom);
 }
 
 const System::ErrorCode CPU::Cycle() noexcept
@@ -40,5 +57,5 @@ const System::ErrorCode CPU::Cycle() noexcept
 
     LOGD("CPU read op-code: ", std::to_string(op));
 
-    return System::ErrorCode::Ok;
+    return ops[op]();
 }

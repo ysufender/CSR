@@ -22,8 +22,8 @@ class VM : IMessageObject
 
         VM(VM const&) = delete;
         VM(VM const&&) = delete;
-        void operator=(VM const&) = delete;
-        void operator=(VM const&&) = delete;
+        VM& operator=(VM const&) = delete;
+        VM& operator=(VM const&&) = delete;
 
         static inline VM& GetVM() noexcept
         {

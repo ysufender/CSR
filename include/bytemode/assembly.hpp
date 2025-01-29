@@ -1,8 +1,6 @@
 #pragma once
 
 #include <filesystem>
-#include <functional>
-#include <memory>
 #include <unordered_map>
 #include <string>
 
@@ -10,31 +8,9 @@
 #include "message.hpp"
 #include "system.hpp"
 #include "bytemode/board.hpp"
+#include "bytemode/rom.hpp"
 
 using BoardCollection = std::unordered_map<sysbit_t, Board>;
-
-class ROM
-{
-    friend class Assembly;
-
-    public:
-        ROM(const Assembly& assembly) : assembly(assembly)
-        { }
-
-        ROM(ROM&) = delete;
-        void operator=(ROM const&) = delete;
-        void operator=(ROM const&&) = delete;
-
-        char operator[](sysbit_t index) const noexcept;
-        const char* operator&(sysbit_t index) const noexcept;
-        const char* operator&() const noexcept;
-        const System::ErrorCode TryRead(sysbit_t index, char& data, std::function<void()> failAct = { }) const noexcept;
-
-    private:
-        std::unique_ptr<char[]> data = nullptr;
-        sysbit_t size = 0;
-        const Assembly& assembly;
-};
 
 class Assembly : IMessageObject
 {

@@ -1,9 +1,12 @@
 #pragma once
 
 #include "CSRConfig.hpp"
+#include "extensions/syntaxextensions.hpp"
 #include "system.hpp"
 
 class Board;
+
+using OperationFunction = const System::ErrorCode(*)() noexcept;
 
 class CPU
 {
@@ -31,10 +34,24 @@ class CPU
         CPU(Board& board);
         
         const System::ErrorCode Cycle() noexcept;
-        const System::ErrorCode DumpState(State& dumpTo);
-        const System::ErrorCode LoadState(const State& loadFrom);
+        const State& DumpState(State& dumpTo) noexcept;
+        const State& LoadState(const State& loadFrom) noexcept;
 
     private: 
         Board& board;
         State state;
 };
+
+namespace
+{
+    namespace ALU
+    {
+        using OPR = const System::ErrorCode;
+
+        OPR MoveReg() noexcept
+        {
+            LOGE(System::LogLevel::Medium, "Implement ", nameof(MoveReg));
+            return System::ErrorCode::Ok;
+        }
+    }
+}

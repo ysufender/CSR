@@ -29,10 +29,10 @@ Board::Board(class Assembly& assembly, sysbit_t id)
     // CPU will be initialized beforehand, so it checks the ROM.
      
     // second 32 bits of ROM is stack size
-    sysbit_t stackSize { IntegerFromBytes<sysbit_t>(assembly.Rom()&4) }; 
+    sysbit_t stackSize { IntegerFromBytes<sysbit_t>(assembly.Rom().ReadSome(4, 4).data)}; 
 
     // third 32 bits of ROM is heap size
-    sysbit_t heapSize { IntegerFromBytes<sysbit_t>(assembly.Rom()&8)};
+    sysbit_t heapSize { IntegerFromBytes<sysbit_t>(assembly.Rom().ReadSome(8, 4).data)};
     
     // Create RAM
     this->ram = {

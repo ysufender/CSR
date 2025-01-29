@@ -15,6 +15,9 @@
         - [ ] ROM
     - [ ] Board
         - [ ] RAM
+            - [ ] Read byte
+            - [ ] Read bytes
+            - [ ]
         - [ ] CPU
         - [ ] Process
             - [ ] Dispatch Messages

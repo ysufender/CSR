@@ -8,6 +8,8 @@
 
 #define rval(expr) std::move(expr)
 
+#define nameof(variable) #variable
+
 #define try_catch(expr, catchcsr, catchother) \
     try { \
         expr \

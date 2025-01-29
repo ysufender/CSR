@@ -22,7 +22,7 @@ char RAM::Read(const sysbit_t address) const
     return this->data[address];
 }
 
-const char* RAM::ReadSome(const sysbit_t address, const sysbit_t size) const
+const Slice RAM::ReadSome(const sysbit_t address, const sysbit_t size) const
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
         CRASH(
@@ -31,8 +31,10 @@ const char* RAM::ReadSome(const sysbit_t address, const sysbit_t size) const
             " Attempt to read out of bounds memory ", std::to_string(address)
         );
 
-    return this->data.get()+address;
-}
+    return {
+        this->data.get()+address,
+        size
+    };}
 
 const System::ErrorCode RAM::Write(const sysbit_t address, char value) noexcept
 {
@@ -145,10 +147,12 @@ const System::ErrorCode RAM::Deallocate(const sysbit_t address, const sysbit_t s
     return System::ErrorCode::Ok;
 }
 
-void RAM::operator=(RAM&& other)
+RAM& RAM::operator=(RAM&& other)
 {
     this->stackSize = other.stackSize;
     this->heapSize = other.heapSize;
     this->data = rval(other.data);
     this->allocationMap = rval(other.allocationMap);
+
+    return *this;
 }
