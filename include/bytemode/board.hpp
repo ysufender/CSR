@@ -17,6 +17,8 @@ class Assembly;
 
 class Board : IMessageObject
 {
+    friend class Process;
+
     public:
         Board() = delete;
         Board(Board&) = delete;
@@ -24,7 +26,7 @@ class Board : IMessageObject
         Board(class Assembly& assembly, sysbit_t id);
 
         const class Assembly& Assembly() const 
-        { return this->parent; }
+        { return this->assembly; }
 
 
         const System::ErrorCode DispatchMessages() noexcept; 
@@ -36,15 +38,20 @@ class Board : IMessageObject
 
         const std::string& Stringify() const noexcept;
 
+        uchar_t GetExecutingProcess() const noexcept
+        { return this->currentProcess; }
+
         const sysbit_t id;
-        RAM ram { *this };
 
     private:
+        uchar_t GenerateNewProcessID() const;
+
         ProcessCollection processes;
-        class Assembly& parent;
+        uchar_t currentProcess { 0 };
+
+        class Assembly& assembly;
+        RAM ram { *this };
         CPU cpu; 
 
         mutable std::string reprStr;
-
-        uchar_t GenerateNewProcessID() const;
 };

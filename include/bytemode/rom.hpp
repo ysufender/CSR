@@ -25,8 +25,8 @@ class ROM
         const char* operator&(sysbit_t index) const noexcept;
         const char* operator&() const noexcept;
 
-        const Slice Data() { return { this->data.get(), this->size }; }
-        sysbit_t Size() { return this->size; }
+        const Slice Data() const { return { this->data.get(), this->size }; }
+        sysbit_t Size() const { return this->size; }
 
         const System::ErrorCode TryRead(sysbit_t index, char& data, std::function<void()> failAct = { }) const noexcept;
         const Slice ReadSome(const sysbit_t index, const sysbit_t size) const;

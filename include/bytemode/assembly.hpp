@@ -33,13 +33,13 @@ class Assembly : IMessageObject
         Assembly() = delete;
         Assembly(AssemblySettings&& settings);
 
-        inline const AssemblySettings& Settings() const noexcept 
+        const AssemblySettings& Settings() const noexcept 
         { return this->settings; }
 
-        inline const ROM& Rom() const noexcept 
+        const ROM& Rom() const noexcept 
         { return this->rom; }
 
-        inline const BoardCollection& Boards() const noexcept 
+        const BoardCollection& Boards() const noexcept 
         { return this->boards; }
 
         const System::ErrorCode DispatchMessages() noexcept override;

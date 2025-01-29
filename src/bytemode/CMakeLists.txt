@@ -7,6 +7,7 @@ add_library(bytemode
         ram.cpp
         slice.cpp
         rom.cpp
+        instructions.cpp
 )
 
 target_link_libraries(bytemode

@@ -1,3 +1,8 @@
+#include <memory>
+#include <sstream>
+#include <string>
+
+#include "bytemode/cpu.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/process.hpp"
 #include "bytemode/board.hpp"
@@ -5,6 +10,57 @@
 #include "message.hpp"
 #include "system.hpp"
 #include "vm.hpp"
+
+//
+// Process Implementation
+//
+const std::string& Process::Stringify() const noexcept
+{
+    if (this->reprStr.size() != 0)
+        return this->reprStr;
+
+    std::stringstream ss;
+    ss << this->board.Stringify() << '[' << this->id << ']';
+    
+    reprStr = ss.str();
+    return reprStr;
+}
+
+const System::ErrorCode Process::Cycle() noexcept
+{
+    System::ErrorCode code { this->DispatchMessages() };
+
+    if (code != System::ErrorCode::Ok)
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->Stringify(),
+            " error while dispatching messages. Error code: ", std::to_string(static_cast<int>(code))
+        );
+
+    OpCodes op { this->board.Assembly().Rom()[this->board.cpu.DumpState().pc] };
+
+    // New callStack will be initialized, or destroyed
+    // either way that means it's interrupt for this process.
+    // Send message to Board to switch to the next process.
+    if (op == OpCodes::cal || op == OpCodes::calr || op == OpCodes::ret)
+    {
+        std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(2) };
+        data[0] = this->id;
+        data[1] = 0;
+        this->SendMessage({MessageType::PtoB, rval(data)});
+    }
+
+    code = this->board.cpu.Cycle();
+
+    if (code != System::ErrorCode::Ok)
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->Stringify(),
+            " error in CPU cycle. Error code: ", std::to_string(static_cast<int>(code))
+        );
+
+    return code;
+}
 
 //
 // IMessageObject Implementation
@@ -59,6 +115,6 @@ const System::ErrorCode Process::SendMessage(Message message) noexcept
     if (IntegerFromBytes<uchar_t>(senderOffset) != this->id)
         return System::ErrorCode::Bad;
 
-    this->parent.ReceiveMessage(message);
+    this->board.ReceiveMessage(message);
     return System::ErrorCode::Ok;
 }

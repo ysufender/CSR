@@ -24,7 +24,7 @@
 // Board Implementation
 //
 Board::Board(class Assembly& assembly, sysbit_t id) 
-    : parent(assembly), cpu(*this), id(id)
+    : assembly(assembly), cpu(*this), id(id)
 {
     // CPU will be initialized beforehand, so it checks the ROM.
      
@@ -69,14 +69,29 @@ const System::ErrorCode Board::AddProcess() noexcept
 
 const System::ErrorCode Board::Run() noexcept
 {
+    // Create the initial process
+    if (this->processes.size() == 0)
+    {
+        System::ErrorCode code { this->AddProcess() };
+
+        if (code != System::ErrorCode::Ok)
+        {
+            LOGE(
+                System::LogLevel::Medium,
+                "In ", this->Stringify(), " failed to initialize initial process. Error code: ",
+                std::to_string(static_cast<int>(code))
+            );
+            return code;
+        }
+    }
+
     // Dispatch messages
     System::ErrorCode code { this->DispatchMessages() }; 
 
     if (code != System::ErrorCode::Ok)
         return code;
 
-    this->cpu.Cycle();
-
+goto skipShut;
     // Send Shutdown Signal to Assembly
     if (this->processes.size() == 0)
     {
@@ -100,8 +115,19 @@ const System::ErrorCode Board::Run() noexcept
                 ". Couldn't send shutdown signal to ", this->Assembly().Stringify()
             );
     }
+skipShut:
 
-    return System::ErrorCode::Ok;
+    code = this->processes.at(this->currentProcess).Cycle();
+
+    if (code != System::ErrorCode::Ok)
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->Stringify(), " error while running current process, id: ",
+            std::to_string(currentProcess),
+            ". Error code: ", std::to_string(static_cast<int>(code))
+        );
+
+    return code;
 }
 
 const std::string& Board::Stringify() const noexcept
@@ -110,7 +136,7 @@ const std::string& Board::Stringify() const noexcept
         return reprStr;
 
     std::stringstream ss;
-    ss << this->parent.Stringify() << '[' << this->id << ']';
+    ss << this->assembly.Stringify() << '[' << this->id << ']';
 
     reprStr = ss.str();
     return reprStr;
@@ -127,6 +153,31 @@ const System::ErrorCode Board::DispatchMessages() noexcept
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
+
+        if (message.type() == MessageType::PtoB)
+        {
+            // Process Interrupt, set currentProcess to next
+            if (message.data()[1] == 0)
+            {
+                if (static_cast<uchar_t>(message.data()[0]) != currentProcess) 
+                    return System::ErrorCode::InvalidSpecifier;
+
+                // Dump current state of CPU to currentProcess
+                this->processes.at(currentProcess).LoadState(this->cpu.DumpState());
+
+                // set the next process to be the current
+                this->currentProcess = std::min<uchar_t>(
+                                            static_cast<uchar_t>(message.data()[0]), 
+                                            this->processes.size()
+                                        );
+
+                // Load the state from new state to CPU
+                this->cpu.LoadState(this->processes.at(currentProcess).DumpState());
+
+                continue;
+            }
+        }
+
         this->messagePool.pop();
     }
 
@@ -215,7 +266,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
             if (IntegerFromBytes<sysbit_t>(message.data().get()+4) != this->id)
                 return System::ErrorCode::Bad;
 
-            this->parent.ReceiveMessage(message);
+            this->assembly.ReceiveMessage(message);
         }
         break;
 
@@ -225,7 +276,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
             if (IntegerFromBytes<sysbit_t>(message.data().get())) 
                 return System::ErrorCode::Bad;
 
-            this->parent.ReceiveMessage(message);
+            this->assembly.ReceiveMessage(message);
         }
         break;
 

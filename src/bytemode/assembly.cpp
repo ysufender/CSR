@@ -24,7 +24,7 @@ const System::ErrorCode Assembly::DispatchMessages() noexcept
 {
     // TODO
 
-    //LOGE(System::LogLevel::Medium, "Assembly::DispatchMessages has not been implemented yet");
+    LOGE(System::LogLevel::Medium, "Assembly::DispatchMessages has not been implemented yet");
 
     while (!this->messagePool.empty())
     {
