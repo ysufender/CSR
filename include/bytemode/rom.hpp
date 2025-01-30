@@ -21,13 +21,14 @@ class ROM
         void operator=(ROM const&) = delete;
         void operator=(ROM const&&) = delete;
 
-        char operator[](sysbit_t index) const noexcept;
-        const char* operator&(sysbit_t index) const noexcept;
-        const char* operator&() const noexcept;
+        char operator[](sysbit_t index) const;
+        const char* operator&(sysbit_t index) const;
+        const char* operator&() const;
 
         const Slice Data() const { return { this->data.get(), this->size }; }
         sysbit_t Size() const { return this->size; }
 
+        char Read(sysbit_t index) const { return (*this)[index]; }
         const System::ErrorCode TryRead(sysbit_t index, char& data, std::function<void()> failAct = { }) const noexcept;
         const Slice ReadSome(const sysbit_t index, const sysbit_t size) const;
 

@@ -3,37 +3,21 @@
 #include <memory>
 #include <vector>
 
+#include "extensions/syntaxextensions.hpp"
 #include "system.hpp"
 
-enum class MessageType : char
-{
-    PtoP, // receiver is B
-        // data is [targetId(1byte), senderID(1byte), message...]
 
-    PtoB, // receiver is B
-        // data is [senderID(1byte), message...]
-
-    BtoP, // receiver is P
-        // data is [targetId(1byte), message...]
-
-    BtoB, // receiver is A
-        // data is [targetId(4bytes), senderID(4bytes), message...]
-
-    BtoA, // receiver is A
-        // data is [senderId(4byte), message...]
-
-    AtoB, // receiver is B
-        // data is [targetId(4byte), message...]
-        
-    AtoA, // receiver is V
-        // data is [targetId(4bytes), senderID(4bytes), message...]
-
-    AtoV, // receiver is V
-        // data is [senderId(4bytes), message...]
-
-    VtoA, // receiver is A
-        // data is [targetId(4bytes), message...]
-};
+#define MTER(E) \
+    E(PtoB) \
+    E(BtoP) \
+    E(BtoB) \
+    E(BtoA) \
+    E(AtoB) \
+    E(AtoA) \
+    E(AtoV) \
+    E(VtoA)
+MAKE_ENUM(MessageType, PtoP, 0, MTER, OUT_CLASS)
+#undef MTER
 
 class Message
 {

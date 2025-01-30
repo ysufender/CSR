@@ -18,153 +18,6 @@
 #include "vm.hpp"
 
 //
-// IMessageObject Implementation
-//
-const System::ErrorCode Assembly::DispatchMessages() noexcept
-{
-    // TODO
-
-    LOGE(System::LogLevel::Medium, "Assembly::DispatchMessages has not been implemented yet");
-
-    while (!this->messagePool.empty())
-    {
-        const Message& message { this->messagePool.front() };
-        System::ErrorCode code { System::ErrorCode::Ok };
-
-        if (message.type() == MessageType::BtoA)
-        {
-            if (message.data()[4] == 0)
-            {
-                sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
-                LOGD(
-                    this->Stringify(), 
-                    " received Shutdown signal from board, id:",
-                    std::to_string(id)
-                );
-
-                this->RemoveBoard(id);
-            }
-        }
-        else
-            LOGE(
-                System::LogLevel::Low, 
-                "Unhandled message, type: ",
-                std::to_string(static_cast<int>(message.type()))
-            );
-
-        if (code != System::ErrorCode::Ok)
-            LOGE(
-                System::LogLevel::Medium,
-                "Message dispatch exited with code ", std::to_string(static_cast<int>(code)),
-                ". Message type: ", std::to_string(static_cast<int>(message.type()))
-            );
-
-        this->messagePool.pop();
-    }
-    return System::ErrorCode::Ok;
-}
-
-const System::ErrorCode Assembly::ReceiveMessage(Message message) noexcept
-{
-    // message.type() must be BtoB, BtoA or VtoA
-    // data must be
-    //      [targetId(4bytes), senderID(4bytes), message...]
-    //      or
-    //      [senderId(4byte), message...]
-    //      or
-    //      [targetId(4bytes), message...]
-    // check the first 4bytes to verify the sender/target
-
-    if (!VM::GetVM().GetSettings().strictMessages)
-        return System::ErrorCode::Ok;
-
-    switch (message.type())
-    {
-        case MessageType::BtoB:
-        // [targetId(4bytes), senderID(4bytes), message...]
-        {
-            sysbit_t target { IntegerFromBytes<sysbit_t>(message.data().get()) };
-            sysbit_t sender { IntegerFromBytes<sysbit_t>(message.data().get()+4) };
-
-            if (!this->boards.contains(target) || !this->boards.contains(sender))
-                return System::ErrorCode::Bad;
-        }
-        break;
-
-        case MessageType::BtoA:
-        // [senderId(4byte), message...]
-        {
-            if (!this->boards.contains(IntegerFromBytes<sysbit_t>(message.data().get())))
-                return System::ErrorCode::Bad;
-        }
-        break;
-
-        case MessageType::VtoA:
-        // [targetId(4bytes), message...]
-        {
-            if (IntegerFromBytes<sysbit_t>(message.data().get()) != this->settings.id)
-                return System::ErrorCode::Bad;
-        }
-        break;
-
-        default:
-            return System::ErrorCode::Bad;
-    }
-
-    this->messagePool.push(message);
-    return System::ErrorCode::Ok;
-}
-
-const System::ErrorCode Assembly::SendMessage(Message message) noexcept
-{
-    // message.type() must be AtoA, AtoB, AtoV
-    // data must be
-    //      [targetId(4bytes), senderID(4bytes), message...]
-    //      or
-    //      [targetId(4byte), message...]
-    //      or
-    //      [senderId(4bytes), message...]
-
-    if (!VM::GetVM().GetSettings().strictMessages)
-        return System::ErrorCode::Ok;
-
-    switch (message.type())
-    {
-        case MessageType::AtoA:
-        {
-            if (IntegerFromBytes<sysbit_t>(message.data().get()+4) != this->settings.id)
-                return System::ErrorCode::Bad;
-
-            VM::GetVM().ReceiveMessage(message);
-        } break;
-        
-        case MessageType::AtoB:
-        {
-            sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
-            if (!this->boards.contains(id))
-                return System::ErrorCode::Bad;
-
-            this->boards.at(id).ReceiveMessage(message);
-        } break;
-
-        case MessageType::AtoV:
-        {
-            if (IntegerFromBytes<sysbit_t>(message.data().get()) != this->settings.id)
-                return System::ErrorCode::Bad;
-
-            VM::GetVM().ReceiveMessage(message);
-        } break;
-        
-        default:
-            return System::ErrorCode::Bad;
-    }
-
-
-    return System::ErrorCode::Ok;
-}
-
-
-//
 // Assembly Implementation
 //
 Assembly::Assembly(Assembly::AssemblySettings&& settings)
@@ -217,8 +70,24 @@ const System::ErrorCode Assembly::Load() noexcept
     this->rom.data = rval(data);
     this->rom.size = static_cast<sysbit_t>(length);
 
-    // If the assembly is not ran, no need to initialize boards,
-    // it might be a shared library.
+    // If the assembly is a library, no need to initialize boards,
+    if (this->settings.type == AssemblyType::Library)
+        return System::ErrorCode::Ok;
+
+    // initialize the initial board.
+    try_catch(
+        if (this->boards.size() == 0)
+        {
+            LOGD("Initializing initial board...");
+            this->AddBoard();
+        },
+
+        LOGE(System::LogLevel::Medium, this->Stringify(), " ROM access error while initializing Board.");
+        return exc.GetCode();,
+
+        std::cerr << "Unexpected error in " << this->Stringify() << '\n';
+        return System::ErrorCode::UnhandledException;
+    );
 
     return System::ErrorCode::Ok;
 }
@@ -270,21 +139,6 @@ const System::ErrorCode Assembly::RemoveBoard(sysbit_t id) noexcept
 
 const System::ErrorCode Assembly::Run() noexcept
 {
-    // initialize the initial board.
-    try_catch(
-        if (this->boards.size() == 0)
-        {
-            LOGD("Initializing initial board...");
-            this->AddBoard();
-        },
-
-        LOGE(System::LogLevel::Medium, this->Stringify(), " ROM access error while initializing Board.");
-        return exc.GetCode();,
-
-        std::cerr << "Unexpected error in " << this->Stringify() << '\n';
-        return System::ErrorCode::UnhandledException;
-    );
-
     System::ErrorCode code { this->DispatchMessages() };
 
     if (code != System::ErrorCode::Ok)
@@ -318,23 +172,167 @@ const System::ErrorCode Assembly::Run() noexcept
             if (code != System::ErrorCode::Ok)
                 LOGE(
                     System::LogLevel::Low,
-                    "Error while running board, id: ", std::to_string(id),
-                    " Error code: ", std::to_string(static_cast<int>(code))
+                    "Error while running board ", board.Stringify(),
+                    " Error code: ", System::ErrorCodeString(code)
                 );,
 
             LOGE(
                 System::LogLevel::Low, 
-                "Error while running assembly, id: ",
-                std::to_string(id) 
+                "Error while running ", board.Stringify()
             );,
 
             LOGE(
                 System::LogLevel::Medium, 
-                "Fatal unexpected error while running board, id: ",
-                std::to_string(id)
+                "Fatal unexpected error while running board ", board.Stringify()
             );
         )
     }
 
     return code;
+}
+
+//
+// IMessageObject Implementation
+//
+const System::ErrorCode Assembly::DispatchMessages() noexcept
+{
+    // TODO
+
+    LOGE(System::LogLevel::Medium, "Assembly::DispatchMessages has not been implemented yet");
+
+    while (!this->messagePool.empty())
+    {
+        const Message& message { this->messagePool.front() };
+        this->messagePool.pop();
+        System::ErrorCode code { System::ErrorCode::Ok };
+
+        if (message.type() == MessageType::BtoA)
+        {
+            if (message.data()[4] == 0)
+            {
+                sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
+                LOGD(
+                    this->Stringify(), 
+                    " received Shutdown signal from board ", this->boards.at(id).Stringify()
+                );
+
+                this->RemoveBoard(id);
+            }
+        }
+        else
+            LOGE(
+                System::LogLevel::Low, 
+                "Unhandled message, type: ",
+                MessageTypeString(message.type())
+            );
+
+        if (code != System::ErrorCode::Ok)
+            LOGE(
+                System::LogLevel::Medium,
+                "Message dispatch exited with code ", System::ErrorCodeString(code),
+                ". Message type: ", MessageTypeString(message.type())
+            );
+    }
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode Assembly::ReceiveMessage(Message message) noexcept
+{
+    // message.type() must be BtoB, BtoA or VtoA
+    // data must be
+    //      [targetId(4bytes), senderID(4bytes), message...]
+    //      or
+    //      [senderId(4byte), message...]
+    //      or
+    //      [targetId(4bytes), message...]
+    // check the first 4bytes to verify the sender/target
+
+    if (!VM::GetVM().GetSettings().strictMessages)
+    {
+        this->messagePool.push(message);
+        return System::ErrorCode::Ok;
+    }
+
+    switch (message.type())
+    {
+        case MessageType::BtoB:
+        // [targetId(4bytes), senderID(4bytes), message...]
+        {
+            sysbit_t target { IntegerFromBytes<sysbit_t>(message.data().get()) };
+            sysbit_t sender { IntegerFromBytes<sysbit_t>(message.data().get()+4) };
+
+            if (!this->boards.contains(target) || !this->boards.contains(sender))
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        case MessageType::BtoA:
+        // [senderId(4byte), message...]
+        {
+            if (!this->boards.contains(IntegerFromBytes<sysbit_t>(message.data().get())))
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        case MessageType::VtoA:
+        // [targetId(4bytes), message...]
+        {
+            if (IntegerFromBytes<sysbit_t>(message.data().get()) != this->settings.id)
+                return System::ErrorCode::Bad;
+        }
+        break;
+
+        default:
+            return System::ErrorCode::Bad;
+    }
+
+    this->messagePool.push(message);
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode Assembly::SendMessage(Message message) noexcept
+{
+    // message.type() must be AtoA, AtoB, AtoV
+    // data must be
+    //      [targetId(4bytes), senderID(4bytes), message...]
+    //      or
+    //      [targetId(4byte), message...]
+    //      or
+    //      [senderId(4bytes), message...]
+
+    bool check { VM::GetVM().GetSettings().strictMessages };
+
+    switch (message.type())
+    {
+        case MessageType::AtoA:
+        {
+            if (check && IntegerFromBytes<sysbit_t>(message.data().get()+4) != this->settings.id)
+                return System::ErrorCode::Bad;
+
+            VM::GetVM().ReceiveMessage(message);
+        } break;
+        
+        case MessageType::AtoB:
+        {
+            sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
+            if (check && !this->boards.contains(id))
+                return System::ErrorCode::Bad;
+
+            this->boards.at(id).ReceiveMessage(message);
+        } break;
+
+        case MessageType::AtoV:
+        {
+            if (check && IntegerFromBytes<sysbit_t>(message.data().get()) != this->settings.id)
+                return System::ErrorCode::Bad;
+
+            VM::GetVM().ReceiveMessage(message);
+        } break;
+        
+        default:
+            return System::ErrorCode::Bad;
+    }
+
+
+    return System::ErrorCode::Ok;
 }

@@ -8,41 +8,40 @@
 class Board;
 
 
-enum class OpCodes : char
-{
-    nop,
-    stt, ste,
-    stts, stes,
-    ldt, lde,
-    rdt, rde, rdr,
-    movc, movs, movr,
-    addi, addf, addb, addri, addrf, addrb, addsi, addsf, addsb,
-    mcp,
-    inci, incf, incb, incri, incrf, incrb, incsi, incsf, incsb,
-    dcri, dcrf, dcrb, dcrri, dcrrf, dcrrb, dcrsi, dcrsf, dcrsb,
-    andst, andse, andr,
-    orst, orse, orr,
-    norst, norse, norr,
-    swpt, swpe, swpr,
-    dupt, dupe,
-    raw , raws,
-    invt, inve, invr, invst, invse,
-    cmp, cmpr,
-    popt, pope,
-    jmp, jmpr,
-    swr,
-    dur,
-    rep,
-    alc,
-    powri, powrf, powrb, powsi, powsf, powsb, powi, powf, powb,
-    powrui, powrub, powsui, powsub, powui, powub,
-    sqri, sqrf, sqrb, sqrri, sqrrf, sqrrb, sqrsi, sqrsf, sqrsb,
-    cnd, cndr,
-    cal, calr,
-    muli, mulf, mulb, mulri, mulrf, mulrb, mulsi, mulsf, mulsb,
-    divi, divf, divb, divri, divrf, divrb, divsi, divsf, divsb,
-    ret,
-};
+#define OPER(E) \
+    E(stt) E(ste) \
+    E(stts) E(stes) \
+    E(ldt) E(lde) \
+    E(rdt) E(rde) E(rdr) \
+    E(movc) E(movs) E(movr) \
+    E(addi) E(addf) E(addb) E(addri) E(addrf) E(addrb) E(addsi) E(addsf) E(addsb) \
+    E(mcp) \
+    E(inci) E(incf) E(incb) E(incri) E(incrf) E(incrb) E(incsi) E(incsf) E(incsb) \
+    E(dcri) E(dcrf) E(dcrb) E(dcrri) E(dcrrf) E(dcrrb) E(dcrsi) E(dcrsf) E(dcrsb) \
+    E(andst) E(andse) E(andr) \
+    E(orst) E(orse) E(orr) \
+    E(norst) E(norse) E(norr) \
+    E(swpt) E(swpe) E(swpr) \
+    E(dupt) E(dupe) \
+    E(raw ) E(raws) \
+    E(invt) E(inve) E(invr) E(invst) E(invse) \
+    E(cmp) E(cmpr) \
+    E(popt) E(pope) \
+    E(jmp) E(jmpr) \
+    E(swr) \
+    E(dur) \
+    E(rep) \
+    E(alc) \
+    E(powri) E(powrf) E(powrb) E(powsi) E(powsf) E(powsb) E(powi) E(powf) E(powb) \
+    E(powrui) E(powrub) E(powsui) E(powsub) E(powui) E(powub) \
+    E(sqri) E(sqrf) E(sqrb) E(sqrri) E(sqrrf) E(sqrrb) E(sqrsi) E(sqrsf) E(sqrsb) \
+    E(cnd) E(cndr) \
+    E(cal) E(calr) \
+    E(muli) E(mulf) E(mulb) E(mulri) E(mulrf) E(mulrb) E(mulsi) E(mulsf) E(mulsb) \
+    E(divi) E(divf) E(divb) E(divri) E(divrf) E(divrb) E(divsi) E(divsf) E(divsb) \
+    E(ret)
+MAKE_ENUM(OpCodes, nop, 0, OPER, OUT_CLASS)
+#undef OPER
 
 class CPU
 {
@@ -81,8 +80,11 @@ class CPU
         Board& board;
         State state;
 
-        using OPR = const System::ErrorCode;
-        using OperationFunction = OPR (*)(CPU& cpu) noexcept;
-        static OPR MoveReg(CPU& cpu) noexcept;
+#define OPR static const System::ErrorCode
+#define OPFunc(name) OPR name(CPU& cpu) noexcept
+        using OperationFunction = const System::ErrorCode (*)(CPU& cpu) noexcept;
+        OPFunc(Nop);
+        OPFunc(MovReg);
+#undef OPR
 };
 

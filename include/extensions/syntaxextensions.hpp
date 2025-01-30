@@ -5,8 +5,6 @@
 #include <iostream>
 #include <string_view>
 
-#include "system.hpp"
-
 #define rval(expr) std::move(expr)
 
 #define nameof(variable) #variable
@@ -25,20 +23,25 @@
     }
 
 
+using namespace std::string_view_literals;
+
+#define OUT_CLASS constexpr
+#define IN_CLASS static constexpr
 #define FOREACH_ENUM(ENUM, ENUMER) ENUM(ENUMER)
 #define GENERATE_ENUM(ENUM) ENUM,
-#define GENERATE_STRING(STRING) #STRING,
-#define MAKE_ENUM(name, values, start) \
-    enum class name : uchar_t { \
+#define GENERATE_STRING(STRING) #STRING##sv,
+#define MAKE_ENUM(name, fenum, fval, values, mode) \
+    enum class name { \
+        fenum = fval, \
         FOREACH_ENUM(values, GENERATE_ENUM) \
     }; \
-    namespace { \
-        namespace { \
-            constexpr std::string_view name##ToString[] { \
-                FOREACH_ENUM(values, GENERATE_STRING) \
-            }; \
-        } \
-        constexpr std::string_view name##String(name enumer) { \
-            return name##ToString[static_cast<uchar_t>(enumer)-start]; \
-        } \
+    mode const std::string_view __##name##__strings__[] { \
+        #fenum##sv, \
+        FOREACH_ENUM(values, GENERATE_STRING) \
+    }; \
+    mode const std::string_view& name##String(char enumer) { \
+        return __##name##__strings__[static_cast<char>(enumer)-fval]; \
+    } \
+    mode const std::string_view& name##String(name enumer) { \
+        return name##String(static_cast<char>(enumer)); \
     }

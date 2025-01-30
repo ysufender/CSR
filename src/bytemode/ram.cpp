@@ -69,7 +69,7 @@ const System::ErrorCode RAM::WriteSome(const sysbit_t address, const sysbit_t si
                 "Error in ",
                 this->board.Stringify(), 
                 ". Can't write to RAM address ", std::to_string(address),
-                ". Error code: ", std::to_string(static_cast<int>(status))
+                ". Error code: ", System::ErrorCodeString(status)
             );
             break;
         }

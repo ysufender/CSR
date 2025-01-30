@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string_view>
 
+#include "extensions/syntaxextensions.hpp"
 #include "extensions/stringextensions.hpp"
 #include "CLIParser.hpp"
 
@@ -24,23 +25,23 @@
 
 struct System
 {
-    enum class ErrorCode
-    {
-        Ok,
-        Bad,
-        UnhandledException,
-        ROMAccessError,
-        RAMAccessError,
-        SourceFileNotFound,
-        UnsupportedFileType,
-        HeapOverflow,
-        StackOverflow,
-        NoSourceFile,
-        InvalidSpecifier,
-        FileIOError,
-        MessageSendError,
-        IndexOutOfBounds,
-    };
+#define ERER(E) \
+    E(Bad) \
+    E(UnhandledException) \
+    E(ROMAccessError) \
+    E(RAMAccessError) \
+    E(SourceFileNotFound) \
+    E(UnsupportedFileType) \
+    E(HeapOverflow) \
+    E(StackOverflow) \
+    E(NoSourceFile) \
+    E(InvalidSpecifier) \
+    E(FileIOError) \
+    E(MessageSendError) \
+    E(IndexOutOfBounds) \
+    E(InvalidInstruction)
+MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
+#undef ERER
 
     enum class LogLevel
     {

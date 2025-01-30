@@ -1,20 +1,26 @@
 #include "CSRConfig.hpp"
 #include "bytemode/assembly.hpp"
 #include "bytemode/slice.hpp"
+#include "system.hpp"
+#include <string>
 #include "bytemode/rom.hpp"
 
 //
 // ROM Implementation
 //
-char ROM::operator[](const sysbit_t index) const noexcept
+char ROM::operator[](const sysbit_t index) const
 {
     if (index >= size || index < 0)
-        return 0;
+        CRASH(
+            System::ErrorCode::ROMAccessError,
+            "In ", this->assembly.Stringify(), " can't access ROM index: ",
+            std::to_string(index)
+        );
 
     return data[index];
 }
 
-const char* ROM::operator&(const sysbit_t index) const noexcept
+const char* ROM::operator&(const sysbit_t index) const
 {
     if (index >= size || index < 0)
         CRASH(System::ErrorCode::ROMAccessError, "Index '", std::to_string(index), "' of ROM is invalid.");
@@ -22,7 +28,7 @@ const char* ROM::operator&(const sysbit_t index) const noexcept
     return data.get()+index;
 }
 
-const char* ROM::operator&() const noexcept
+const char* ROM::operator&() const
 {
     return this->operator&(0); 
 }

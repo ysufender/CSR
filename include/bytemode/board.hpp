@@ -33,7 +33,9 @@ class Board : IMessageObject
         const System::ErrorCode ReceiveMessage(Message message) noexcept; 
         const System::ErrorCode SendMessage(Message message) noexcept; 
 
+        const System::ErrorCode ChangeExecutingProcess() noexcept;
         const System::ErrorCode AddProcess() noexcept;
+        const System::ErrorCode RemoveProcess(uchar_t id) noexcept;
         const System::ErrorCode Run() noexcept;
 
         const std::string& Stringify() const noexcept;

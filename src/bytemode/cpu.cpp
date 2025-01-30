@@ -5,6 +5,7 @@
 #include "bytemode/assembly.hpp"
 #include "bytemode/cpu.hpp"
 #include "CSRConfig.hpp"
+#include "extensions/stringextensions.hpp"
 #include "system.hpp"
 
 CPU::CPU(Board& board) : board(board), state()
@@ -24,11 +25,8 @@ CPU::CPU(Board& board) : board(board), state()
 
 const System::ErrorCode CPU::Cycle() noexcept
 {
-    constexpr OperationFunction ops[] = {
-        nullptr, nullptr, nullptr, nullptr,
-        nullptr, nullptr, nullptr, nullptr,
-        nullptr, nullptr, nullptr, nullptr,
-        CPU::MoveReg
+    static constexpr OperationFunction ops[] = {
+        Nop
     };
 
     char op;
@@ -40,12 +38,42 @@ const System::ErrorCode CPU::Cycle() noexcept
             System::LogLevel::Medium, 
             "In ", this->board.Stringify(),
             ", error while trying to read the instructions from ROM. Exit code: ",
-            std::to_string(static_cast<int>(code))
+            System::ErrorCodeString(code)
         );
         return code;
     }
 
-    LOGD("CPU read op-code: ", std::to_string(op));
+    LOGD(
+        "CPU read op-code: ", 
+        OpCodesString(op), 
+        " ", 
+        std::to_string(op), 
+        " at state.pc: ", 
+        std::to_string(state.pc)
+    );
 
-    return ops[op](*this);
+    if (sizeof(ops)/8 > op)
+    {
+        code = ops[op](*this);
+
+        if (code == System::ErrorCode::Ok)
+            return code;
+
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->board.Stringify(),
+            ", error while executing the instruction ", OpCodesString(op),
+            ". Error code: ", System::ErrorCodeString(code)
+        );
+    }
+
+    LOGE(
+        System::LogLevel::Medium,
+        "In ", this->board.Stringify(),
+        ", error while executing the instruction ", OpCodesString(op), 
+        " at ROM index ", std::to_string(this->state.pc),
+        ". Instruction hasn't been implemented yet or instruction is wrong."
+    );
+
+    return System::ErrorCode::InvalidInstruction;
 }

@@ -84,6 +84,6 @@ CSRException::CSRException(std::string message, std::string file, int line, Syst
 
     std::stringstream ss;
 
-    ss << message << " [" << _file << ':' << _line << "|<" << std::to_string(static_cast<int>(_errCode)) << ">]\n";
+    ss << message << " [" << _file << ':' << _line << "|<" << System::ErrorCodeString(_errCode) << ">]\n";
     _fullStr = ss.str();
 }

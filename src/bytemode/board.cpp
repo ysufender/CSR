@@ -42,6 +42,19 @@ Board::Board(class Assembly& assembly, sysbit_t id)
     };
 
     // CPU is already created. 
+
+    // Create the initial process
+    if (this->processes.size() == 0)
+    {
+        System::ErrorCode code { this->AddProcess() };
+
+        if (code != System::ErrorCode::Ok)
+            CRASH(
+                code,
+                "In ", this->Stringify(), " failed to initialize initial process. Error code: ",
+                System::ErrorCodeString(code)
+            );
+    }
 }
 
 uchar_t Board::GenerateNewProcessID() const
@@ -50,6 +63,23 @@ uchar_t Board::GenerateNewProcessID() const
     while (this->processes.contains(id))
         id++;
     return id;
+}
+
+const System::ErrorCode Board::ChangeExecutingProcess() noexcept
+{
+    // Dump current state of CPU to currentProcess
+    this->processes.at(currentProcess).LoadState(this->cpu.DumpState());
+
+    // set the next process to be the current
+    this->currentProcess = std::min<uchar_t>(
+                                this->currentProcess, 
+                                this->processes.size()
+                            );
+
+    // Load the state from new state to CPU
+    this->cpu.LoadState(this->processes.at(currentProcess).DumpState());
+
+    return System::ErrorCode::Ok;
 }
 
 const System::ErrorCode Board::AddProcess() noexcept
@@ -67,31 +97,24 @@ const System::ErrorCode Board::AddProcess() noexcept
     return System::ErrorCode::Ok;
 }
 
+const System::ErrorCode Board::RemoveProcess(uchar_t id) noexcept
+{
+    if (!this->processes.contains(id))
+        return System::ErrorCode::InvalidSpecifier;
+
+    this->processes.erase(id);
+
+    return System::ErrorCode::Ok;
+}
+
 const System::ErrorCode Board::Run() noexcept
 {
-    // Create the initial process
-    if (this->processes.size() == 0)
-    {
-        System::ErrorCode code { this->AddProcess() };
-
-        if (code != System::ErrorCode::Ok)
-        {
-            LOGE(
-                System::LogLevel::Medium,
-                "In ", this->Stringify(), " failed to initialize initial process. Error code: ",
-                std::to_string(static_cast<int>(code))
-            );
-            return code;
-        }
-    }
-
     // Dispatch messages
     System::ErrorCode code { this->DispatchMessages() }; 
 
     if (code != System::ErrorCode::Ok)
         return code;
 
-goto skipShut;
     // Send Shutdown Signal to Assembly
     if (this->processes.size() == 0)
     {
@@ -115,7 +138,6 @@ goto skipShut;
                 ". Couldn't send shutdown signal to ", this->Assembly().Stringify()
             );
     }
-skipShut:
 
     code = this->processes.at(this->currentProcess).Cycle();
 
@@ -124,7 +146,7 @@ skipShut:
             System::LogLevel::Medium,
             "In ", this->Stringify(), " error while running current process, id: ",
             std::to_string(currentProcess),
-            ". Error code: ", std::to_string(static_cast<int>(code))
+            ". Error code: ", System::ErrorCodeString(code)
         );
 
     return code;
@@ -147,12 +169,11 @@ const std::string& Board::Stringify() const noexcept
 //
 const System::ErrorCode Board::DispatchMessages() noexcept
 {
-    // TODO
-
     LOGE(System::LogLevel::Medium, "Board::DispatchMessages has not been implemented yet");
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
+        this->messagePool.pop();
 
         if (message.type() == MessageType::PtoB)
         {
@@ -161,24 +182,19 @@ const System::ErrorCode Board::DispatchMessages() noexcept
             {
                 if (static_cast<uchar_t>(message.data()[0]) != currentProcess) 
                     return System::ErrorCode::InvalidSpecifier;
-
-                // Dump current state of CPU to currentProcess
-                this->processes.at(currentProcess).LoadState(this->cpu.DumpState());
-
-                // set the next process to be the current
-                this->currentProcess = std::min<uchar_t>(
-                                            static_cast<uchar_t>(message.data()[0]), 
-                                            this->processes.size()
-                                        );
-
-                // Load the state from new state to CPU
-                this->cpu.LoadState(this->processes.at(currentProcess).DumpState());
-
+                this->ChangeExecutingProcess();
+                continue;
+            }
+            // Process requests Shutdown
+            if (message.data()[1] == 1)
+            {
+                LOGD("Test");
+                if (this->currentProcess == message.data()[0])
+                    this->ChangeExecutingProcess(); 
+                this->RemoveProcess(message.data()[0]);
                 continue;
             }
         }
-
-        this->messagePool.pop();
     }
 
     return System::ErrorCode::Ok;
@@ -195,7 +211,10 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
     //      [targetId(4byte), message...]
 
     if (!VM::GetVM().GetSettings().strictMessages)
+    {
+        this->messagePool.push(message);
         return System::ErrorCode::Ok;
+    }
 
     switch (message.type())
     {
@@ -244,8 +263,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
     //      or
     //      [senderId(4byte), message...]
 
-    if (!VM::GetVM().GetSettings().strictMessages)
-        return System::ErrorCode::Ok;
+    bool check { VM::GetVM().GetSettings().strictMessages };
 
     switch (message.type())
     {
@@ -253,7 +271,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
         // [targetId(1byte), message...]
         {
             sysbit_t id { IntegerFromBytes<uchar_t>(message.data().get()) };
-            if (!this->processes.contains(id))  
+            if (check && !this->processes.contains(id))
                 return System::ErrorCode::Bad;
 
             this->processes.at(id).ReceiveMessage(message);
@@ -263,7 +281,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
         case MessageType::BtoB:
         // [targetId(4bytes), senderID(4bytes), message...]
         {
-            if (IntegerFromBytes<sysbit_t>(message.data().get()+4) != this->id)
+            if (check && IntegerFromBytes<sysbit_t>(message.data().get()+4) != this->id)
                 return System::ErrorCode::Bad;
 
             this->assembly.ReceiveMessage(message);
@@ -273,7 +291,7 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
         case MessageType::BtoA:
         // [senderId(4byte), message...]
         {
-            if (IntegerFromBytes<sysbit_t>(message.data().get())) 
+            if (check && IntegerFromBytes<sysbit_t>(message.data().get())) 
                 return System::ErrorCode::Bad;
 
             this->assembly.ReceiveMessage(message);
@@ -286,5 +304,3 @@ const System::ErrorCode Board::SendMessage(Message message) noexcept
 
     return System::ErrorCode::Ok;
 }
-
-

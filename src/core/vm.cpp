@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <string>
 #include <limits>
 
@@ -8,104 +9,6 @@
 #include "message.hpp"
 #include "system.hpp"
 #include "vm.hpp"
-
-//
-// IMessageObject Implementation
-//
-const System::ErrorCode VM::DispatchMessages() noexcept
-{
-    // TODO
-    // 1- sender might request a redirect
-    // 2- sender might request a target shutdown 
-    // 3- sender might request a self shutdown 
-    // TODO
-
-    // Note: messages are already verified quite a lot of times by this point
-    // so there is no need to check again. Unless --no-strict-messages is set
-    // in CLI
-
-    LOGE(System::LogLevel::Medium, "VM::DispatchMessages has not been implemented yet");
-    while (!this->messagePool.empty())
-    {
-        const Message& message { this->messagePool.front() };
-        System::ErrorCode code { System::ErrorCode::Ok };
-
-        if (message.type() == MessageType::AtoV)
-        {
-            if (message.data()[4] == 0)
-            {
-                LOGD("Received Shutdown signal from ", this->asmIds.at(IntegerFromBytes<sysbit_t>(message.data().get()))->Stringify());
-                code = this->RemoveAssembly(IntegerFromBytes<sysbit_t>(message.data().get()));
-            }
-        }
-        else
-            LOGE(
-                System::LogLevel::Low, 
-                "Unhandled message, type: ",
-                std::to_string(static_cast<int>(message.type()))
-            );
-
-        if (code != System::ErrorCode::Ok)
-            LOGE(
-                System::LogLevel::Medium,
-                "Message dispatch exited with code ", std::to_string(static_cast<int>(code)),
-                ". Message type: ", std::to_string(static_cast<int>(message.type()))
-            );
-    
-        this->messagePool.pop();
-    }
-    
-    return System::ErrorCode::Ok;
-}
-
-const System::ErrorCode VM::ReceiveMessage(Message message) noexcept
-{
-    if (!this->settings.strictMessages)
-        return System::ErrorCode::Ok;
-
-    // message.type() must either be AtoA or AtoV
-    if (message.type() != MessageType::AtoA && message.type() != MessageType::AtoV)
-        return System::ErrorCode::Bad;
-
-    // data must be either
-    //      [targetId(4bytes), senderID(4bytes), message...]
-    //      or
-    //      [senderId(4bytes), message...]
-    // check the first 4bytes to verify that sender/target exists.
-    if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data().get())))
-        return System::ErrorCode::Bad;
-
-    if (message.type() == MessageType::AtoA)
-    {
-        // additionally check the second 4bytes to verify that sender exists.
-        if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data().get()+4)))
-            return System::ErrorCode::Bad;
-    }
-
-    this->messagePool.push(message);
-
-    return System::ErrorCode::Ok;
-}
-
-const System::ErrorCode VM::SendMessage(Message message) noexcept
-{
-    if (!this->settings.strictMessages)
-        return System::ErrorCode::Ok;
-
-    // message.type() must be VtoA
-    if (message.type() != MessageType::VtoA)
-        return System::ErrorCode::Bad;
-
-    // data must be [targetId(4bytes), message...]
-    // check the first 4bytes to verify that target exists
-    sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
-    if (!this->asmIds.contains(id))
-        return System::ErrorCode::Bad;
-
-    this->asmIds.at(id)->ReceiveMessage(message);
-
-    return System::ErrorCode::Ok;
-}
 
 //
 // VM Implementation
@@ -177,6 +80,8 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
     this->settings = settings;
     System::ErrorCode code = System::ErrorCode::Ok;
 
+    bool r = false;
+
     while (!this->assemblies.empty())
     {
         // Dispatch Messages
@@ -186,7 +91,7 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
             LOGE(
                 System::LogLevel::Medium, 
                 "Error while dispatching messages. Error code: ", 
-                std::to_string(static_cast<int>(code))
+                System::ErrorCodeString(code) 
             );
 
         // Run the assemblies
@@ -199,7 +104,7 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
                     LOGE(
                         System::LogLevel::Low,
                         "Error while running assembly ", assembly.Stringify(),
-                        " Error code: ", std::to_string(static_cast<int>(code))
+                        " Error code: ", System::ErrorCodeString(code) 
                     );,
 
                 LOGE(
@@ -215,7 +120,119 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
                 );
             )
         }
+
+        if (!r)
+        {
+            int c = std::getchar();
+            if (c == 'r')
+                r = true;
+        }
     }
 
     return code;
+}
+
+//
+// IMessageObject Implementation
+//
+const System::ErrorCode VM::DispatchMessages() noexcept
+{
+    // TODO
+    // 1- sender might request a redirect
+    // 2- sender might request a target shutdown 
+    // 3- sender might request a self shutdown 
+    // TODO
+
+    // Note: messages are already verified quite a lot of times by this point
+    // so there is no need to check again. Unless --no-strict-messages is set
+    // in CLI
+
+    LOGE(System::LogLevel::Medium, "VM::DispatchMessages has not been implemented yet");
+    while (!this->messagePool.empty())
+    {
+        const Message& message { this->messagePool.front() };
+        System::ErrorCode code { System::ErrorCode::Ok };
+
+        if (message.type() == MessageType::AtoV)
+        {
+            if (message.data()[4] == 0)
+            {
+                LOGD("Received Shutdown signal from ", this->asmIds.at(IntegerFromBytes<sysbit_t>(message.data().get()))->Stringify());
+                code = this->RemoveAssembly(IntegerFromBytes<sysbit_t>(message.data().get()));
+            }
+        }
+        else
+            LOGE(
+                System::LogLevel::Low, 
+                "Unhandled message, type: ",
+                MessageTypeString(message.type())
+            );
+
+        if (code != System::ErrorCode::Ok)
+            LOGE(
+                System::LogLevel::Medium,
+                "Message dispatch exited with code ", System::ErrorCodeString(code),
+                ". Message type: ", MessageTypeString(message.type()) 
+            );
+    
+        this->messagePool.pop();
+    }
+    
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode VM::ReceiveMessage(Message message) noexcept
+{
+    if (!this->settings.strictMessages)
+    {
+        this->messagePool.push(message);
+        return System::ErrorCode::Ok;
+    }
+
+    // message.type() must either be AtoA or AtoV
+    if (message.type() != MessageType::AtoA && message.type() != MessageType::AtoV)
+        return System::ErrorCode::Bad;
+
+    // data must be either
+    //      [targetId(4bytes), senderID(4bytes), message...]
+    //      or
+    //      [senderId(4bytes), message...]
+    // check the first 4bytes to verify that sender/target exists.
+    if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data().get())))
+        return System::ErrorCode::Bad;
+
+    if (message.type() == MessageType::AtoA)
+    {
+        // additionally check the second 4bytes to verify that sender exists.
+        if (!this->asmIds.contains(IntegerFromBytes<sysbit_t>(message.data().get()+4)))
+            return System::ErrorCode::Bad;
+    }
+
+    this->messagePool.push(message);
+
+    return System::ErrorCode::Ok;
+}
+
+const System::ErrorCode VM::SendMessage(Message message) noexcept
+{
+    if (!this->settings.strictMessages)
+    {
+        sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
+        this->asmIds.at(id)->ReceiveMessage(message);
+        return System::ErrorCode::Ok;
+    }
+
+    // message.type() must be VtoA
+    if (message.type() != MessageType::VtoA)
+        return System::ErrorCode::Bad;
+
+    // data must be [targetId(4bytes), message...]
+    // check the first 4bytes to verify that target exists
+    sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
+    if (!this->asmIds.contains(id))
+        return System::ErrorCode::Bad;
+
+    this->asmIds.at(id)->ReceiveMessage(message);
+
+    return System::ErrorCode::Ok;
 }
