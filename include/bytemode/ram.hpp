@@ -40,6 +40,9 @@ class RAM
         sysbit_t Allocate(const sysbit_t size);
         const System::ErrorCode Deallocate(const sysbit_t address, const sysbit_t size) noexcept;
 
+        sysbit_t Size() const noexcept
+        { return heapSize+stackSize; }
+
     private:
         std::unique_ptr<uchar_t[]> allocationMap;
         std::unique_ptr<char[]> data;

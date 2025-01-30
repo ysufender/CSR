@@ -137,17 +137,19 @@ const System::ErrorCode Board::Run() noexcept
                 "Error in ", this->Stringify(),
                 ". Couldn't send shutdown signal to ", this->Assembly().Stringify()
             );
+
+        return code;
     }
 
     code = this->processes.at(this->currentProcess).Cycle();
 
-    if (code != System::ErrorCode::Ok)
-        LOGE(
-            System::LogLevel::Medium,
-            "In ", this->Stringify(), " error while running current process, id: ",
-            std::to_string(currentProcess),
-            ". Error code: ", System::ErrorCodeString(code)
-        );
+//    if (code != System::ErrorCode::Ok)
+//        LOGE(
+//            System::LogLevel::Medium,
+//            "In ", this->Stringify(), " error while running current process, id: ",
+//            std::to_string(currentProcess),
+//            ". Error code: ", System::ErrorCodeString(code)
+//        );
 
     return code;
 }
@@ -169,11 +171,11 @@ const std::string& Board::Stringify() const noexcept
 //
 const System::ErrorCode Board::DispatchMessages() noexcept
 {
-    LOGE(System::LogLevel::Medium, "Board::DispatchMessages has not been implemented yet");
+    System::ErrorCode code { System::ErrorCode::Ok };
+
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
-        this->messagePool.pop();
 
         if (message.type() == MessageType::PtoB)
         {
@@ -182,22 +184,26 @@ const System::ErrorCode Board::DispatchMessages() noexcept
             {
                 if (static_cast<uchar_t>(message.data()[0]) != currentProcess) 
                     return System::ErrorCode::InvalidSpecifier;
-                this->ChangeExecutingProcess();
-                continue;
+                code = this->ChangeExecutingProcess();
+                if (code != System::ErrorCode::Ok)
+                    LOGE(System::LogLevel::Medium, this->Stringify(), " error while dispatching messages ", System::ErrorCodeString(code));
             }
+
             // Process requests Shutdown
-            if (message.data()[1] == 1)
+            else if (message.data()[1] == 1)
             {
-                LOGD("Test");
                 if (this->currentProcess == message.data()[0])
                     this->ChangeExecutingProcess(); 
-                this->RemoveProcess(message.data()[0]);
-                continue;
+                code = this->RemoveProcess(message.data()[0]);
+                if (code != System::ErrorCode::Ok)
+                    LOGE(System::LogLevel::Medium, this->Stringify(), " error while dispatching messages ", System::ErrorCodeString(code));
             }
         }
+
+        this->messagePool.pop();
     }
 
-    return System::ErrorCode::Ok;
+    return code;
 }
 
 const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
@@ -221,10 +227,7 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
         case MessageType::PtoP:
         // [targetId(1byte), senderID(1byte), message...]
         {
-            sysbit_t target { IntegerFromBytes<sysbit_t>(message.data().get()) };
-            sysbit_t sender { IntegerFromBytes<sysbit_t>(message.data().get()+4) };
-
-            if (!this->processes.contains(target) || !this->processes.contains(sender))
+            if (!this->processes.contains(message.data()[0]) || !this->processes.contains(message.data()[1]))
                 return System::ErrorCode::Bad;
         }
         break;
@@ -232,7 +235,7 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
         case MessageType::PtoB:
         // [senderID(1byte), message...]
         {
-            if (!this->processes.contains(IntegerFromBytes<sysbit_t>(message.data().get())))  
+            if (!this->processes.contains(message.data()[0]))  
                 return System::ErrorCode::Bad;
         }
         break;

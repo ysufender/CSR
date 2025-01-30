@@ -80,19 +80,17 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
     this->settings = settings;
     System::ErrorCode code = System::ErrorCode::Ok;
 
-    bool r = false;
-
     while (!this->assemblies.empty())
     {
         // Dispatch Messages
         code = this->DispatchMessages();
 
-        if (code != System::ErrorCode::Ok)
-            LOGE(
-                System::LogLevel::Medium, 
-                "Error while dispatching messages. Error code: ", 
-                System::ErrorCodeString(code) 
-            );
+//        if (code != System::ErrorCode::Ok)
+//            LOGE(
+//                System::LogLevel::Medium, 
+//                "Error while dispatching messages. Error code: ", 
+//                System::ErrorCodeString(code) 
+//            );
 
         // Run the assemblies
         for (auto& [name, assembly] : this->assemblies)
@@ -100,12 +98,13 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
             try_catch(
                 code = assembly.Run();
                 
-                if (code != System::ErrorCode::Ok)
-                    LOGE(
-                        System::LogLevel::Low,
-                        "Error while running assembly ", assembly.Stringify(),
-                        " Error code: ", System::ErrorCodeString(code) 
-                    );,
+//                if (code != System::ErrorCode::Ok)
+//                    LOGE(
+//                        System::LogLevel::Low,
+//                        "Error while running assembly ", assembly.Stringify(),
+//                        " Error code: ", System::ErrorCodeString(code) 
+//                    );,
+                ,
 
                 LOGE(
                     System::LogLevel::Low, 
@@ -121,11 +120,11 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
             )
         }
 
-        if (!r)
+        if (this->settings.step)
         {
             int c = std::getchar();
             if (c == 'r')
-                r = true;
+                this->settings.step = false;
         }
     }
 
@@ -137,36 +136,26 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
 //
 const System::ErrorCode VM::DispatchMessages() noexcept
 {
-    // TODO
-    // 1- sender might request a redirect
-    // 2- sender might request a target shutdown 
-    // 3- sender might request a self shutdown 
-    // TODO
+    System::ErrorCode code { System::ErrorCode::Ok };
 
-    // Note: messages are already verified quite a lot of times by this point
-    // so there is no need to check again. Unless --no-strict-messages is set
-    // in CLI
-
-    LOGE(System::LogLevel::Medium, "VM::DispatchMessages has not been implemented yet");
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
-        System::ErrorCode code { System::ErrorCode::Ok };
 
         if (message.type() == MessageType::AtoV)
         {
             if (message.data()[4] == 0)
-            {
-                LOGD("Received Shutdown signal from ", this->asmIds.at(IntegerFromBytes<sysbit_t>(message.data().get()))->Stringify());
                 code = this->RemoveAssembly(IntegerFromBytes<sysbit_t>(message.data().get()));
-            }
         }
         else
+        {
             LOGE(
                 System::LogLevel::Low, 
                 "Unhandled message, type: ",
                 MessageTypeString(message.type())
             );
+            code = System::ErrorCode::MessageDispatchError;
+        } 
 
         if (code != System::ErrorCode::Ok)
             LOGE(
@@ -178,7 +167,7 @@ const System::ErrorCode VM::DispatchMessages() noexcept
         this->messagePool.pop();
     }
     
-    return System::ErrorCode::Ok;
+    return code;
 }
 
 const System::ErrorCode VM::ReceiveMessage(Message message) noexcept

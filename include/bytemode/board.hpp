@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -18,6 +17,7 @@ class Assembly;
 class Board : IMessageObject
 {
     friend class Process;
+    friend class CPU;
 
     public:
         Board() = delete;
@@ -25,9 +25,21 @@ class Board : IMessageObject
         Board(Board&&) = delete;
         Board(class Assembly& assembly, sysbit_t id);
 
+#ifndef NDEBUG
+        ~Board()
+        {
+            for (sysbit_t i = 0; i < ram.Size() / 8; i++)
+            {
+                std::cout << i*8 << ": ";
+                for (sysbit_t j = 0; j < 8; j++)
+                    std::cout << static_cast<int>(ram.Read(i*8+j)) << ' ';
+                std::cout << '\n';
+            }
+        }
+#endif
+
         const class Assembly& Assembly() const 
         { return this->assembly; }
-
 
         const System::ErrorCode DispatchMessages() noexcept; 
         const System::ErrorCode ReceiveMessage(Message message) noexcept; 

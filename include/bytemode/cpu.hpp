@@ -81,10 +81,13 @@ class CPU
         State state;
 
 #define OPR static const System::ErrorCode
-#define OPFunc(name) OPR name(CPU& cpu) noexcept
+#define OPFunc(name) OPR name(CPU& cpu) noexcept;
         using OperationFunction = const System::ErrorCode (*)(CPU& cpu) noexcept;
-        OPFunc(Nop);
-        OPFunc(MovReg);
+
+        OPFunc(Nop)
+        OPFunc(MovReg)
+        OPFunc(STT)
+        OPFunc(STE)
 #undef OPR
 };
 

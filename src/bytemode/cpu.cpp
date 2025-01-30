@@ -26,7 +26,7 @@ CPU::CPU(Board& board) : board(board), state()
 const System::ErrorCode CPU::Cycle() noexcept
 {
     static constexpr OperationFunction ops[] = {
-        Nop
+        Nop, STT, STE
     };
 
     char op;
@@ -42,15 +42,6 @@ const System::ErrorCode CPU::Cycle() noexcept
         );
         return code;
     }
-
-    LOGD(
-        "CPU read op-code: ", 
-        OpCodesString(op), 
-        " ", 
-        std::to_string(op), 
-        " at state.pc: ", 
-        std::to_string(state.pc)
-    );
 
     if (sizeof(ops)/8 > op)
     {
@@ -68,11 +59,11 @@ const System::ErrorCode CPU::Cycle() noexcept
     }
 
     LOGE(
-        System::LogLevel::Medium,
+        System::LogLevel::Low,
         "In ", this->board.Stringify(),
-        ", error while executing the instruction ", OpCodesString(op), 
-        " at ROM index ", std::to_string(this->state.pc),
-        ". Instruction hasn't been implemented yet or instruction is wrong."
+        ", error while executing the instruction '", OpCodesString(op), 
+        "' at ROM index '", std::to_string(this->state.pc),
+        "'. Instruction hasn't been implemented yet or instruction is wrong."
     );
 
     return System::ErrorCode::InvalidInstruction;

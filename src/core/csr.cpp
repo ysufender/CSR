@@ -62,6 +62,9 @@ int csrmain(int argc, char** args)
 
             errc = VM::GetVM().Run({
                 .strictMessages = !flags.GetFlag<CLIParser::FlagType::Bool>("no-strict-messages"),
+#ifndef NDEBUG
+                .step = flags.GetFlag<CLIParser::FlagType::Bool>("step"),
+#endif
             });
         } 
     }
@@ -117,6 +120,12 @@ CLIParser::Flags SetUpCLI(char **args, int argc)
     parser.AddFlag<FlagType::Bool>("no-strict-messages", "Strictly verifies messages in each checkpoint.");
     parser.Separator();
     parser.AddFlag<FlagType::StringList>("exe", "Executable files to execute.");
+#ifndef NDEBUG
+    parser.Separator();
+    parser.AddFlag<FlagType::Bool>("step", "Run the VM once every input.");
+
+    parser.BindFlag("s", "step");
+#endif
 
     parser.BindFlag("h", "help");
     parser.BindFlag("v", "version");

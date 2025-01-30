@@ -37,6 +37,27 @@ const System::ErrorCode Process::Cycle() noexcept
             " error while dispatching messages. Error code: ", System::ErrorCodeString(code)
         );
 
+    // Send Shutdown signal to board
+    if (this->board.cpu.DumpState().pc >= this->board.assembly.Rom().Size())
+    {
+        std::unique_ptr<char[]> data { new char[2] };
+        data[0] = this->id;
+        data[1] = 1;
+
+        System::ErrorCode code { this->SendMessage({
+            MessageType::PtoB, 
+            rval(data)
+        })};
+
+        if (code != System::ErrorCode::Ok)
+            LOGE(
+                System::LogLevel::Medium,
+                "In ", this->Stringify(), " error while sending Shutdown signal to board."
+            );
+        
+        return code;
+    }
+
     OpCodes op { this->board.Assembly().Rom()[this->board.cpu.DumpState().pc] };
 
     // New callStack will be initialized, or destroyed
@@ -59,10 +80,7 @@ const System::ErrorCode Process::Cycle() noexcept
             " error in CPU cycle. Error code: ", System::ErrorCodeString(code)
         );
     
-    this->SendMessage({
-        MessageType::PtoB,
-        std::unique_ptr<char[]>(new char[2]{static_cast<char>(this->id), 1})
-    });
+
     return code;
 }
 
@@ -71,12 +89,10 @@ const System::ErrorCode Process::Cycle() noexcept
 //
 const System::ErrorCode Process::DispatchMessages() noexcept
 {
-    // TODO
-
-    LOGE(System::LogLevel::Medium, "Process::DispatchMessages has not been implemented yet");
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
+
         this->messagePool.pop();
     }
 
@@ -93,12 +109,12 @@ const System::ErrorCode Process::ReceiveMessage(Message message) noexcept
 
     // message.type() can only be BtoP
     if (message.type() != MessageType::BtoP)
-        return System::ErrorCode::Bad;
+        return System::ErrorCode::MessageReceiveError;
 
     // message.data() must be
     //      [targetId(1byte), message...]
     if (IntegerFromBytes<uchar_t>(message.data().get()) != this->id)
-        return System::ErrorCode::Bad;
+        return System::ErrorCode::MessageReceiveError;
 
     this->messagePool.push(message);
     return System::ErrorCode::Ok;
@@ -107,10 +123,7 @@ const System::ErrorCode Process::ReceiveMessage(Message message) noexcept
 const System::ErrorCode Process::SendMessage(Message message) noexcept
 {
     if (!VM::GetVM().GetSettings().strictMessages)
-    {
-        this->board.ReceiveMessage(message);
-        return System::ErrorCode::Ok;
-    }
+        return this->board.ReceiveMessage(message);
 
     // message.type() can be either PtoP or PtoB
     // message.data() must be
@@ -125,6 +138,5 @@ const System::ErrorCode Process::SendMessage(Message message) noexcept
     if (IntegerFromBytes<uchar_t>(senderOffset) != this->id)
         return System::ErrorCode::Bad;
 
-    this->board.ReceiveMessage(message);
-    return System::ErrorCode::Ok;
+    return this->board.ReceiveMessage(message);
 }

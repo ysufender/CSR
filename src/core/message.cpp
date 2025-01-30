@@ -3,18 +3,14 @@
 
 Message::Message(Message& other)
 {
-    this->_data = rval(other._data);
     this->_type = other._type;
-
-    other._data = nullptr;
+    this->_data = rval(other._data);
 }
 
 Message::Message(Message&& other)
 {
-    this->_data = rval(other._data);
     this->_type = other._type;
-
-    other._data = nullptr;
+    this->_data = rval(other._data);
 }
 
 Message::Message(MessageType type, std::unique_ptr<char[]> data)

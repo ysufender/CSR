@@ -78,7 +78,6 @@ const System::ErrorCode Assembly::Load() noexcept
     try_catch(
         if (this->boards.size() == 0)
         {
-            LOGD("Initializing initial board...");
             this->AddBoard();
         },
 
@@ -169,12 +168,13 @@ const System::ErrorCode Assembly::Run() noexcept
         try_catch(
             code = board.Run();
 
-            if (code != System::ErrorCode::Ok)
-                LOGE(
-                    System::LogLevel::Low,
-                    "Error while running board ", board.Stringify(),
-                    " Error code: ", System::ErrorCodeString(code)
-                );,
+//            if (code != System::ErrorCode::Ok)
+//                LOGE(
+//                    System::LogLevel::Low,
+//                    "Error while running board ", board.Stringify(),
+//                    " Error code: ", System::ErrorCodeString(code)
+//                );,
+            ,
 
             LOGE(
                 System::LogLevel::Low, 
@@ -196,14 +196,9 @@ const System::ErrorCode Assembly::Run() noexcept
 //
 const System::ErrorCode Assembly::DispatchMessages() noexcept
 {
-    // TODO
-
-    LOGE(System::LogLevel::Medium, "Assembly::DispatchMessages has not been implemented yet");
-
     while (!this->messagePool.empty())
     {
         const Message& message { this->messagePool.front() };
-        this->messagePool.pop();
         System::ErrorCode code { System::ErrorCode::Ok };
 
         if (message.type() == MessageType::BtoA)
@@ -211,11 +206,6 @@ const System::ErrorCode Assembly::DispatchMessages() noexcept
             if (message.data()[4] == 0)
             {
                 sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
-                LOGD(
-                    this->Stringify(), 
-                    " received Shutdown signal from board ", this->boards.at(id).Stringify()
-                );
-
                 this->RemoveBoard(id);
             }
         }
@@ -232,6 +222,8 @@ const System::ErrorCode Assembly::DispatchMessages() noexcept
                 "Message dispatch exited with code ", System::ErrorCodeString(code),
                 ". Message type: ", MessageTypeString(message.type())
             );
+
+        this->messagePool.pop();
     }
     return System::ErrorCode::Ok;
 }

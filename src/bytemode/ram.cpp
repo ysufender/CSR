@@ -80,10 +80,6 @@ const System::ErrorCode RAM::WriteSome(const sysbit_t address, const sysbit_t si
 
 sysbit_t RAM::Allocate(const sysbit_t size)
 {
-    LOGD("Allocating ", std::to_string(size), " bytes from ", this->board.Stringify());
-    LOGD("Heap Size: ", std::to_string(heapSize));
-    LOGD("Allocation Map Size: ", std::to_string(heapSize/8));
-
     sysbit_t counter { size };
     sysbit_t allocationAddr { 0 };
     bool set = false;

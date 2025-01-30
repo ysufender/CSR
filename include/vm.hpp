@@ -18,6 +18,9 @@ class VM : IMessageObject
         struct VMSettings
         {
             bool strictMessages;
+#ifndef NDEBUG
+            bool step;
+#endif
         };
 
         VM(VM const&) = delete;

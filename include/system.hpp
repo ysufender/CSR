@@ -39,7 +39,9 @@ struct System
     E(FileIOError) \
     E(MessageSendError) \
     E(IndexOutOfBounds) \
-    E(InvalidInstruction)
+    E(InvalidInstruction) \
+    E(MessageReceiveError) \
+    E(MessageDispatchError)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

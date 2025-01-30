@@ -51,6 +51,9 @@ class MessagePool
         void push(Message message) noexcept
         { this->_underlyingVec.emplace_back(message); }
 
+        size_t size() const noexcept
+        { return this->_underlyingVec.size(); }
+
     private:
         std::vector<Message> _underlyingVec { };
 };
