@@ -81,8 +81,8 @@ int csrmain(int argc, char** args)
 
         return 1;
     }
-    std::cout << std::endl;
 
+    std::cout << std::endl;
     return static_cast<int>(errc);
 }
 
@@ -100,13 +100,13 @@ void PrintHeader() noexcept
               << '\n';
 }
 
-void PrintHelp(const CLIParser::Flags &flags) noexcept
+void PrintHelp(const CLIParser::Flags& flags) noexcept
 {
     PrintHeader();
     std::cout << flags.GetHelpText() << '\n';
 }
 
-CLIParser::Flags SetUpCLI(char **args, int argc)
+CLIParser::Flags SetUpCLI(char** args, int argc)
 {
     using namespace CLIParser;
 

@@ -21,7 +21,7 @@
 #define LOGE(level, ...) System::LogError(Extensions::String::Concat({__VA_ARGS__}), level, __FILE__, __LINE__, System::ErrorCode::Bad)
 #define CRASH(code, ...) System::LogError(Extensions::String::Concat({__VA_ARGS__}), System::LogLevel::High, __FILE__, __LINE__, code)
 
-#define CSR_ERR(message) CSRException { message, __FILE__, __LINE__ };
+#define CSR_ERR(code, message) CSRException { message, __FILE__, __LINE__, code };
 
 struct System
 {

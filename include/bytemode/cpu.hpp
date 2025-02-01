@@ -26,7 +26,7 @@ class CPU
             uchar_t bl { 0 };
             uchar_t cl { 0 };
             uchar_t dl { 0 };
-            uchar_t fl { 0 };
+            uchar_t flg { 0 };
         };
 
         CPU() = delete;
@@ -57,8 +57,11 @@ class CPU
         OPFunc(NoOperation)
         OPFunc(StoreThirtyTwo)
         OPFunc(StoreEight)
-        OPFunc(StoreThirtyTwoSymbol)
-        OPFunc(StoreEightSymbol)
+        OPFunc(StoreFromSymbol)
+        OPFunc(LoadFromStack)
+        OPFunc(ReadFromHeap)
+        OPFunc(ReadFromRegister)
+#undef OPFunc
 #undef OPR
 };
 

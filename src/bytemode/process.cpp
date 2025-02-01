@@ -26,6 +26,26 @@ const std::string& Process::Stringify() const noexcept
     return reprStr;
 }
 
+Error SendShutdown(Process& process)
+{
+    std::unique_ptr<char[]> data { new char[2] };
+    data[0] = process.id;
+    data[1] = 1;
+
+    System::ErrorCode code { process.SendMessage({
+        MessageType::PtoB, 
+        rval(data)
+    })};
+
+    if (code != System::ErrorCode::Ok)
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", process.Stringify(), " error while sending Shutdown signal to board."
+        );
+    
+    return code;
+}
+
 Error Process::Cycle() noexcept
 {
     System::ErrorCode code { this->DispatchMessages() };
@@ -39,30 +59,14 @@ Error Process::Cycle() noexcept
 
     // Send Shutdown signal to board
     if (this->board.cpu.DumpState().pc >= this->board.assembly.Rom().Size())
-    {
-        std::unique_ptr<char[]> data { new char[2] };
-        data[0] = this->id;
-        data[1] = 1;
-
-        System::ErrorCode code { this->SendMessage({
-            MessageType::PtoB, 
-            rval(data)
-        })};
-
-        if (code != System::ErrorCode::Ok)
-            LOGE(
-                System::LogLevel::Medium,
-                "In ", this->Stringify(), " error while sending Shutdown signal to board."
-            );
-        
-        return code;
-    }
+        return SendShutdown(*this);
 
     OpCodes op { this->board.Assembly().Rom()[this->board.cpu.DumpState().pc] };
 
     // New callStack will be initialized, or destroyed
     // either way that means it's interrupt for this process.
     // Send message to Board to switch to the next process.
+    // Switch signal
     if (op == OpCodes::cal || op == OpCodes::calr || op == OpCodes::ret)
     {
         std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(2) };
@@ -73,15 +77,15 @@ Error Process::Cycle() noexcept
 
     code = this->board.cpu.Cycle();
 
-    if (code != System::ErrorCode::Ok)
-        LOGE(
-            System::LogLevel::Medium,
-            "In ", this->Stringify(),
-            " error in CPU cycle. Error code: ", System::ErrorCodeString(code)
-        );
-    
+    if (code == Error::Ok)
+        return code;
 
-    return code;
+    LOGE(
+        System::LogLevel::Medium,
+        "In ", this->Stringify(),
+        " error in CPU cycle. Error code: ", System::ErrorCodeString(code)
+    );
+    return SendShutdown(*this);
 }
 
 //

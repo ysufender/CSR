@@ -23,6 +23,27 @@
 //
 // Board Implementation
 //
+#ifndef NDEBUG
+Board::~Board()
+{
+    std::cout << "\nRAM Stack (" << ram.StackSize() << ")";
+    for (sysbit_t i = 0; i < ram.StackSize(); i++)
+    {
+        if (i - 8*(i/8) == 0)
+            std::cout << "\n0x" << std::hex << std::uppercase << i << " |";
+        std::cout << ' ' << std::hex << std::uppercase << (int)ram.Read(i) << " |";
+    }
+
+    std::cout << "\n\nRAM Heap (" << ram.HeapSize() << ")";
+    for (sysbit_t i = 0; i+ram.StackSize() < ram.Size(); i++)
+    {
+        if (i - 8*(i/8) == 0)
+            std::cout << "\n0x" << std::hex << std::uppercase << i+ram.StackSize() << " |";
+        std::cout << ' ' << std::hex << std::uppercase << (int)ram.Read(i+ram.StackSize()) << " |";
+    }
+}
+#endif
+
 Board::Board(class Assembly& assembly, sysbit_t id) 
     : assembly(assembly), cpu(*this), id(id)
 {

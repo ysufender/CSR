@@ -84,14 +84,16 @@ sysbit_t RAM::Allocate(const sysbit_t size)
     sysbit_t counter { size };
     sysbit_t allocationAddr { 0 };
     bool set = false;
-    for (sysbit_t i = 0; i < this->heapSize; i++)
+    for (sysbit_t i = this->stackSize; i < this->Size(); i++)
     {
         if (counter == 0)
             break;
 
-        const sysbit_t index { i/8 };
-        const uchar_t offset { static_cast<uchar_t>(i - (index*8)) };
-        const bool isAvailable { this->allocationMap[i/8] >> (8-offset) == 0 }; 
+        const sysbit_t reali { i - this->StackSize() };
+        const sysbit_t index { reali/8 };
+        const uchar_t offset { static_cast<uchar_t>(reali - (index*8)) };
+        const bool isAvailable { ((this->allocationMap[index] >> (7-offset)) & 1) == 0 }; 
+
         if (!isAvailable)
         {
             counter = size;
@@ -110,7 +112,7 @@ sysbit_t RAM::Allocate(const sysbit_t size)
             "Can't allocate memory of size ", std::to_string(size),
             " bytes from ", this->board.Stringify(), ". Board is out of memory."
         );
-    for (sysbit_t i = allocationAddr; i < allocationAddr+size; i++)
+    for (sysbit_t i = allocationAddr-this->StackSize(); i < size; i++)
     {
         const sysbit_t index { i/8 }; 
         const uchar_t offset { static_cast<uchar_t>(i - (index*8)) };

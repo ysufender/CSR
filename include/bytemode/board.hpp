@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ios>
 #include <string>
 #include <unordered_map>
 
@@ -26,16 +27,7 @@ class Board : IMessageObject
         Board(class Assembly& assembly, sysbit_t id);
 
 #ifndef NDEBUG
-        ~Board()
-        {
-            for (sysbit_t i = 0; i < ram.Size() / 8; i++)
-            {
-                std::cout << i*8 << ": ";
-                for (sysbit_t j = 0; j < 8; j++)
-                    std::cout << static_cast<int>(ram.Read(i*8+j)) << ' ';
-                std::cout << '\n';
-            }
-        }
+        ~Board();
 #endif
 
         const class Assembly& Assembly() const 

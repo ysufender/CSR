@@ -27,7 +27,8 @@ CPU::CPU(Board& board) : board(board), state()
 Error CPU::Cycle() noexcept
 {
     static constexpr OperationFunction ops[] = {
-        NoOperation, StoreThirtyTwo, StoreEight, StoreThirtyTwoSymbol, StoreEightSymbol
+        NoOperation, StoreThirtyTwo, StoreEight, StoreFromSymbol, StoreFromSymbol ,
+        LoadFromStack, LoadFromStack, ReadFromHeap, ReadFromHeap, ReadFromRegister
     };
 
     char op;
@@ -46,6 +47,7 @@ Error CPU::Cycle() noexcept
 
     if (sizeof(ops)/8 > op)
     {
+        std::cout << '\n';
         LOGD(this->board.GetExecutingProcess().Stringify(), "::CPU read op ", OpCodesString(op));
         this->state.pc++; // pc points to either the next op or the first operand
         code = ops[op](*this);
@@ -59,6 +61,8 @@ Error CPU::Cycle() noexcept
             ", error while executing the instruction ", OpCodesString(op),
             ". Error code: ", System::ErrorCodeString(code)
         );
+
+        return code;
     }
 
     LOGE(
@@ -74,7 +78,7 @@ Error CPU::Cycle() noexcept
 
 Error CPU::Push(const char value) noexcept 
 {
-    if (this->state.sp+1 >= this->board.ram.StackSize())
+    if (this->state.sp+1 > this->board.ram.StackSize())
     {
         LOGE(
             System::LogLevel::Medium,
@@ -130,8 +134,9 @@ Error CPU::Pop() noexcept
 
 Error CPU::PushSome(const Slice values) noexcept
 {
-    if (this->state.sp+values.size >= this->board.ram.StackSize())
+    if (this->state.sp+values.size > this->board.ram.StackSize())
     {
+        // 0123
         LOGE(
             System::LogLevel::Medium,
             "In ", this->board.GetExecutingProcess().Stringify(),
