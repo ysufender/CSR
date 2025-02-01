@@ -42,7 +42,7 @@ sysbit_t VM::GenerateNewAssemblyID() const
     return id;
 }
 
-const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
+Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
 {
     if (this->assemblies.contains(settings.name))
         return System::ErrorCode::Bad;
@@ -64,7 +64,7 @@ const System::ErrorCode VM::AddAssembly(Assembly::AssemblySettings&& settings) n
     return code;
 }
 
-const System::ErrorCode VM::RemoveAssembly(sysbit_t id) noexcept
+Error VM::RemoveAssembly(sysbit_t id) noexcept
 {
     if (!this->asmIds.contains(id))  
         return System::ErrorCode::InvalidSpecifier;
@@ -75,7 +75,7 @@ const System::ErrorCode VM::RemoveAssembly(sysbit_t id) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode VM::Run(VMSettings&& settings)
+Error VM::Run(VMSettings&& settings)
 {
     this->settings = settings;
     System::ErrorCode code = System::ErrorCode::Ok;
@@ -134,7 +134,7 @@ const System::ErrorCode VM::Run(VMSettings&& settings)
 //
 // IMessageObject Implementation
 //
-const System::ErrorCode VM::DispatchMessages() noexcept
+Error VM::DispatchMessages() noexcept
 {
     System::ErrorCode code { System::ErrorCode::Ok };
 
@@ -170,7 +170,7 @@ const System::ErrorCode VM::DispatchMessages() noexcept
     return code;
 }
 
-const System::ErrorCode VM::ReceiveMessage(Message message) noexcept
+Error VM::ReceiveMessage(Message message) noexcept
 {
     if (!this->settings.strictMessages)
     {
@@ -202,7 +202,7 @@ const System::ErrorCode VM::ReceiveMessage(Message message) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode VM::SendMessage(Message message) noexcept
+Error VM::SendMessage(Message message) noexcept
 {
     if (!this->settings.strictMessages)
     {

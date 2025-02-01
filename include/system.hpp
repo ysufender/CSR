@@ -78,6 +78,8 @@ MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
         void operator delete[](void*) = delete;
 };
 
+using Error = const System::ErrorCode;
+
 class CSRException : public std::runtime_error
 {
     private:
@@ -93,7 +95,7 @@ class CSRException : public std::runtime_error
         CSRException(std::string message, std::string file, int line, System::ErrorCode errCode);
         
         const int GetLine() const noexcept { return _line; }
-        const System::ErrorCode GetCode() const noexcept { return _errCode; }
+        Error GetCode() const noexcept { return _errCode; }
         const std::string& GetFile() const noexcept { return _file; }
         const std::string& GetMsg() const noexcept { return _message; }
 

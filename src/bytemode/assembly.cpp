@@ -25,7 +25,7 @@ Assembly::Assembly(Assembly::AssemblySettings&& settings)
     this->settings = settings;
 }
 
-const System::ErrorCode Assembly::Load() noexcept
+Error Assembly::Load() noexcept
 {
     if (!std::filesystem::exists(this->settings.path))
         return System::ErrorCode::SourceFileNotFound;
@@ -111,7 +111,7 @@ sysbit_t Assembly::GenerateNewBoardID() const
     return id;
 }
 
-const System::ErrorCode Assembly::AddBoard() noexcept
+Error Assembly::AddBoard() noexcept
 {
     if (this->boards.size() >= std::numeric_limits<sysbit_t>::max())
         return System::ErrorCode::Bad;
@@ -126,7 +126,7 @@ const System::ErrorCode Assembly::AddBoard() noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Assembly::RemoveBoard(sysbit_t id) noexcept
+Error Assembly::RemoveBoard(sysbit_t id) noexcept
 {
     if (!this->boards.contains(id))
         return System::ErrorCode::InvalidSpecifier;
@@ -136,7 +136,7 @@ const System::ErrorCode Assembly::RemoveBoard(sysbit_t id) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Assembly::Run() noexcept
+Error Assembly::Run() noexcept
 {
     System::ErrorCode code { this->DispatchMessages() };
 
@@ -194,7 +194,7 @@ const System::ErrorCode Assembly::Run() noexcept
 //
 // IMessageObject Implementation
 //
-const System::ErrorCode Assembly::DispatchMessages() noexcept
+Error Assembly::DispatchMessages() noexcept
 {
     while (!this->messagePool.empty())
     {
@@ -228,7 +228,7 @@ const System::ErrorCode Assembly::DispatchMessages() noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Assembly::ReceiveMessage(Message message) noexcept
+Error Assembly::ReceiveMessage(Message message) noexcept
 {
     // message.type() must be BtoB, BtoA or VtoA
     // data must be
@@ -282,7 +282,7 @@ const System::ErrorCode Assembly::ReceiveMessage(Message message) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Assembly::SendMessage(Message message) noexcept
+Error Assembly::SendMessage(Message message) noexcept
 {
     // message.type() must be AtoA, AtoB, AtoV
     // data must be

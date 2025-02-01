@@ -38,15 +38,15 @@ int csrmain(int argc, char** args)
 
             for (const std::filesystem::path& file : files)
             {
-                System::ErrorCode err { VM::GetVM().AddAssembly({
-                        // /*jit =*/ flags.GetFlag<CLIParser::FlagType::Bool>("jit"), 
-                        /*jit =*/ false,
-                        /*name =*/ file.filename().generic_string(),
-                        /*path =*/ file,
-                        /*type = will be set by the Assembly class*/
-                        })};
+                errc = VM::GetVM().AddAssembly({
+                // /*jit =*/ flags.GetFlag<CLIParser::FlagType::Bool>("jit"), 
+                .jit = false,
+                .name = file.filename().generic_string(),
+                .path = file,
+                /*type = will be set by the Assembly class*/
+                });
 
-                switch (err) 
+                switch (errc) 
                 {
                     case System::ErrorCode::Bad:
                         LOGE(System::LogLevel::Medium, "Can't register assembly '", file.filename().generic_string(), "', it already exists.");

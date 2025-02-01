@@ -36,7 +36,7 @@ const Slice RAM::ReadSome(const sysbit_t address, const sysbit_t size) const
         size
     };}
 
-const System::ErrorCode RAM::Write(const sysbit_t address, char value) noexcept
+Error RAM::Write(const sysbit_t address, char value) noexcept
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0)
         return System::ErrorCode::RAMAccessError;
@@ -44,21 +44,21 @@ const System::ErrorCode RAM::Write(const sysbit_t address, char value) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode RAM::WriteSome(const sysbit_t address, const sysbit_t size, const char* values) noexcept
+Error RAM::WriteSome(const sysbit_t address, const Slice values) noexcept
 {
-    if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
+    if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+values.size) > this->stackSize+this->heapSize)
     {
         LOGE(
             System::LogLevel::Medium, 
             "Error in ", this->board.Stringify(),
-            ". Attempt to read out of bounds memory ",
+            ". Attempt to write to out of bounds memory ",
             std::to_string(address)
         );
         return System::ErrorCode::RAMAccessError;
     }
 
-    System::ErrorCode status = System::ErrorCode::Ok;
-    for(sysbit_t i = 0; i < size; i++)
+    System::ErrorCode status { System::ErrorCode::Ok };
+    for(sysbit_t i = 0; i < values.size; i++)
     {
         status = this->Write(address+i, values[i]);
 
@@ -75,6 +75,7 @@ const System::ErrorCode RAM::WriteSome(const sysbit_t address, const sysbit_t si
         }
             
     }
+
     return status;
 }
 
@@ -119,7 +120,7 @@ sysbit_t RAM::Allocate(const sysbit_t size)
     return allocationAddr;
 }
 
-const System::ErrorCode RAM::Deallocate(const sysbit_t address, const sysbit_t size) noexcept
+Error RAM::Deallocate(const sysbit_t address, const sysbit_t size) noexcept
 {
     if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
     {

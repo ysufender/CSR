@@ -26,7 +26,7 @@ const std::string& Process::Stringify() const noexcept
     return reprStr;
 }
 
-const System::ErrorCode Process::Cycle() noexcept
+Error Process::Cycle() noexcept
 {
     System::ErrorCode code { this->DispatchMessages() };
 
@@ -87,7 +87,7 @@ const System::ErrorCode Process::Cycle() noexcept
 //
 // IMessageObject Implementation
 //
-const System::ErrorCode Process::DispatchMessages() noexcept
+Error Process::DispatchMessages() noexcept
 {
     while (!this->messagePool.empty())
     {
@@ -99,7 +99,7 @@ const System::ErrorCode Process::DispatchMessages() noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Process::ReceiveMessage(Message message) noexcept
+Error Process::ReceiveMessage(Message message) noexcept
 {
     if (!VM::GetVM().GetSettings().strictMessages)
     {
@@ -120,7 +120,7 @@ const System::ErrorCode Process::ReceiveMessage(Message message) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Process::SendMessage(Message message) noexcept
+Error Process::SendMessage(Message message) noexcept
 {
     if (!VM::GetVM().GetSettings().strictMessages)
         return this->board.ReceiveMessage(message);

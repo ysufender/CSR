@@ -1,4 +1,5 @@
 #include <cassert>
+#include <memory>
 #include <string>
 
 #include "extensions/converters.hpp"
@@ -23,10 +24,10 @@ CPU::CPU(Board& board) : board(board), state()
     this->state.pc = IntegerFromBytes<sysbit_t>(&board.Assembly().Rom());
 }
 
-const System::ErrorCode CPU::Cycle() noexcept
+Error CPU::Cycle() noexcept
 {
     static constexpr OperationFunction ops[] = {
-        Nop, STT, STE
+        NoOperation, StoreThirtyTwo, StoreEight, StoreThirtyTwoSymbol, StoreEightSymbol
     };
 
     char op;
@@ -45,6 +46,8 @@ const System::ErrorCode CPU::Cycle() noexcept
 
     if (sizeof(ops)/8 > op)
     {
+        LOGD(this->board.GetExecutingProcess().Stringify(), "::CPU read op ", OpCodesString(op));
+        this->state.pc++; // pc points to either the next op or the first operand
         code = ops[op](*this);
 
         if (code == System::ErrorCode::Ok)
@@ -67,4 +70,117 @@ const System::ErrorCode CPU::Cycle() noexcept
     );
 
     return System::ErrorCode::InvalidInstruction;
+}
+
+Error CPU::Push(const char value) noexcept 
+{
+    if (this->state.sp+1 >= this->board.ram.StackSize())
+    {
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->board.GetExecutingProcess().Stringify(),
+            " can't push value onto stack, stack is full."
+        );
+        return System::ErrorCode::StackOverflow;
+    }
+
+    Error errc { this->board.ram.Write(this->state.sp, value) };
+
+    if (errc == System::ErrorCode::Ok)
+        this->state.sp++;
+    else
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->board.GetExecutingProcess().Stringify(),
+            " error while pushing value onto stack. Error code: ",
+            System::ErrorCodeString(errc)
+        );
+
+    return errc;
+}
+
+Error CPU::Pop() noexcept
+{
+    if (this->state.sp < 1)
+    {
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->board.GetExecutingProcess().Stringify(),
+            " error while popping value from stack. Can't pop while SP < 1. Error Code: ",
+            System::ErrorCodeString(System::ErrorCode::IndexOutOfBounds)
+        );
+
+        return System::ErrorCode::IndexOutOfBounds;
+    }
+
+    Error errc { this->board.ram.Write(this->state.sp, 0) };
+
+    if (errc == System::ErrorCode::Ok)
+        this->state.sp--;
+    else
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->board.GetExecutingProcess().Stringify(),
+            " error while popping value onto stack. Error code: ",
+            System::ErrorCodeString(errc)
+        );
+
+    return errc;
+}
+
+Error CPU::PushSome(const Slice values) noexcept
+{
+    if (this->state.sp+values.size >= this->board.ram.StackSize())
+    {
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->board.GetExecutingProcess().Stringify(),
+            " can't push value onto stack, stack is full."
+        );
+        return System::ErrorCode::StackOverflow;
+    }
+
+    Error errc { this->board.ram.WriteSome(this->state.sp, values) };
+
+    if (errc == System::ErrorCode::Ok)
+        this->state.sp+=values.size;
+    else
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->board.GetExecutingProcess().Stringify(),
+            " error while pushing value onto stack. Error code: ",
+            System::ErrorCodeString(errc)
+        );
+
+    return errc;
+}
+
+Error CPU::PopSome(const sysbit_t size) noexcept
+{
+    if (this->state.sp-size < 0)
+    {
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->board.GetExecutingProcess().Stringify(),
+            " error while popping value from stack. Can't pop while SP-size < 0. Error Code: ",
+            System::ErrorCodeString(System::ErrorCode::IndexOutOfBounds)
+        );
+
+        return System::ErrorCode::IndexOutOfBounds;
+    }
+
+    std::unique_ptr<char[]> zeros { std::make_unique<char[]>(size) };
+    Error errc { this->board.ram.WriteSome(this->state.sp-size, {zeros.get(), size}) };
+
+    if (errc == System::ErrorCode::Ok)
+        this->state.sp-=size;
+    else
+        LOGE(
+            System::LogLevel::Medium,
+            "In ", this->board.GetExecutingProcess().Stringify(),
+            " error while popping value onto stack. Error code: ",
+            System::ErrorCodeString(errc)
+        );
+
+    return errc;
 }

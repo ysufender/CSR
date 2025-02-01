@@ -42,14 +42,14 @@ class Assembly : IMessageObject
         const BoardCollection& Boards() const noexcept 
         { return this->boards; }
 
-        const System::ErrorCode DispatchMessages() noexcept override;
-        const System::ErrorCode ReceiveMessage(Message message) noexcept override;
-        const System::ErrorCode SendMessage(Message message) noexcept override;
+        Error DispatchMessages() noexcept override;
+        Error ReceiveMessage(Message message) noexcept override;
+        Error SendMessage(Message message) noexcept override;
 
-        const System::ErrorCode Load() noexcept;
-        const System::ErrorCode Run() noexcept;
-        const System::ErrorCode AddBoard() noexcept;
-        const System::ErrorCode RemoveBoard(sysbit_t id) noexcept;
+        Error Load() noexcept;
+        Error Run() noexcept;
+        Error AddBoard() noexcept;
+        Error RemoveBoard(sysbit_t id) noexcept;
 
         const std::string& Stringify() const noexcept;
 

@@ -41,19 +41,19 @@ class Board : IMessageObject
         const class Assembly& Assembly() const 
         { return this->assembly; }
 
-        const System::ErrorCode DispatchMessages() noexcept; 
-        const System::ErrorCode ReceiveMessage(Message message) noexcept; 
-        const System::ErrorCode SendMessage(Message message) noexcept; 
+        Error DispatchMessages() noexcept; 
+        Error ReceiveMessage(Message message) noexcept; 
+        Error SendMessage(Message message) noexcept; 
 
-        const System::ErrorCode ChangeExecutingProcess() noexcept;
-        const System::ErrorCode AddProcess() noexcept;
-        const System::ErrorCode RemoveProcess(uchar_t id) noexcept;
-        const System::ErrorCode Run() noexcept;
+        Error ChangeExecutingProcess() noexcept;
+        Error AddProcess() noexcept;
+        Error RemoveProcess(uchar_t id) noexcept;
+        Error Run() noexcept;
 
         const std::string& Stringify() const noexcept;
 
-        uchar_t GetExecutingProcess() const noexcept
-        { return this->currentProcess; }
+        const Process& GetExecutingProcess() const noexcept
+        { return this->processes.at(this->currentProcess); }
 
         const sysbit_t id;
 

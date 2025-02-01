@@ -1,8 +1,9 @@
+#include <string>
+
 #include "CSRConfig.hpp"
 #include "bytemode/assembly.hpp"
-#include "bytemode/slice.hpp"
 #include "system.hpp"
-#include <string>
+#include "slice.hpp"
 #include "bytemode/rom.hpp"
 
 //
@@ -44,7 +45,7 @@ const Slice ROM::ReadSome(const sysbit_t index, const sysbit_t size) const
     };
 }
 
-const System::ErrorCode ROM::TryRead(const sysbit_t index, char& data, const std::function<void()> failAct) const noexcept
+Error ROM::TryRead(const sysbit_t index, char& data, const std::function<void()> failAct) const noexcept
 {
     System::ErrorCode isOk { index >= this->size || index < 0 };
 

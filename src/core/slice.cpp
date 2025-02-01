@@ -1,4 +1,4 @@
-#include "bytemode/slice.hpp"
+#include "slice.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
 
@@ -16,7 +16,7 @@ char Slice::operator[](const sysbit_t index) const
     return data[index];
 }
 
-const System::ErrorCode Slice::TryRead(const sysbit_t index, char& out) noexcept
+Error Slice::TryRead(const sysbit_t index, char& out) noexcept
 {
     if (index < 0 || index >= size)
         return System::ErrorCode::IndexOutOfBounds;

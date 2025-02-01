@@ -36,45 +36,40 @@ MAKE_ENUM(RegisterModeFlags, eax, 8, REGOR, OUT_CLASS)
 MAKE_ENUM(CompareModeFlags, les, 21, CMPER, OUT_CLASS)
 #undef CMPER
 
-#define OPR const System::ErrorCode
-#define NOT_IMP(name) LOGE(System::LogLevel::Low, "Implement ", #name)
-OPR CPU::Nop(CPU& cpu) noexcept
+#define OPR Error
+#define NOT_IMP(name) \
+        LOGE(System::LogLevel::Low, "Implement ", #name); \
+        return System::ErrorCode::Ok;
+
+OPR CPU::NoOperation(CPU& cpu) noexcept
 {
     cpu.state.pc++;
     return System::ErrorCode::Ok;
 }
 
-OPR CPU::STT(CPU& cpu) noexcept
+OPR CPU::StoreThirtyTwo(CPU& cpu) noexcept
 {
-    // Store 32-bit raw value on stack
-    System::ErrorCode code { cpu.board.ram.WriteSome(
-        cpu.state.sp,
-        4,
-        cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
-    )};
-
-    cpu.state.pc+=5;
-    cpu.state.sp+=4;
-    return code;
+    Error err { cpu.PushSome(cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4)) };
+    if (err == System::ErrorCode::Ok)
+        cpu.state.pc+=4;
+    return err;
 }
 
-OPR CPU::STE(CPU& cpu) noexcept
+OPR CPU::StoreEight(CPU& cpu) noexcept
 {
-    NOT_IMP(STE);
-    System::ErrorCode code { cpu.board.ram.WriteSome(
-        cpu.state.sp,
-        1,
-        cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 1).data
-    )};
-
-    cpu.state.pc+=2;
-    cpu.state.sp+=1;
+    Error code { cpu.Push(cpu.board.assembly.Rom().Read(cpu.state.pc)) };
+    if (code == System::ErrorCode::Ok)
+        cpu.state.pc++;
     return System::ErrorCode::Ok;
 }
 
-OPR CPU::MovReg(CPU& cpu) noexcept
+OPR CPU::StoreThirtyTwoSymbol(CPU& cpu) noexcept
 {
-    NOT_IMP(MoveReg);
-    return System::ErrorCode::Ok;
+    NOT_IMP(StoreThirtyTwoSymbol);
+}
+
+OPR CPU::StoreEightSymbol(CPU& cpu) noexcept
+{
+    NOT_IMP(StoreEightSymbol);
 }
 #undef OPR

@@ -4,7 +4,7 @@
 #include <memory>
 
 #include "CSRConfig.hpp"
-#include "bytemode/slice.hpp"
+#include "slice.hpp"
 #include "system.hpp"
 
 class Assembly;
@@ -29,7 +29,7 @@ class ROM
         sysbit_t Size() const { return this->size; }
 
         char Read(sysbit_t index) const { return (*this)[index]; }
-        const System::ErrorCode TryRead(sysbit_t index, char& data, std::function<void()> failAct = { }) const noexcept;
+        Error TryRead(sysbit_t index, char& data, std::function<void()> failAct = { }) const noexcept;
         const Slice ReadSome(const sysbit_t index, const sysbit_t size) const;
 
     private:

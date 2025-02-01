@@ -1,12 +1,66 @@
 #pragma once
 
 #include "extensions/syntaxextensions.hpp"
+#include "slice.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
-#include <string>
 
 class Board;
 
+class CPU
+{
+    public:
+        struct State
+        {
+            sysbit_t eax { 0 };
+            sysbit_t ebx { 0 };
+            sysbit_t ecx { 0 };
+            sysbit_t edx { 0 };
+            sysbit_t esi { 0 };
+            sysbit_t edi { 0 };
+
+            sysbit_t pc { 0 };
+            sysbit_t sp { 0 };
+
+            uchar_t al { 0 };
+            uchar_t bl { 0 };
+            uchar_t cl { 0 };
+            uchar_t dl { 0 };
+            uchar_t fl { 0 };
+        };
+
+        CPU() = delete;
+        CPU(Board& board);
+        
+        Error Cycle() noexcept;
+
+        const State& DumpState() const noexcept
+        { return this->state; }
+
+        void LoadState(const State& loadFrom) noexcept
+        { this->state = loadFrom; }
+
+        Error Push(const char value) noexcept;
+        Error Pop() noexcept;
+
+        Error PushSome(const Slice values) noexcept;
+        Error PopSome(const sysbit_t size) noexcept;
+
+    private: 
+        Board& board;
+        State state;
+
+#define OPR static Error
+#define OPFunc(name) OPR name(CPU& cpu) noexcept;
+        using OperationFunction = Error (*)(CPU& cpu) noexcept;
+
+        OPFunc(NoOperation)
+        OPFunc(StoreThirtyTwo)
+        OPFunc(StoreEight)
+        OPFunc(StoreThirtyTwoSymbol)
+        OPFunc(StoreEightSymbol)
+#undef OPR
+};
 
 #define OPER(E) \
     E(stt) E(ste) \
@@ -42,52 +96,3 @@ class Board;
     E(ret)
 MAKE_ENUM(OpCodes, nop, 0, OPER, OUT_CLASS)
 #undef OPER
-
-class CPU
-{
-    public:
-        struct State
-        {
-            sysbit_t eax { 0 };
-            sysbit_t ebx { 0 };
-            sysbit_t ecx { 0 };
-            sysbit_t edx { 0 };
-            sysbit_t esi { 0 };
-            sysbit_t edi { 0 };
-
-            sysbit_t pc { 0 };
-            sysbit_t sp { 0 };
-
-            uchar_t al { 0 };
-            uchar_t bl { 0 };
-            uchar_t cl { 0 };
-            uchar_t dl { 0 };
-            uchar_t fl { 0 };
-        };
-
-        CPU() = delete;
-        CPU(Board& board);
-        
-        const System::ErrorCode Cycle() noexcept;
-
-        const State& DumpState() const noexcept
-        { return this->state; }
-
-        void LoadState(const State& loadFrom) noexcept
-        { this->state = loadFrom; }
-
-    private: 
-        Board& board;
-        State state;
-
-#define OPR static const System::ErrorCode
-#define OPFunc(name) OPR name(CPU& cpu) noexcept;
-        using OperationFunction = const System::ErrorCode (*)(CPU& cpu) noexcept;
-
-        OPFunc(Nop)
-        OPFunc(MovReg)
-        OPFunc(STT)
-        OPFunc(STE)
-#undef OPR
-};
-

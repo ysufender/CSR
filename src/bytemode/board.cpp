@@ -65,7 +65,7 @@ uchar_t Board::GenerateNewProcessID() const
     return id;
 }
 
-const System::ErrorCode Board::ChangeExecutingProcess() noexcept
+Error Board::ChangeExecutingProcess() noexcept
 {
     // Dump current state of CPU to currentProcess
     this->processes.at(currentProcess).LoadState(this->cpu.DumpState());
@@ -82,7 +82,7 @@ const System::ErrorCode Board::ChangeExecutingProcess() noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Board::AddProcess() noexcept
+Error Board::AddProcess() noexcept
 {
     if (this->processes.size() >= std::numeric_limits<uchar_t>::max())
         return System::ErrorCode::Bad;
@@ -97,7 +97,7 @@ const System::ErrorCode Board::AddProcess() noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Board::RemoveProcess(uchar_t id) noexcept
+Error Board::RemoveProcess(uchar_t id) noexcept
 {
     if (!this->processes.contains(id))
         return System::ErrorCode::InvalidSpecifier;
@@ -107,7 +107,7 @@ const System::ErrorCode Board::RemoveProcess(uchar_t id) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Board::Run() noexcept
+Error Board::Run() noexcept
 {
     // Dispatch messages
     System::ErrorCode code { this->DispatchMessages() }; 
@@ -169,7 +169,7 @@ const std::string& Board::Stringify() const noexcept
 //
 // IMessageObject Implementation
 //
-const System::ErrorCode Board::DispatchMessages() noexcept
+Error Board::DispatchMessages() noexcept
 {
     System::ErrorCode code { System::ErrorCode::Ok };
 
@@ -206,7 +206,7 @@ const System::ErrorCode Board::DispatchMessages() noexcept
     return code;
 }
 
-const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
+Error Board::ReceiveMessage(Message message) noexcept
 {
     // message.type() must be PtoP, PtoB, AtoB
     // message.data() must be
@@ -256,7 +256,7 @@ const System::ErrorCode Board::ReceiveMessage(Message message) noexcept
     return System::ErrorCode::Ok;
 }
 
-const System::ErrorCode Board::SendMessage(Message message) noexcept
+Error Board::SendMessage(Message message) noexcept
 {
     // message.type() must be BtoP, BtoB, BtoA
     // message.data() must be

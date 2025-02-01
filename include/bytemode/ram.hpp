@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bytemode/slice.hpp"
+#include "slice.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
 
@@ -32,16 +32,22 @@ class RAM
         RAM& operator=(RAM&& other);
 
         char Read(const sysbit_t address) const;
-        const System::ErrorCode Write(const sysbit_t address, char value) noexcept;
+        Error Write(const sysbit_t address, char value) noexcept;
 
         const Slice ReadSome(const sysbit_t address, const sysbit_t size) const;
-        const System::ErrorCode WriteSome(const sysbit_t address, const sysbit_t size, const char* values) noexcept;
+        Error WriteSome(const sysbit_t address, const Slice values) noexcept;
 
         sysbit_t Allocate(const sysbit_t size);
-        const System::ErrorCode Deallocate(const sysbit_t address, const sysbit_t size) noexcept;
+        Error Deallocate(const sysbit_t address, const sysbit_t size) noexcept;
 
         sysbit_t Size() const noexcept
         { return heapSize+stackSize; }
+
+        sysbit_t StackSize() const noexcept
+        { return stackSize; }
+
+        sysbit_t HeapSize() const noexcept
+        { return heapSize; }
 
     private:
         std::unique_ptr<uchar_t[]> allocationMap;

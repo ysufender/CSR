@@ -16,9 +16,9 @@ class Process : IMessageObject
         Process(Board& parent, uchar_t id) : board(parent), id(id)
         { }
 
-        const System::ErrorCode DispatchMessages() noexcept override;
-        const System::ErrorCode ReceiveMessage(Message message) noexcept override;
-        const System::ErrorCode SendMessage(Message message) noexcept override;
+        Error DispatchMessages() noexcept override;
+        Error ReceiveMessage(Message message) noexcept override;
+        Error SendMessage(Message message) noexcept override;
 
         const std::string& Stringify() const noexcept;
 
@@ -28,7 +28,7 @@ class Process : IMessageObject
         void LoadState(const CPU::State& loadFrom) noexcept
         { this->state = loadFrom; }
 
-        const System::ErrorCode Cycle() noexcept;
+        Error Cycle() noexcept;
 
         const uchar_t id;
 

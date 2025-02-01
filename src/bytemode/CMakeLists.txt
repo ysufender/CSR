@@ -5,7 +5,6 @@ add_library(bytemode
         board.cpp
         cpu.cpp
         ram.cpp
-        slice.cpp
         rom.cpp
         instructions.cpp
 )
@@ -13,4 +12,5 @@ add_library(bytemode
 target_link_libraries(bytemode
     PRIVATE
         libs
+        core
 )
