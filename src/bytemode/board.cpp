@@ -26,12 +26,27 @@
 #ifndef NDEBUG
 Board::~Board()
 {
+    std::cout << "\nCPU\n";
+    std::cout << "pc : " << this->cpu.DumpState().pc;
+    std::cout << " sp : " << this->cpu.DumpState().sp << '\n';
+    std::cout << "eax : " << this->cpu.DumpState().eax;
+    std::cout << " ebx : " << this->cpu.DumpState().ebx;
+    std::cout << " ecx : " << this->cpu.DumpState().ecx;
+    std::cout << " edx : " << this->cpu.DumpState().edx;
+    std::cout << " esi : " << this->cpu.DumpState().esi;
+    std::cout << " edi : " << this->cpu.DumpState().edi<< '\n';
+    std::cout << "al : " << (sysbit_t)this->cpu.DumpState().al;
+    std::cout << " bl : " << (sysbit_t)this->cpu.DumpState().bl;
+    std::cout << " cl : " << (sysbit_t)this->cpu.DumpState().cl;
+    std::cout << " dl : " << (sysbit_t)this->cpu.DumpState().dl << '\n';
+    std::cout << "flg : " << (sysbit_t)this->cpu.DumpState().flg << '\n';
+
     std::cout << "\nRAM Stack (" << ram.StackSize() << ")";
     for (sysbit_t i = 0; i < ram.StackSize(); i++)
     {
         if (i - 8*(i/8) == 0)
             std::cout << "\n0x" << std::hex << std::uppercase << i << " |";
-        std::cout << ' ' << std::hex << std::uppercase << (int)ram.Read(i) << " |";
+        std::cout << ' ' << std::hex << std::uppercase << (sysbit_t)ram.Read(i) << " |";
     }
 
     std::cout << "\n\nRAM Heap (" << ram.HeapSize() << ")";
@@ -39,7 +54,7 @@ Board::~Board()
     {
         if (i - 8*(i/8) == 0)
             std::cout << "\n0x" << std::hex << std::uppercase << i+ram.StackSize() << " |";
-        std::cout << ' ' << std::hex << std::uppercase << (int)ram.Read(i+ram.StackSize()) << " |";
+        std::cout << ' ' << std::hex << std::uppercase << (sysbit_t)ram.Read(i+ram.StackSize()) << " |";
     }
 }
 #endif

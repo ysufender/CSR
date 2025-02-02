@@ -6,7 +6,6 @@
 #include "bytemode/assembly.hpp"
 #include "bytemode/cpu.hpp"
 #include "CSRConfig.hpp"
-#include "extensions/stringextensions.hpp"
 #include "system.hpp"
 
 CPU::CPU(Board& board) : board(board), state()
@@ -27,8 +26,9 @@ CPU::CPU(Board& board) : board(board), state()
 Error CPU::Cycle() noexcept
 {
     static constexpr OperationFunction ops[] = {
-        NoOperation, StoreThirtyTwo, StoreEight, StoreFromSymbol, StoreFromSymbol ,
-        LoadFromStack, LoadFromStack, ReadFromHeap, ReadFromHeap, ReadFromRegister
+        NoOperation, StoreThirtyTwo, StoreEight, StoreFromSymbol, StoreFromSymbol,
+        LoadFromStack, LoadFromStack, ReadFromHeap, ReadFromHeap, ReadFromRegister,
+        Move, Move, Move
     };
 
     char op;
@@ -47,7 +47,7 @@ Error CPU::Cycle() noexcept
 
     if (sizeof(ops)/8 > op)
     {
-        std::cout << '\n';
+        std::cout << '\n' << this->state.pc << '\n';
         LOGD(this->board.GetExecutingProcess().Stringify(), "::CPU read op ", OpCodesString(op));
         this->state.pc++; // pc points to either the next op or the first operand
         code = ops[op](*this);

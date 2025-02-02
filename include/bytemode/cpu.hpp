@@ -61,6 +61,7 @@ class CPU
         OPFunc(LoadFromStack)
         OPFunc(ReadFromHeap)
         OPFunc(ReadFromRegister)
+        OPFunc(Move)
 #undef OPFunc
 #undef OPR
 };
