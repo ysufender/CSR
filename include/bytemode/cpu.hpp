@@ -55,13 +55,11 @@ class CPU
         using OperationFunction = Error (*)(CPU& cpu) noexcept;
 
         OPFunc(NoOperation)
-        OPFunc(StoreThirtyTwo)
-        OPFunc(StoreEight)
-        OPFunc(StoreFromSymbol)
+        OPFunc(StoreThirtyTwo) OPFunc(StoreEight) OPFunc(StoreFromSymbol)
         OPFunc(LoadFromStack)
-        OPFunc(ReadFromHeap)
-        OPFunc(ReadFromRegister)
+        OPFunc(ReadFromHeap) OPFunc(ReadFromRegister)
         OPFunc(Move)
+        OPFunc(Add32) OPFunc(AddFloat) OPFunc(Add8)
 #undef OPFunc
 #undef OPR
 };

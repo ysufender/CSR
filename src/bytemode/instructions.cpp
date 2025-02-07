@@ -306,4 +306,70 @@ OPR CPU::Move(CPU& cpu) noexcept
         return System::ErrorCode::UnhandledException;
     ) 
 }
+
+OPR CPU::Add32(CPU& cpu) noexcept
+{
+    try_catch(
+        sysbit_t int1;
+        sysbit_t int2;
+        int1 = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        cpu.PopSome(4);
+        int2 = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        cpu.PopSome(4);
+
+        char* data { BytesFromInteger(int1+int2) };
+        Error err { cpu.PushSome({
+            data,
+            4
+        })};
+
+        delete[] data;
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::AddFloat(CPU& cpu) noexcept
+{
+    try_catch(
+        float float1;
+        float float2;
+        float1 = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        cpu.PopSome(4);
+        float2 = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        cpu.PopSome(4);
+
+        char* data { BytesFromFloat<char>(float1+float2) };
+        Error err { cpu.PushSome({
+            data,
+            4
+        })};
+
+        delete[] data;
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::Add8(CPU& cpu) noexcept
+{
+    try_catch(
+        uchar_t byte1;
+        uchar_t byte2;
+        byte1 = cpu.board.ram.Read(cpu.state.sp-1);
+        cpu.Pop();
+        byte2 = cpu.board.ram.Read(cpu.state.sp-1);
+        cpu.Pop();
+        
+        Error err { cpu.Push(byte1+byte2) };
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
 #undef OPR

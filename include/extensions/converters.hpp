@@ -4,6 +4,7 @@
 #include <bitset>
 #include <cmath>
 #include <iostream>
+#include <iterator>
 #include <type_traits>
 
 #include "CSRConfig.hpp"
@@ -33,6 +34,23 @@ T IntegerFromBytes(const U* bytes) noexcept
     return reinterpret_cast<T>(ures);
 }
 
+template<byte_t T>
+float FloatFromBytes(const T* bytes) noexcept
+{
+    if (std::endian::native == std::endian::big)
+        return *reinterpret_cast<float*>(const_cast<uchar_t*>(reinterpret_cast<const uchar_t*>(bytes)));
+
+    float returnFloat;
+    uchar_t* tmpB { reinterpret_cast<uchar_t*>(&returnFloat) };
+
+    tmpB[0] = bytes[3];
+    tmpB[1] = bytes[2];
+    tmpB[2] = bytes[1];
+    tmpB[3] = bytes[0];
+
+    return returnFloat;
+}
+
 template<std::integral T, byte_t U = char>
 U* BytesFromInteger(const T integer) noexcept
 {
@@ -47,4 +65,21 @@ U* BytesFromInteger(const T integer) noexcept
         bytes[i] = static_cast<uchar_t>((uinteger << ((sizeof(T)-i-1)*8)));
 
     return reinterpret_cast<U*>(bytes);
+}
+
+template<byte_t T>
+T* BytesFromFloat(const float val) noexcept
+{
+    if (std::endian::native == std::endian::big)
+        return reinterpret_cast<T*>(new float{val});
+
+    uchar_t* bytes { new uchar_t[4] };
+    const uchar_t* tmpB { reinterpret_cast<const uchar_t*>(&val) };
+
+    bytes[0] = tmpB[3];
+    bytes[1] = tmpB[2];
+    bytes[2] = tmpB[1];
+    bytes[3] = tmpB[0];
+
+    return reinterpret_cast<T*>(bytes);
 }
