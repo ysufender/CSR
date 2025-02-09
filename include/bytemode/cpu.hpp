@@ -60,6 +60,7 @@ class CPU
         OPFunc(ReadFromHeap) OPFunc(ReadFromRegister)
         OPFunc(Move)
         OPFunc(Add32) OPFunc(AddFloat) OPFunc(Add8)
+        OPFunc(AddReg)
 #undef OPFunc
 #undef OPR
 };

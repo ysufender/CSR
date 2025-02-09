@@ -31,7 +31,7 @@ using namespace std::string_view_literals;
 #define GENERATE_ENUM(ENUM) ENUM,
 #define GENERATE_STRING(STRING) #STRING##sv,
 #define MAKE_ENUM(name, fenum, fval, values, mode) \
-    enum class name { \
+    enum class name : char { \
         fenum = fval, \
         FOREACH_ENUM(values, GENERATE_ENUM) \
     }; \

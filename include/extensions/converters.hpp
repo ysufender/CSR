@@ -22,12 +22,11 @@ T IntegerFromBytes(const U* bytes) noexcept
         return *reinterpret_cast<T*>(const_cast<uchar_t*>(reinterpret_cast<const uchar_t*>(bytes)));
 
     // bytes must be in big endian order
-   
     std::make_unsigned_t<T> ures { 0 };
 
     for (char i = 0; i < sizeof(T); i++)
     {
-        ures <<= sizeof(uchar_t);
+        ures <<= sizeof(uchar_t)*8;
         ures |= static_cast<uchar_t>(bytes[i]);
     }
 
@@ -40,7 +39,7 @@ float FloatFromBytes(const T* bytes) noexcept
     if (std::endian::native == std::endian::big)
         return *reinterpret_cast<float*>(const_cast<uchar_t*>(reinterpret_cast<const uchar_t*>(bytes)));
 
-    float returnFloat;
+    float returnFloat { 0 };
     uchar_t* tmpB { reinterpret_cast<uchar_t*>(&returnFloat) };
 
     tmpB[0] = bytes[3];
@@ -62,7 +61,7 @@ U* BytesFromInteger(const T integer) noexcept
     uchar_t* bytes { new uchar_t[sizeof(uinteger)] };
 
     for (char i = 0; i < sizeof(T); i++)
-        bytes[i] = static_cast<uchar_t>((uinteger << ((sizeof(T)-i-1)*8)));
+        bytes[sizeof(uinteger)-1-i] = static_cast<uchar_t>((uinteger >> (i*8)));
 
     return reinterpret_cast<U*>(bytes);
 }

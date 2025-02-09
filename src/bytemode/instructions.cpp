@@ -1,5 +1,7 @@
 #include <cstring>
 #include <bitset>
+#include <ios>
+#include <string>
 
 #include "CSRConfig.hpp"
 #include "extensions/converters.hpp"
@@ -14,7 +16,7 @@ constexpr uchar_t NoMode = 0x00;
 #define NUMER(E) \
     E(Float) \
     E(Byte) \
-    E(UIntr) \
+    E(UInt) \
     E(UByte)
 MAKE_ENUM(NumericModeFlags, Int, 1, NUMER, OUT_CLASS)
 #undef NUMER
@@ -370,6 +372,70 @@ OPR CPU::Add8(CPU& cpu) noexcept
 
         return exc.GetCode();,
         return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::AddReg(CPU& cpu) noexcept
+{
+    try_catch(
+        OpCodes op { cpu.board.assembly.Rom().Read(cpu.state.pc-1) };
+        RegisterModeFlags reg1 { cpu.board.assembly.Rom().Read(cpu.state.pc) };
+        RegisterModeFlags reg2 { cpu.board.assembly.Rom().Read(cpu.state.pc+1) };
+        
+        if (
+            /*case 1*/ 
+            ((op == OpCodes::addrb)
+            &&
+            (!Is8BitReg(reg1) || !Is8BitReg(reg2)))
+            ||
+
+            /*case 2*/
+            ((op != OpCodes::addrb)
+            &&
+            (Is8BitReg(reg1) || Is8BitReg(reg2)))
+        )
+            CRASH(System::ErrorCode::InvalidSpecifier,
+                "In ", cpu.board.Stringify(), ", PC: ", std::to_string(cpu.state.pc-1),
+                " ", OpCodesString(op),
+                " ", RegisterModeFlagsString(reg1),
+                " ", RegisterModeFlagsString(reg2),
+                " Given registers are not compatible with given numeric type."
+            );
+
+        cpu.state.pc+=2;
+
+        if (Is8BitReg(reg1))
+        {
+            uchar_t reg1ref { GetRegister8Bit(reg1, cpu.state) };
+            uchar_t& reg2ref { GetRegister8Bit(reg2, cpu.state) };
+            reg2ref += reg1ref;
+        }
+        else if (op == OpCodes::addrf)
+        {
+            sysbit_t reg1ref { GetRegister32Bit(reg1, cpu.state) };
+            sysbit_t& reg2ref { GetRegister32Bit(reg2, cpu.state) };
+
+            float float1 { FloatFromBytes(
+                    BytesFromInteger(reg1ref)
+                    ) };
+            float float2 { FloatFromBytes(
+                    BytesFromInteger(reg2ref)
+                    )};
+            reg2ref = IntegerFromBytes<sysbit_t>(
+                    BytesFromFloat<char>(float1+float2)
+                    );
+        }
+        else
+        {
+            sysbit_t reg1ref { GetRegister32Bit(reg1, cpu.state) };
+            sysbit_t& reg2ref { GetRegister32Bit(reg2, cpu.state) };
+            reg2ref += reg1ref;
+        }
+
+        return System::ErrorCode::Ok;,
+
+        return exc.GetCode();,
+        return Error::UnhandledException;
     )
 }
 #undef OPR

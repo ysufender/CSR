@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstring>
 #include <fstream>
+#include <ios>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -26,22 +27,21 @@
 #ifndef NDEBUG
 Board::~Board()
 {
-    std::cout << "\nCPU\n";
-    std::cout << "pc : " << this->cpu.DumpState().pc;
-    std::cout << " sp : " << this->cpu.DumpState().sp << '\n';
-    std::cout << "eax : " << this->cpu.DumpState().eax;
-    std::cout << " ebx : " << this->cpu.DumpState().ebx;
-    std::cout << " ecx : " << this->cpu.DumpState().ecx;
-    std::cout << " edx : " << this->cpu.DumpState().edx;
-    std::cout << " esi : " << this->cpu.DumpState().esi;
-    std::cout << " edi : " << this->cpu.DumpState().edi<< '\n';
-    std::cout << "al : " << (sysbit_t)this->cpu.DumpState().al;
-    std::cout << " bl : " << (sysbit_t)this->cpu.DumpState().bl;
-    std::cout << " cl : " << (sysbit_t)this->cpu.DumpState().cl;
-    std::cout << " dl : " << (sysbit_t)this->cpu.DumpState().dl << '\n';
-    std::cout << "flg : " << (sysbit_t)this->cpu.DumpState().flg << '\n';
-
-    std::cout << "\nRAM Stack (" << ram.StackSize() << ")";
+    std::cout << "\nCPU\n" << std::hex
+        << "pc : " << this->cpu.DumpState().pc 
+        << " sp : " << this->cpu.DumpState().sp << '\n' 
+        << "eax : " << this->cpu.DumpState().eax 
+        << " ebx : " << this->cpu.DumpState().ebx 
+        << " ecx : " << this->cpu.DumpState().ecx 
+        << " edx : " << this->cpu.DumpState().edx 
+        << " esi : " << this->cpu.DumpState().esi 
+        << " edi : " << this->cpu.DumpState().edi<< '\n' 
+        << "al : " << (sysbit_t)this->cpu.DumpState().al 
+        << " bl : " << (sysbit_t)this->cpu.DumpState().bl 
+        << " cl : " << (sysbit_t)this->cpu.DumpState().cl 
+        << " dl : " << (sysbit_t)this->cpu.DumpState().dl << '\n' 
+        << "flg : " << (sysbit_t)this->cpu.DumpState().flg << '\n'
+        << "\nRAM Stack (" << ram.StackSize() << ")";
     for (sysbit_t i = 0; i < ram.StackSize(); i++)
     {
         if (i - 8*(i/8) == 0)
