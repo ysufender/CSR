@@ -41,7 +41,8 @@ struct System
     E(IndexOutOfBounds) \
     E(InvalidInstruction) \
     E(MessageReceiveError) \
-    E(MessageDispatchError)
+    E(MessageDispatchError) \
+    E(MemoryOverflow)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

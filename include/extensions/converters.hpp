@@ -66,7 +66,7 @@ U* BytesFromInteger(const T integer) noexcept
     return reinterpret_cast<U*>(bytes);
 }
 
-template<byte_t T>
+template<byte_t T = char>
 T* BytesFromFloat(const float val) noexcept
 {
     if (std::endian::native == std::endian::big)

@@ -438,4 +438,240 @@ OPR CPU::AddReg(CPU& cpu) noexcept
         return Error::UnhandledException;
     )
 }
+
+OPR CPU::AddSafe32(CPU& cpu) noexcept
+{
+    try_catch(
+        sysbit_t int1;
+        sysbit_t int2;
+        int1 = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        int2 = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data);
+
+        char* data { BytesFromInteger(int1+int2) };
+        Error err { cpu.PushSome({
+            data,
+            4
+        })};
+
+        delete[] data;
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::AddSafeFloat(CPU& cpu) noexcept
+{
+    try_catch(
+        float float1;
+        float float2;
+        float1 = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        float2 = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data);
+
+        char* data { BytesFromFloat<char>(float1+float2) };
+        Error err { cpu.PushSome({
+            data,
+            4
+        })};
+
+        delete[] data;
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::AddSafe8(CPU& cpu) noexcept
+{
+    try_catch(
+        uchar_t byte1;
+        uchar_t byte2;
+        byte1 = cpu.board.ram.Read(cpu.state.sp-1);
+        byte2 = cpu.board.ram.Read(cpu.state.sp-2);
+        
+        Error err { cpu.Push(byte1+byte2) };
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::MemCopy(CPU& cpu) noexcept
+{
+    // mcp <4bits> <4bits>
+    // bits are memory mode flags
+    try_catch(
+        uchar_t compressedModes { static_cast<uchar_t>(cpu.board.assembly.Rom().Read(cpu.state.pc)) };
+        MemoryModeFlags from { MemoryModeFlags(compressedModes >> 4) };
+        MemoryModeFlags to { MemoryModeFlags(compressedModes & 0x0F) };
+
+        sysbit_t fromAddr { GetRegister32Bit(RegisterModeFlags::eax, cpu.state) };
+        sysbit_t toAddr { GetRegister32Bit(RegisterModeFlags::ebx, cpu.state) };
+        sysbit_t size { GetRegister32Bit(RegisterModeFlags::ecx, cpu.state) };
+
+        auto modeCheck = [&cpu](MemoryModeFlags flag, sysbit_t addr) -> bool {
+            if (flag == MemoryModeFlags::Stack)
+                return (addr < cpu.board.ram.StackSize());
+            return ((addr >= cpu.board.ram.StackSize()) && (addr < cpu.board.ram.Size()));
+        };
+
+        if (!modeCheck(from, fromAddr) || !modeCheck(to, toAddr))
+        {
+            LOGE(
+                System::LogLevel::Medium,
+                "In ", cpu.board.Stringify(), nameof(MemCopy) , " missmatching memory modes and addresses.\n",
+                "From Flag: ", MemoryModeFlagsString(from), " From Addr: ", std::to_string(fromAddr),
+                "\nTo Flag: ", MemoryModeFlagsString(to), " To Addr: ", std::to_string(toAddr),
+                "\n Heap Start: ", std::to_string(cpu.board.ram.StackSize())
+            );
+            return System::ErrorCode::RAMAccessError;
+        }
+        
+        if ((toAddr + size) > cpu.board.ram.Size())
+        {
+            LOGE(
+                System::LogLevel::Medium,
+                "In ", cpu.board.Stringify(), nameof(MemCopy), " instruction will cause memory overflow.",
+                "\nTo Address: ", std::to_string(toAddr), " Size: ", std::to_string(size),
+                "\nMemory Size: ", std::to_string(cpu.board.ram.Size())
+            );
+            return System::ErrorCode::MemoryOverflow;
+        }
+
+        if (to == MemoryModeFlags::Stack && (toAddr + size) >= cpu.board.ram.StackSize())
+            LOGW(
+                "In ", cpu.board.Stringify(), nameof(MemCopy), 
+                " instruction will overflow from stack and overwrite heap."
+            );
+
+        Slice dataToCopy { cpu.board.ram.ReadSome(fromAddr, size) };
+        Error code { cpu.board.ram.WriteSome(toAddr, dataToCopy) };
+
+        if (code == System::ErrorCode::Ok)
+            cpu.state.pc++;
+
+        return code;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::Increment(CPU& cpu) noexcept
+{
+    // inc[type] <value> 
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::inci:
+            {
+                if (cpu.state.sp < 4)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Increment),
+                        "can't increment (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                sysbit_t amount { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data 
+                )};
+
+                sysbit_t stack { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                )};
+
+                char* data { BytesFromInteger(stack+amount) };
+                Error code { cpu.board.ram.WriteSome(
+                    cpu.state.sp-4,
+                    {data, 4}
+                )};
+
+                delete[] data;
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc+=4;
+
+                return code;
+            }
+
+            case OpCodes::incf:
+            {
+                if (cpu.state.sp < 4)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Increment),
+                        "can't increment (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                float amount { FloatFromBytes(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+                )}; 
+
+                float stack { FloatFromBytes(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data      
+                )};
+
+                char* data { BytesFromFloat(amount+stack) };
+                Error code { cpu.board.ram.WriteSome(
+                    cpu.state.sp-4,
+                    {data, 4}
+                )};
+
+                delete[] data;
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc+=4;
+
+                return code;
+            }
+
+            case OpCodes::incb:
+            {
+                if (cpu.state.sp < 1)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Increment),
+                        "can't increment (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                uchar_t amount { static_cast<uchar_t>(
+                    cpu.board.assembly.Rom().Read(cpu.state.pc)
+                )};
+                uchar_t stack { static_cast<uchar_t>(
+                    cpu.board.ram.Read(cpu.state.sp-1)
+                )};
+
+                Error code { cpu.board.ram.Write(
+                    cpu.state.sp-1,
+                    amount + stack
+                )};
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc++;
+
+                return code;
+            }
+
+            default:
+                return Error::InvalidSpecifier;        
+        }
+
+        return System::ErrorCode::Ok;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
 #undef OPR

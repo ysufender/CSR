@@ -28,7 +28,10 @@ Error CPU::Cycle() noexcept
     static constexpr OperationFunction ops[] = {
         NoOperation, StoreThirtyTwo, StoreEight, StoreFromSymbol, StoreFromSymbol,
         LoadFromStack, LoadFromStack, ReadFromHeap, ReadFromHeap, ReadFromRegister,
-        Move, Move, Move, Add32, AddFloat, Add8, AddReg, AddReg, AddReg
+        Move, Move, Move, Add32, AddFloat, Add8, AddReg, AddReg, AddReg,
+        AddSafe32, AddSafeFloat, AddSafe8,
+        MemCopy,
+        Increment, Increment, Increment
     };
 
     char op;

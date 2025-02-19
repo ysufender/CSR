@@ -61,6 +61,9 @@ class CPU
         OPFunc(Move)
         OPFunc(Add32) OPFunc(AddFloat) OPFunc(Add8)
         OPFunc(AddReg)
+        OPFunc(AddSafe32) OPFunc(AddSafeFloat) OPFunc(AddSafe8)
+        OPFunc(MemCopy)
+        OPFunc(Increment)
 #undef OPFunc
 #undef OPR
 };
