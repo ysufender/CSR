@@ -35,6 +35,9 @@ Error CPU::Cycle() noexcept
         IncrementSafe, IncrementSafe, IncrementSafe,
         Decrement, Decrement, Decrement, DecrementReg, DecrementReg, DecrementReg,
         DecrementSafe, DecrementSafe, DecrementSafe,
+        BitAnd, BitAnd, BitAnd,
+        BitOr, BitOr, BitOr,
+        BitNor, BitNor, BitNor,
     };
 
     char op;

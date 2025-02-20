@@ -1,41 +1,15 @@
+#include <array>
 #include <cstring>
 #include <string>
 
 #include "CSRConfig.hpp"
 #include "extensions/converters.hpp"
-#include "extensions/syntaxextensions.hpp"
+#include "bytemode/instructions.hpp"
 #include "bytemode/assembly.hpp"
 #include "bytemode/board.hpp"
 #include "bytemode/cpu.hpp"
 #include "system.hpp"
 
-constexpr uchar_t NoMode = 0x00;
-
-#define NUMER(E) \
-    E(Float) \
-    E(Byte) \
-    E(UInt) \
-    E(UByte)
-MAKE_ENUM(NumericModeFlags, Int, 1, NUMER, OUT_CLASS)
-#undef NUMER
-
-#define MEMOR(E) \
-    E(Heap)
-MAKE_ENUM(MemoryModeFlags, Stack, 6, MEMOR, OUT_CLASS)
-#undef MEMOR
-
-#define REGOR(E) \
-    E(ebx) E(ecx) E(edx) E(esi) E(edi) \
-    E(pc) E(sp) \
-    E(al) E(bl) E(cl) E(dl) \
-    E(flg)
-MAKE_ENUM(RegisterModeFlags, eax, 8, REGOR, OUT_CLASS)
-#undef REGOR
-
-#define CMPER(E) \
-    E(gre) E(equ) E(leq) E(geq) E(neq) 
-MAKE_ENUM(CompareModeFlags, les, 21, CMPER, OUT_CLASS)
-#undef CMPER
 #define OPR Error
 #define NOT_IMP(name) \
         LOGE(System::LogLevel::Low, "Implement ", #name); \
@@ -1159,5 +1133,134 @@ OPR CPU::DecrementSafe(CPU& cpu) noexcept
         return exc.GetCode();,
         return System::ErrorCode::UnhandledException;
     ) 
+}
+
+#define arr std::array
+#define fn std::function<sysbit_t(sysbit_t, sysbit_t)>
+OPR CPU::BitLogic(CPU& cpu, arr<OpCodes, 3> op, fn bitwise) noexcept
+{
+    try_catch(
+        OpCodes opc { cpu.board.assembly.Rom().Read(cpu.state.pc-1) };
+        if (opc == op.at(0))
+        {
+            sysbit_t val1 { IntegerFromBytes<sysbit_t>(
+                cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+            )};
+
+            sysbit_t val2 { IntegerFromBytes<sysbit_t>(
+                cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+            )}; 
+            
+            if (Is8BitReg(cpu.board.assembly.Rom().Read(cpu.state.pc)))
+            {
+                uchar_t& reg { GetRegister8Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+                reg = static_cast<uchar_t>(bitwise(val1, val2));
+            }
+            else
+            {
+                sysbit_t& reg { GetRegister32Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+                reg = bitwise(val1, val2);
+            }
+
+            cpu.state.pc++; 
+            return System::ErrorCode::Ok;
+        }
+        if (opc == op.at(1))
+        {
+            uchar_t val1 { 
+                static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-2))
+            };
+
+            uchar_t val2 {
+                static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-1))
+            };
+        
+            if (Is8BitReg(cpu.board.assembly.Rom().Read(cpu.state.pc)))
+            {
+                uchar_t& reg { GetRegister8Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+                reg = static_cast<uchar_t>(bitwise(val1, val2));
+            }
+            else
+            {
+                sysbit_t& reg { GetRegister32Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+                reg = bitwise(val1, val2);
+            }
+
+            cpu.state.pc++; 
+            return System::ErrorCode::Ok;
+        }
+        if (opc == op.at(2))
+        {
+            RegisterModeFlags reg1mode {
+                cpu.board.assembly.Rom().Read(cpu.state.pc)
+            };
+
+            RegisterModeFlags reg2mode {
+                cpu.board.assembly.Rom().Read(cpu.state.pc+1)
+            };
+
+            sysbit_t reg1;
+            if (Is8BitReg(reg1mode))
+                reg1 = static_cast<sysbit_t>(GetRegister8Bit(reg1mode, cpu.state));
+            else 
+                reg1 = GetRegister32Bit(reg1mode, cpu.state);
+
+            if (Is8BitReg(reg2mode))
+                GetRegister8Bit(reg2mode, cpu.state) = 
+                    bitwise(GetRegister8Bit(reg2mode, cpu.state), static_cast<uchar_t>(reg1));
+            else
+                GetRegister32Bit(reg2mode, cpu.state) = 
+                    bitwise(GetRegister32Bit(reg2mode, cpu.state), static_cast<uchar_t>(reg1));
+
+            cpu.state.pc+=2; 
+            return System::ErrorCode::Ok;
+        }
+        return System::ErrorCode::InvalidSpecifier;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+#undef arr
+#undef fn
+
+OPR CPU::BitAnd(CPU& cpu) noexcept
+{
+    return BitLogic(
+        cpu, 
+        {OpCodes::andst, OpCodes::andse, OpCodes::andr},
+        [](sysbit_t a, sysbit_t b) -> sysbit_t { return a & b; }
+    ); 
+}
+
+OPR CPU::BitOr(CPU& cpu) noexcept
+{
+    return BitLogic(
+        cpu, 
+        {OpCodes::orst, OpCodes::orse, OpCodes::orr},
+        [](sysbit_t a, sysbit_t b) -> sysbit_t { return a | b; }
+    );
+}
+
+OPR CPU::BitNor(CPU& cpu) noexcept
+{
+    LOGW("This operation ", nameof(BitNor), " is stupid as hell. Why does it exist?");
+    return BitLogic(
+        cpu,
+        {OpCodes::norst, OpCodes::norse, OpCodes::norr},
+        [](sysbit_t a, sysbit_t b) -> sysbit_t { return ~(a | b);}
+    );
 }
 #undef OPR
