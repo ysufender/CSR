@@ -27,21 +27,22 @@
 #ifndef NDEBUG
 Board::~Board()
 {
-    std::cout << "\nCPU\n" << std::hex
-        << "pc : " << this->cpu.DumpState().pc 
-        << " sp : " << this->cpu.DumpState().sp << '\n' 
-        << "eax : " << this->cpu.DumpState().eax 
-        << " ebx : " << this->cpu.DumpState().ebx 
-        << " ecx : " << this->cpu.DumpState().ecx 
-        << " edx : " << this->cpu.DumpState().edx 
-        << " esi : " << this->cpu.DumpState().esi 
-        << " edi : " << this->cpu.DumpState().edi<< '\n' 
-        << "al : " << (sysbit_t)this->cpu.DumpState().al 
-        << " bl : " << (sysbit_t)this->cpu.DumpState().bl 
-        << " cl : " << (sysbit_t)this->cpu.DumpState().cl 
-        << " dl : " << (sysbit_t)this->cpu.DumpState().dl << '\n' 
-        << "flg : " << (sysbit_t)this->cpu.DumpState().flg << '\n'
-        << "\nRAM Stack (" << ram.StackSize() << ")";
+    std::cout << "\nCPU\n" << std::hex << std::uppercase
+        << "pc : " << static_cast<sysbit_t>(this->cpu.DumpState().pc) 
+        << " sp : " << static_cast<sysbit_t>(this->cpu.DumpState().sp) << '\n' 
+        << "eax : " << static_cast<sysbit_t>(this->cpu.DumpState().eax) 
+        << " ebx : " << static_cast<sysbit_t>(this->cpu.DumpState().ebx)
+        << " ecx : " << static_cast<sysbit_t>(this->cpu.DumpState().ecx) 
+        << " edx : " << static_cast<sysbit_t>(this->cpu.DumpState().edx) 
+        << " esi : " << static_cast<sysbit_t>(this->cpu.DumpState().esi) 
+        << " edi : " << static_cast<sysbit_t>(this->cpu.DumpState().edi) << '\n' 
+        << "al : " << static_cast<sysbit_t>(this->cpu.DumpState().al) 
+        << " bl : " << static_cast<sysbit_t>(this->cpu.DumpState().bl) 
+        << " cl : " << static_cast<sysbit_t>(this->cpu.DumpState().cl) 
+        << " dl : " << static_cast<sysbit_t>(this->cpu.DumpState().dl) << '\n' 
+        << "flg : " << static_cast<sysbit_t>(this->cpu.DumpState().flg) << '\n'
+        << std::dec
+        << "\nRAM Stack (" << (sysbit_t)ram.StackSize() << ")";
     for (sysbit_t i = 0; i < ram.StackSize(); i++)
     {
         if (i - 8*(i/8) == 0)
@@ -49,7 +50,7 @@ Board::~Board()
         std::cout << ' ' << std::hex << std::uppercase << (sysbit_t)ram.Read(i) << " |";
     }
 
-    std::cout << "\n\nRAM Heap (" << ram.HeapSize() << ")";
+    std::cout << "\n\nRAM Heap (" << std::dec << ram.HeapSize() << ")";
     for (sysbit_t i = 0; i+ram.StackSize() < ram.Size(); i++)
     {
         if (i - 8*(i/8) == 0)

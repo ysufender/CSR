@@ -1,6 +1,4 @@
 #include <cstring>
-#include <bitset>
-#include <ios>
 #include <string>
 
 #include "CSRConfig.hpp"
@@ -415,15 +413,23 @@ OPR CPU::AddReg(CPU& cpu) noexcept
             sysbit_t reg1ref { GetRegister32Bit(reg1, cpu.state) };
             sysbit_t& reg2ref { GetRegister32Bit(reg2, cpu.state) };
 
+            char* data { BytesFromInteger(reg1ref) };
             float float1 { FloatFromBytes(
-                    BytesFromInteger(reg1ref)
-                    ) };
+                data
+            )};
+            delete[] data;
+
+            data = BytesFromInteger(reg2ref);
             float float2 { FloatFromBytes(
-                    BytesFromInteger(reg2ref)
-                    )};
+                data
+            )};
+            delete[] data;
+
+            data = BytesFromFloat(float1+float2);
             reg2ref = IntegerFromBytes<sysbit_t>(
-                    BytesFromFloat<char>(float1+float2)
-                    );
+                data
+            );
+            delete[] data;
         }
         else
         {
@@ -452,8 +458,8 @@ OPR CPU::AddSafe32(CPU& cpu) noexcept
             data,
             4
         })};
-
         delete[] data;
+
         return err;,
 
         return exc.GetCode();,
@@ -474,8 +480,8 @@ OPR CPU::AddSafeFloat(CPU& cpu) noexcept
             data,
             4
         })};
-
         delete[] data;
+
         return err;,
 
         return exc.GetCode();,
@@ -591,7 +597,6 @@ OPR CPU::Increment(CPU& cpu) noexcept
                     cpu.state.sp-4,
                     {data, 4}
                 )};
-
                 delete[] data;
 
                 if (code == System::ErrorCode::Ok)
@@ -625,7 +630,6 @@ OPR CPU::Increment(CPU& cpu) noexcept
                     cpu.state.sp-4,
                     {data, 4}
                 )};
-
                 delete[] data;
 
                 if (code == System::ErrorCode::Ok)
@@ -673,5 +677,487 @@ OPR CPU::Increment(CPU& cpu) noexcept
         return exc.GetCode();,
         return System::ErrorCode::UnhandledException;
     )
+}
+
+OPR CPU::IncrementReg(CPU& cpu) noexcept
+{
+    // incr[type] <value> 
+    // register size checks are done at assemble-time
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::incri:
+            {
+                sysbit_t& reg { GetRegister32Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+
+                sysbit_t amount { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc+1, 4).data
+                )};
+
+                reg += amount;
+
+                cpu.state.pc+=5;
+
+                return System::ErrorCode::Ok;
+            }
+
+            case OpCodes::incrf:
+            {
+                sysbit_t& reg { GetRegister32Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+
+                char* data { BytesFromInteger(reg) };
+                float regVal { FloatFromBytes(data)}; 
+                delete[] data;
+
+                float amount { FloatFromBytes(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc+1, 4).data      
+                )};
+
+                data = BytesFromFloat(regVal+amount);
+                reg = IntegerFromBytes<sysbit_t>(data);
+                delete[] data;
+
+                cpu.state.pc+=5;
+                return System::ErrorCode::Ok;
+            }
+
+            case OpCodes::incrb:
+            {
+                uchar_t& reg { GetRegister8Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+
+                uchar_t amount { static_cast<uchar_t>(
+                    cpu.board.assembly.Rom().Read(cpu.state.pc+1)
+                )};
+
+                reg += amount;
+
+                cpu.state.pc+=2;
+                return System::ErrorCode::Ok;
+            }
+
+            default:
+                return Error::InvalidSpecifier;        
+        },
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::IncrementSafe(CPU& cpu) noexcept
+{
+    // inc[type] <value> 
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::incsi:
+            {
+                if (cpu.state.sp < 4)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Increment),
+                        "can't increment (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                sysbit_t amount { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data 
+                )};
+
+                sysbit_t stack { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                )};
+
+                char* data { BytesFromInteger(stack+amount) };
+                Error code { cpu.PushSome({
+                    data, 
+                    4
+                })};
+                delete[] data;
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc+=4;
+
+                return code;
+            }
+
+            case OpCodes::incsf:
+            {
+                if (cpu.state.sp < 4)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Increment),
+                        "can't increment (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                float amount { FloatFromBytes(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+                )}; 
+
+                float stack { FloatFromBytes(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data      
+                )};
+
+                char* data { BytesFromFloat(amount+stack) };
+                Error code { cpu.PushSome({
+                    data,
+                    4
+                })};
+                delete[] data;
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc+=4;
+
+                return code;
+            }
+
+            case OpCodes::incsb:
+            {
+                if (cpu.state.sp < 1)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Increment),
+                        "can't increment (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                uchar_t amount { static_cast<uchar_t>(
+                    cpu.board.assembly.Rom().Read(cpu.state.pc)
+                )};
+                uchar_t stack { static_cast<uchar_t>(
+                    cpu.board.ram.Read(cpu.state.sp-1)
+                )};
+
+                Error code { cpu.Push(
+                    amount + stack
+                )};
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc++;
+
+                return code;
+            }
+
+            default:
+                return Error::InvalidSpecifier;        
+        }
+
+        return System::ErrorCode::Ok;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    ) 
+}
+
+OPR CPU::Decrement(CPU& cpu) noexcept
+{
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::dcri:
+            {
+                if (cpu.state.sp < 4)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Decrement),
+                        "can't decrement (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                sysbit_t amount { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data 
+                )};
+
+                sysbit_t stack { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                )};
+
+                char* data { BytesFromInteger(stack - amount) };
+                Error code { cpu.board.ram.WriteSome(
+                    cpu.state.sp-4,
+                    {data, 4}
+                )};
+                delete[] data;
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc+=4;
+
+                return code;
+            }
+
+            case OpCodes::dcrf:
+            {
+                if (cpu.state.sp < 4)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Decrement),
+                        "can't decrement (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                float amount { FloatFromBytes(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+                )}; 
+
+                float stack { FloatFromBytes(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data      
+                )};
+
+                char* data { BytesFromFloat(stack - amount) };
+                Error code { cpu.board.ram.WriteSome(
+                    cpu.state.sp-4,
+                    {data, 4}
+                )};
+                delete[] data;
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc+=4;
+
+                return code;
+            }
+
+            case OpCodes::dcrb:
+            {
+                if (cpu.state.sp < 1)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Decrement),
+                        "can't decrement (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                uchar_t amount { static_cast<uchar_t>(
+                    cpu.board.assembly.Rom().Read(cpu.state.pc)
+                )};
+                uchar_t stack { static_cast<uchar_t>(
+                    cpu.board.ram.Read(cpu.state.sp-1)
+                )};
+
+                Error code { cpu.board.ram.Write(
+                    cpu.state.sp-1,
+                    stack - amount
+                )};
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc++;
+
+                return code;
+            }
+
+            default:
+                return Error::InvalidSpecifier;        
+        }
+
+        return System::ErrorCode::Ok;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::DecrementReg(CPU& cpu) noexcept
+{
+    // register size checks are done at assemble-time
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::dcrri:
+            {
+                sysbit_t& reg { GetRegister32Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+
+                sysbit_t amount { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc+1, 4).data
+                )};
+
+                reg -= amount;
+
+                cpu.state.pc+=5;
+
+                return System::ErrorCode::Ok;
+            }
+
+            case OpCodes::dcrrf:
+            {
+                sysbit_t& reg { GetRegister32Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+
+                char* data { BytesFromInteger(reg) };
+                float regVal { FloatFromBytes(data)}; 
+                delete[] data;
+
+                float amount { FloatFromBytes(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc+1, 4).data      
+                )};
+
+                data = BytesFromFloat(regVal - amount);
+                reg = IntegerFromBytes<sysbit_t>(data);
+                delete[] data;
+
+                cpu.state.pc+=5;
+                return System::ErrorCode::Ok;
+            }
+
+            case OpCodes::dcrrb:
+            {
+                uchar_t& reg { GetRegister8Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+
+                uchar_t amount { static_cast<uchar_t>(
+                    cpu.board.assembly.Rom().Read(cpu.state.pc+1)
+                )};
+
+                reg -= amount;
+
+                cpu.state.pc+=2;
+                return System::ErrorCode::Ok;
+            }
+
+            default:
+                return Error::InvalidSpecifier;        
+        },
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::DecrementSafe(CPU& cpu) noexcept
+{
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::dcrsi:
+            {
+                if (cpu.state.sp < 4)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Decrement),
+                        "can't decrement (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                sysbit_t amount { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data 
+                )};
+
+                sysbit_t stack { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                )} ;
+
+                char* data { BytesFromInteger(stack - amount) };
+                Error code { cpu.PushSome({
+                    data, 
+                    4
+                })};
+                delete[] data;
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc+=4;
+
+                return code;
+            }
+
+            case OpCodes::dcrsf:
+            {
+                if (cpu.state.sp < 4)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Decrement),
+                        "can't decrement (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                float amount { FloatFromBytes(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+                )}; 
+
+                float stack { FloatFromBytes(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data      
+                )};
+
+                char* data { BytesFromFloat(stack - amount) };
+                Error code { cpu.PushSome({
+                    data,
+                    4
+                })};
+                delete[] data;
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc+=4;
+
+                return code;
+            }
+
+            case OpCodes::dcrsb:
+            {
+                if (cpu.state.sp < 1)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "In ", cpu.board.Stringify(), nameof(Decrement),
+                        "can't decrement (u)int from stack, SP < 4."
+                    );
+                    return Error::Bad;
+                }
+
+                uchar_t amount { static_cast<uchar_t>(
+                    cpu.board.assembly.Rom().Read(cpu.state.pc)
+                )};
+                uchar_t stack { static_cast<uchar_t>(
+                    cpu.board.ram.Read(cpu.state.sp-1)
+                )};
+
+                Error code { cpu.Push(
+                    stack - amount 
+                )};
+
+                if (code == System::ErrorCode::Ok)
+                    cpu.state.pc++;
+
+                return code;
+            }
+
+            default:
+                return Error::InvalidSpecifier;        
+        }
+
+        return System::ErrorCode::Ok;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    ) 
 }
 #undef OPR

@@ -1,10 +1,7 @@
 #pragma once
 
 #include <bit>
-#include <bitset>
 #include <cmath>
-#include <iostream>
-#include <iterator>
 #include <type_traits>
 
 #include "CSRConfig.hpp"
@@ -50,6 +47,7 @@ float FloatFromBytes(const T* bytes) noexcept
     return returnFloat;
 }
 
+// Caller must free the bytes
 template<std::integral T, byte_t U = char>
 U* BytesFromInteger(const T integer) noexcept
 {
@@ -66,6 +64,7 @@ U* BytesFromInteger(const T integer) noexcept
     return reinterpret_cast<U*>(bytes);
 }
 
+// Caller must free the bytes
 template<byte_t T = char>
 T* BytesFromFloat(const float val) noexcept
 {

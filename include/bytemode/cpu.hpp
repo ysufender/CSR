@@ -63,7 +63,8 @@ class CPU
         OPFunc(AddReg)
         OPFunc(AddSafe32) OPFunc(AddSafeFloat) OPFunc(AddSafe8)
         OPFunc(MemCopy)
-        OPFunc(Increment)
+        OPFunc(Increment) OPFunc(IncrementReg) OPFunc(IncrementSafe)
+        OPFunc(Decrement) OPFunc(DecrementReg) OPFunc(DecrementSafe)
 #undef OPFunc
 #undef OPR
 };

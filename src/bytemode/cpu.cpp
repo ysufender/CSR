@@ -31,7 +31,10 @@ Error CPU::Cycle() noexcept
         Move, Move, Move, Add32, AddFloat, Add8, AddReg, AddReg, AddReg,
         AddSafe32, AddSafeFloat, AddSafe8,
         MemCopy,
-        Increment, Increment, Increment
+        Increment, Increment, Increment, IncrementReg, IncrementReg, IncrementReg,
+        IncrementSafe, IncrementSafe, IncrementSafe,
+        Decrement, Decrement, Decrement, DecrementReg, DecrementReg, DecrementReg,
+        DecrementSafe, DecrementSafe, DecrementSafe,
     };
 
     char op;
