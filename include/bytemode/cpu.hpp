@@ -74,6 +74,8 @@ class CPU
         OPFunc(BitAnd)
         OPFunc(BitOr)
         OPFunc(BitNor)
+        OPFunc(SwapTop)
+        OPFunc(DuplicateTop)
 #undef fn
 #undef arr
 #undef CustomOPF

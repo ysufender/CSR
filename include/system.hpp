@@ -42,7 +42,8 @@ struct System
     E(InvalidInstruction) \
     E(MessageReceiveError) \
     E(MessageDispatchError) \
-    E(MemoryOverflow)
+    E(MemoryOverflow) \
+    E(NotImplemented)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 
