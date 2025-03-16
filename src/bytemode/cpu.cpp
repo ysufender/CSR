@@ -39,7 +39,8 @@ Error CPU::Cycle() noexcept
         BitOr, BitOr, BitOr,
         BitNor, BitNor, BitNor,
         SwapTop, SwapTop, SwapTop,
-        DuplicateTop, DuplicateTop, DuplicateTop,
+        DuplicateTop, DuplicateTop,
+        RawDataStack, RawDataStack,
     };
 
     char op;

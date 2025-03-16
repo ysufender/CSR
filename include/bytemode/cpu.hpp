@@ -76,6 +76,7 @@ class CPU
         OPFunc(BitNor)
         OPFunc(SwapTop)
         OPFunc(DuplicateTop)
+        OPFunc(RawDataStack)
 #undef fn
 #undef arr
 #undef CustomOPF

@@ -8,6 +8,7 @@
 #include "bytemode/assembly.hpp"
 #include "bytemode/board.hpp"
 #include "bytemode/cpu.hpp"
+#include "extensions/syntaxextensions.hpp"
 #include "system.hpp"
 
 #define OPR Error
@@ -1345,6 +1346,112 @@ OPR CPU::SwapTop(CPU& cpu) noexcept
 
 OPR CPU::DuplicateTop(CPU& cpu) noexcept
 {
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::dupt:
+            {
+                if (cpu.state.sp < 4)
+                    CRASH(
+                        Error::RAMAccessError,
+                        "In ", cpu.board.Stringify(),
+                        " can't duplicate 32-bits on stack. SP < 4"
+                    );
 
+                Slice data { cpu.board.ram.ReadSome(cpu.state.sp-4, 4) };
+                Error code { cpu.PushSome(data) };
+                
+                return code;
+            }
+
+            case OpCodes::dupe:
+            {
+                if (cpu.state.sp < 1)
+                    CRASH(
+                        Error::RAMAccessError,
+                        "In ", cpu.board.Stringify(),
+                        " can't duplicate 8-bits on stack. SP < 1"
+                    );
+
+                const char data { cpu.board.ram.Read(cpu.state.sp-1) };
+                Error code { cpu.Push(data) };
+
+                return code;
+            }
+            break;
+
+            default:
+                return System::ErrorCode::InvalidSpecifier;
+        },
+
+        return exc.GetCode();,
+        return Error::UnhandledException;
+    );
+}
+
+OPR CPU::RawDataStack(CPU& cpu) noexcept
+{
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::raw:
+            {
+                // raw <size> <..data..>
+                sysbit_t size { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc++, 4).data
+                )};
+
+                System::ErrorCode err;
+                for (; size > 0; size--)
+                {
+                    err = cpu.Push(
+                        cpu.board.assembly.Rom().Read(cpu.state.pc++)
+                    );
+
+                    if (err != System::ErrorCode::Ok)
+                        break;
+                }
+                LOGD("Hello ", std::to_string(cpu.state.pc));
+
+                return err;
+            }
+
+            case OpCodes::raws:
+            {
+                // raw <address> <size> 
+                sysbit_t addr { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+                )};
+                
+                cpu.state.pc += 4;
+
+                sysbit_t size { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+                )};
+
+                System::ErrorCode err;
+                for (; size > 0; size--)
+                {
+                    err = cpu.Push(
+                        cpu.board.assembly.Rom().Read(addr++)
+                    );
+
+                    if (err != System::ErrorCode::Ok)
+                        break;
+                }
+
+                if (err == System::ErrorCode::Ok)
+                    cpu.state.pc += 4;
+
+                return err;
+            }
+
+            default:
+                return System::ErrorCode::InvalidSpecifier;
+        }, 
+
+        return exc.GetCode();, 
+        return Error::UnhandledException;
+    )
 }
 #undef OPR
