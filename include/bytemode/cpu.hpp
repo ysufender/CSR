@@ -56,7 +56,7 @@ class CPU
         using OperationFunction = Error (*)(CPU& cpu) noexcept;
 
 #define OPFunc(name) static Error name(CPU& cpu) noexcept;
-#define CustomOPF(name, ...) static Error name(CPU& cpu, __VA_ARGS__) noexcept;
+#define CustomOPF(ret, name, ...) static ret name(CPU& cpu, __VA_ARGS__) noexcept;
 #define arr std::array
 #define fn std::function<sysbit_t(sysbit_t, sysbit_t)>
         OPFunc(NoOperation)
@@ -70,13 +70,12 @@ class CPU
         OPFunc(MemCopy)
         OPFunc(Increment) OPFunc(IncrementReg) OPFunc(IncrementSafe)
         OPFunc(Decrement) OPFunc(DecrementReg) OPFunc(DecrementSafe)
-        CustomOPF(BitLogic, arr<OpCodes, 3>, fn)
-        OPFunc(BitAnd)
-        OPFunc(BitOr)
-        OPFunc(BitNor)
+        CustomOPF(Error, BitLogic, arr<OpCodes, 3>, fn) OPFunc(BitAnd) OPFunc(BitOr) OPFunc(BitNor)
         OPFunc(SwapTop)
         OPFunc(DuplicateTop)
         OPFunc(RawDataStack)
+        OPFunc(Invert) OPFunc(InvertSafe)
+        OPFunc(Compare)
 #undef fn
 #undef arr
 #undef CustomOPF

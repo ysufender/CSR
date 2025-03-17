@@ -1,6 +1,7 @@
 #include <array>
 #include <cstring>
 #include <string>
+#include <type_traits>
 
 #include "CSRConfig.hpp"
 #include "extensions/converters.hpp"
@@ -1398,8 +1399,9 @@ OPR CPU::RawDataStack(CPU& cpu) noexcept
             {
                 // raw <size> <..data..>
                 sysbit_t size { IntegerFromBytes<sysbit_t>(
-                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc++, 4).data
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
                 )};
+                cpu.state.pc += 4;
 
                 System::ErrorCode err;
                 for (; size > 0; size--)
@@ -1411,7 +1413,6 @@ OPR CPU::RawDataStack(CPU& cpu) noexcept
                     if (err != System::ErrorCode::Ok)
                         break;
                 }
-                LOGD("Hello ", std::to_string(cpu.state.pc));
 
                 return err;
             }
@@ -1452,6 +1453,278 @@ OPR CPU::RawDataStack(CPU& cpu) noexcept
 
         return exc.GetCode();, 
         return Error::UnhandledException;
+    )
+}
+
+OPR CPU::Invert(CPU& cpu) noexcept
+{
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::invt:
+            {
+                sysbit_t top32 { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data 
+                )};
+                System::ErrorCode err { cpu.PopSome(4) };
+
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                top32 = ~top32;
+
+                char* data { BytesFromInteger(
+                    top32
+                )};
+
+                err = cpu.PushSome({
+                    data,
+                    4
+                });
+                delete[] data;
+
+                return err;
+            }
+
+            case OpCodes::inve:
+            {
+                uchar_t byte { static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-1)) };
+                System::ErrorCode err { cpu.Pop() };
+
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                byte = ~byte;
+                err = cpu.Push(byte);
+                return err;
+            }
+
+            case OpCodes::invr:
+            {
+                RegisterModeFlags regMode { 
+                    cpu.board.assembly.Rom().Read(cpu.state.pc)
+                };
+
+                if (Is8BitReg(regMode))
+                {
+                    uchar_t& reg { GetRegister8Bit(regMode, cpu.state) };
+                    reg = ~reg;
+                }
+                else 
+                {
+                    sysbit_t& reg { GetRegister32Bit(regMode, cpu.state) };
+                    reg = ~reg;
+                }
+
+                return System::ErrorCode::Ok;
+            }
+
+            default:
+                return System::ErrorCode::InvalidSpecifier;
+        }, 
+        
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::InvertSafe(CPU& cpu) noexcept
+{
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::invst:
+            {
+                sysbit_t top32 { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data 
+                )};
+
+                top32 = ~top32;
+
+                char* data { BytesFromInteger(
+                    top32
+                )};
+
+                Error err { cpu.PushSome({
+                    data,
+                    4
+                })};
+                delete[] data;
+
+                return err;
+            }
+
+            case OpCodes::invse:
+            {
+                uchar_t byte { static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-1)) };
+
+                byte = ~byte;
+                Error err { cpu.Push(byte) };
+                return err;
+            }
+
+            default:
+                return System::ErrorCode::InvalidSpecifier;
+        }, 
+        
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+template<typename T>
+    requires (
+        std::is_integral_v<T> || 
+        std::is_floating_point_v<T> && 
+        !std::is_same_v<double, T>
+    )
+static bool CompareVarious(T lhs, T rhs, uchar_t mode)
+{
+    switch (CompareModeFlags(mode))
+    {
+        case CompareModeFlags::les:
+            return lhs < rhs;
+        case CompareModeFlags::gre:
+            return lhs > rhs;
+        case CompareModeFlags::equ:
+            return lhs == rhs;
+        case CompareModeFlags::leq:
+            return lhs <= rhs;
+        case CompareModeFlags::geq:
+            return lhs >= rhs;
+        case CompareModeFlags::neq:
+            return lhs != rhs;
+    }
+
+    return false;
+}
+
+OPR CPU::Compare(CPU& cpu) noexcept
+{
+    using Numo = NumericModeFlags;
+
+    try_catch(
+        const uchar_t compressedModes { static_cast<const uchar_t>(
+            cpu.board.assembly.Rom().Read(cpu.state.pc)
+        )};
+        cpu.state.sp++;
+        Numo numMode { 
+            static_cast<char>(compressedModes >> 5) 
+        };
+        const uchar_t compareMode {
+            static_cast<const uchar_t>((compressedModes << 3) >> 3)
+        };
+        uchar_t& bl { GetRegister8Bit(RegisterModeFlags::bl, cpu.state) };
+
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::cmp:
+            {
+                if (numMode == Numo::UInt)
+                {
+                    sysbit_t int1 { IntegerFromBytes<sysbit_t>(
+                        cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+                    )};
+                    sysbit_t int2 { IntegerFromBytes<sysbit_t>(
+                        cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                    )};
+
+                    bl = CompareVarious(int1, int2, compareMode);
+                }
+                else if (numMode == Numo::Float)
+                {
+                    float float1 { FloatFromBytes(
+                        cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+                    )};
+                    float float2 { FloatFromBytes(
+                        cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                    )};
+
+                    bl = CompareVarious(float1, float2, compareMode);
+                }
+                else if (numMode == Numo::Int)
+                {
+                    int int1 { IntegerFromBytes<int32_t>(
+                        cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+                    )};
+                    int int2 { IntegerFromBytes<int32_t>(
+                        cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                    )};
+
+                    bl = CompareVarious(int1, int2, compareMode);
+                }
+                else if (numMode == Numo::UByte)
+                {
+                    uchar_t byte1 { static_cast<uchar_t>(
+                        cpu.board.ram.Read(cpu.state.sp-2)
+                    )};
+                    uchar_t byte2 { static_cast<uchar_t>(
+                        cpu.board.ram.Read(cpu.state.sp-1)
+                    )};
+
+                    bl = CompareVarious(byte1, byte2, compareMode);
+                }
+                else
+                {
+                    char byte1 { cpu.board.ram.Read(cpu.state.sp-2) };
+                    char byte2 { cpu.board.ram.Read(cpu.state.sp-1) };
+
+                    bl = CompareVarious(byte1, byte2, compareMode);
+                }
+            }
+
+            case OpCodes::cmpr:
+            {
+                RegisterModeFlags reg1mode {
+                    cpu.board.assembly.Rom().Read(cpu.state.pc++)
+                };
+                RegisterModeFlags reg2mode {
+                    cpu.board.assembly.Rom().Read(cpu.state.pc++)
+                };
+
+                sysbit_t reg1 { Is8BitReg(reg1mode) ? 
+                    GetRegister8Bit(reg1mode, cpu.state) :
+                    GetRegister32Bit(reg1mode, cpu.state)
+                };
+                sysbit_t reg2 { Is8BitReg(reg2mode) ? 
+                    GetRegister8Bit(reg2mode, cpu.state) :
+                    GetRegister32Bit(reg2mode, cpu.state)
+                };
+
+                if (numMode == Numo::UInt)
+                    bl = CompareVarious(reg1, reg2, compareMode);
+                else if (numMode == Numo::Float)
+                    bl = CompareVarious(
+                        static_cast<float>(reg1),
+                        static_cast<float>(reg2),
+                        compareMode
+                    );
+                else if (numMode == Numo::Int)
+                    bl = CompareVarious(
+                        static_cast<int>(reg1),
+                        static_cast<int>(reg2),
+                        compareMode
+                    );
+                else if (numMode == Numo::UByte)
+                    bl = CompareVarious(
+                        static_cast<uchar_t>(reg1),
+                        static_cast<uchar_t>(reg2),
+                        compareMode
+                    );
+                else
+                    bl = CompareVarious(
+                        static_cast<char>(reg1),
+                        static_cast<char>(reg2),
+                        compareMode
+                    );
+            }
+
+            default:
+                return System::ErrorCode::InvalidSpecifier;
+        }, 
+        
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
     )
 }
 #undef OPR

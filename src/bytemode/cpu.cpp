@@ -41,6 +41,8 @@ Error CPU::Cycle() noexcept
         SwapTop, SwapTop, SwapTop,
         DuplicateTop, DuplicateTop,
         RawDataStack, RawDataStack,
+        Invert, Invert, Invert, InvertSafe, InvertSafe,
+        Compare, Compare,
     };
 
     char op;

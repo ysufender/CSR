@@ -27,7 +27,7 @@ T IntegerFromBytes(const U* bytes) noexcept
         ures |= static_cast<uchar_t>(bytes[i]);
     }
 
-    return reinterpret_cast<T>(ures);
+    return static_cast<T>(ures);
 }
 
 template<byte_t T>
