@@ -76,6 +76,8 @@ class CPU
         OPFunc(RawDataStack)
         OPFunc(Invert) OPFunc(InvertSafe)
         OPFunc(Compare)
+        OPFunc(PopInstruction)
+        OPFunc(Jump)
 #undef fn
 #undef arr
 #undef CustomOPF

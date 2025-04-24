@@ -1727,4 +1727,67 @@ OPR CPU::Compare(CPU& cpu) noexcept
         return System::ErrorCode::UnhandledException;
     )
 }
+
+OPR CPU::PopInstruction(CPU& cpu) noexcept
+{
+    try_catch(
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::pope:
+                return cpu.Pop();
+            case OpCodes::popt:
+                return cpu.PopSome(4);
+            default:
+                return System::ErrorCode::InvalidSpecifier;
+        }, 
+        
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::Jump(CPU& cpu) noexcept
+{
+    try_catch(
+        switch(OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::jmpr:
+            {
+                sysbit_t address { GetRegister32Bit(
+                    RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                    cpu.state
+                )};
+
+                // Safety test, address must be in bounds of rom
+                const sysbit_t romSize { cpu.board.assembly.Rom().Size() };
+                if (address >= romSize) // unsigned. no need for negative check
+                    return Error::ROMAccessError; 
+
+                cpu.state.pc = address;
+                return Error::Ok;
+            }
+
+            case OpCodes::jmp:
+            {
+                sysbit_t address { IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data 
+                )};
+                
+                // Safety test, address must be in bounds of rom
+                const sysbit_t romSize { cpu.board.assembly.Rom().Size() };
+                if (address >= romSize) // unsigned. no need for negative check
+                    return Error::ROMAccessError;
+
+                cpu.state.pc = address;
+                return Error::Ok;
+            }
+
+            default:
+                return Error::InvalidSpecifier;
+        },
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
 #undef OPR
