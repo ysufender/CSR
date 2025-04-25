@@ -37,7 +37,7 @@ class RAM
         const Slice ReadSome(const sysbit_t address, const sysbit_t size) const;
         Error WriteSome(const sysbit_t address, const Slice values) noexcept;
 
-        sysbit_t Allocate(const sysbit_t size);
+        sysbit_t Allocate(sysbit_t size);
         Error Deallocate(const sysbit_t address, const sysbit_t size) noexcept;
 
         sysbit_t Size() const noexcept

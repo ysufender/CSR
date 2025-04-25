@@ -43,7 +43,8 @@ struct System
     E(MessageReceiveError) \
     E(MessageDispatchError) \
     E(MemoryOverflow) \
-    E(NotImplemented)
+    E(NotImplemented) \
+    E(FragmentedHeap)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

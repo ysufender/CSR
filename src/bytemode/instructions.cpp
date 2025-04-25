@@ -126,8 +126,8 @@ OPR CPU::StoreFromSymbol(CPU& cpu) noexcept
 
 OPR CPU::LoadFromStack(CPU& cpu) noexcept
 {
-    // lda %i/ui/f
-    // lda %b/ub
+    // ldc %i/ui/f
+    // ldc %b/ub
     //
     // ldt
     // lde
@@ -138,13 +138,15 @@ OPR CPU::LoadFromStack(CPU& cpu) noexcept
         };
 
         const Slice values { cpu.board.ram.ReadSome(cpu.state.sp-size, size) };
-        const sysbit_t alloc { cpu.board.ram.Allocate(size) };
+        // ldc no longer allocates memory itself.
+        // it should be allocated and address must be put on &ebx beforehand
+        //const sysbit_t alloc { cpu.board.ram.Allocate(size) };
 
-        Error errc { cpu.board.ram.WriteSome(alloc, values) };
+        Error errc { cpu.board.ram.WriteSome(cpu.state.ebx, values) };
         if (errc != System::ErrorCode::Ok)
-             return cpu.board.ram.Deallocate(alloc, size);
+            // even though we didn't allocate here, we free in case of an error.
+             return cpu.board.ram.Deallocate(cpu.state.ebx, size);
 
-        cpu.state.ebx = alloc;
         return errc;, 
 
         return exc.GetCode();,
@@ -1847,37 +1849,69 @@ OPR CPU::DuplicateRange(CPU& cpu) noexcept
 OPR CPU::Repeat(CPU& cpu) noexcept
 {
     try_catch(
+        // rep <compressed(mem/num)> <count> <val>
         MemoryModeFlags memMode;
         NumericModeFlags numMode;
         const uchar_t compressed { static_cast<uchar_t>(
             cpu.board.assembly.Rom().Read(cpu.state.pc)
         )};
+
         memMode = MemoryModeFlags(compressed >> 4);
         numMode = NumericModeFlags(compressed & 0b00001111);
 
-        switch (numMode)
+        cpu.state.pc++;
+        const sysbit_t count { IntegerFromBytes<sysbit_t>(
+            cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+        )};
+        cpu.state.pc += 4;
+
+        const Slice valueData {
+            cpu.board.assembly.Rom().ReadSome(cpu.state.pc, ByteSize(numMode))
+        };
+        cpu.state.pc += ByteSize(numMode);
+
+        sysbit_t address;
+        if (memMode == MemoryModeFlags::Heap)
+            address = cpu.state.ebx;
+        else
         {
-            case NumericModeFlags::UInt:
-            case NumericModeFlags::Int:
-            {
-            }
-
-            case NumericModeFlags::UByte:
-            case NumericModeFlags::Byte:
-            {
-            }
-
-            case NumericModeFlags::Float:
-            {
-            }
-
-            default:
-                return System::ErrorCode::InvalidSpecifier;
+            if (cpu.state.sp + count*ByteSize(numMode) > cpu.board.ram.StackSize())
+                CRASH(
+                    Error::StackOverflow, 
+                    "In ", cpu.board.Stringify(), " instruction rep. Can't push onto stack, it's full"
+                );
+            address = cpu.state.sp;
+            cpu.state.sp += count*ByteSize(numMode);
         }
-        ,
+        
+        System::ErrorCode err { Error::Ok };
+        for (sysbit_t i = 0; (i < count) && (err == Error::Ok); i++, address += ByteSize(numMode))
+            err = err == Error::Ok ? 
+                cpu.board.ram.WriteSome(address, valueData) :
+                err;
+
+        return err;,
 
         return exc.GetCode();,
         return System::ErrorCode::UnhandledException;
     )   
+}
+
+OPR CPU::Allocate(CPU& cpu) noexcept
+{
+    try_catch(
+        // alc <size: sysbit>
+        const sysbit_t size { IntegerFromBytes<sysbit_t>(
+            cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+        )};
+        cpu.state.pc += 4;
+
+        const sysbit_t address { cpu.board.ram.Allocate(size) };
+        cpu.state.ebx = address;
+        return Error::Ok;,
+        
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
 }
 #undef OPR

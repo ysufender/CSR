@@ -13,6 +13,10 @@ constexpr uchar_t NoMode = 0x00;
 MAKE_ENUM(NumericModeFlags, Int, 1, NUMER, OUT_CLASS)
 #undef NUMER
 
+#define ByteSize(numo) \
+    (numo != NumericModeFlags::Byte && numo != NumericModeFlags::UByte \
+        ? 4 : 1)
+
 #define MEMOR(E) \
     E(Heap)
 MAKE_ENUM(MemoryModeFlags, Stack, 6, MEMOR, OUT_CLASS)

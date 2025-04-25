@@ -80,6 +80,7 @@ class CPU
         OPFunc(Jump)
         OPFunc(SwapRange) OPFunc(DuplicateRange)
         OPFunc(Repeat)
+        OPFunc(Allocate)
 #undef fn
 #undef arr
 #undef CustomOPF

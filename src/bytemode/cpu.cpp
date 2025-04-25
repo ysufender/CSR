@@ -47,6 +47,7 @@ Error CPU::Cycle() noexcept
         Jump, Jump,
         SwapRange, DuplicateRange,
         Repeat,
+        Allocate
     };
 
     char op;
