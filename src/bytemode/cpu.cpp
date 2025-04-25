@@ -47,7 +47,11 @@ Error CPU::Cycle() noexcept
         Jump, Jump,
         SwapRange, DuplicateRange,
         Repeat,
-        Allocate
+        Allocate,
+        PowRegister, PowRegister, PowRegister,
+        PowStack, PowStack, PowStack,
+        PowConst, PowConst, PowConst,
+        /*for obsolete unsigned pow*/NoOperation, NoOperation, NoOperation, NoOperation, NoOperation, NoOperation,
     };
 
     char op;
@@ -156,7 +160,6 @@ Error CPU::PushSome(const Slice values) noexcept
 {
     if (this->state.sp+values.size > this->board.ram.StackSize())
     {
-        // 0123
         LOGE(
             System::LogLevel::Medium,
             "In ", this->board.GetExecutingProcess().Stringify(),

@@ -277,7 +277,7 @@ OPR CPU::Move(CPU& cpu) noexcept
             }
 
             default:
-                return System::ErrorCode::InvalidSpecifier;
+                return System::ErrorCode::InvalidInstruction;
         },
 
         return exc.GetCode();,
@@ -632,7 +632,7 @@ OPR CPU::Increment(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidSpecifier;        
+                return Error::InvalidInstruction;        
         }
 
         return System::ErrorCode::Ok;,
@@ -708,7 +708,7 @@ OPR CPU::IncrementReg(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidSpecifier;        
+                return Error::InvalidInstruction;        
         },
 
         return exc.GetCode();,
@@ -809,7 +809,7 @@ OPR CPU::IncrementSafe(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidSpecifier;        
+                return Error::InvalidInstruction;        
         }
 
         return System::ErrorCode::Ok;,
@@ -856,11 +856,12 @@ OPR CPU::Decrement(CPU& cpu) noexcept
 
             case OpCodes::dcrf:
             {
+                std::cout << "SP: " << cpu.state.sp << '\n';
                 if (cpu.state.sp < 4)
                     CRASH(
                         System::ErrorCode::Bad,
                         "In ", cpu.board.Stringify(), nameof(Decrement),
-                        "can't decrement (u)int from stack, SP < 4."
+                        "can't decrement float from stack, SP < 4."
                     );
 
                 float amount { FloatFromBytes(
@@ -890,7 +891,7 @@ OPR CPU::Decrement(CPU& cpu) noexcept
                     CRASH(
                         System::ErrorCode::Bad,
                         "In ", cpu.board.Stringify(), nameof(Decrement),
-                        "can't decrement (u)int from stack, SP < 4."
+                        "can't decrement (u)byte from stack, SP < 4."
                     );
 
                 uchar_t amount { static_cast<uchar_t>(
@@ -912,7 +913,7 @@ OPR CPU::Decrement(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidSpecifier;        
+                return Error::InvalidInstruction;        
         }
 
         return System::ErrorCode::Ok;,
@@ -987,7 +988,7 @@ OPR CPU::DecrementReg(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidSpecifier;        
+                return Error::InvalidInstruction;        
         },
 
         return exc.GetCode();,
@@ -1087,7 +1088,7 @@ OPR CPU::DecrementSafe(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidSpecifier;        
+                return Error::InvalidInstruction;        
         }
 
         return System::ErrorCode::Ok;,
@@ -1339,7 +1340,7 @@ OPR CPU::SwapTop(CPU& cpu) noexcept
             }
 
             default:
-                return System::ErrorCode::InvalidSpecifier;
+                return System::ErrorCode::InvalidInstruction;
         },
 
         return exc.GetCode();,
@@ -1384,7 +1385,7 @@ OPR CPU::DuplicateTop(CPU& cpu) noexcept
             break;
 
             default:
-                return System::ErrorCode::InvalidSpecifier;
+                return System::ErrorCode::InvalidInstruction;
         },
 
         return exc.GetCode();,
@@ -1450,7 +1451,7 @@ OPR CPU::RawDataStack(CPU& cpu) noexcept
             }
 
             default:
-                return System::ErrorCode::InvalidSpecifier;
+                return System::ErrorCode::InvalidInstruction;
         }, 
 
         return exc.GetCode();, 
@@ -1522,7 +1523,7 @@ OPR CPU::Invert(CPU& cpu) noexcept
             }
 
             default:
-                return System::ErrorCode::InvalidSpecifier;
+                return System::ErrorCode::InvalidInstruction;
         }, 
         
         return exc.GetCode();, 
@@ -1566,7 +1567,7 @@ OPR CPU::InvertSafe(CPU& cpu) noexcept
             }
 
             default:
-                return System::ErrorCode::InvalidSpecifier;
+                return System::ErrorCode::InvalidInstruction;
         }, 
         
         return exc.GetCode();, 
@@ -1722,7 +1723,7 @@ OPR CPU::Compare(CPU& cpu) noexcept
             }
 
             default:
-                return System::ErrorCode::InvalidSpecifier;
+                return System::ErrorCode::InvalidInstruction;
         }, 
         
         return exc.GetCode();, 
@@ -1740,7 +1741,7 @@ OPR CPU::PopInstruction(CPU& cpu) noexcept
             case OpCodes::popt:
                 return cpu.PopSome(4);
             default:
-                return System::ErrorCode::InvalidSpecifier;
+                return System::ErrorCode::InvalidInstruction;
         }, 
         
         return exc.GetCode();, 
@@ -1751,7 +1752,7 @@ OPR CPU::PopInstruction(CPU& cpu) noexcept
 OPR CPU::Jump(CPU& cpu) noexcept
 {
     try_catch(
-        switch(OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
         {
             case OpCodes::jmpr:
             {
@@ -1785,7 +1786,7 @@ OPR CPU::Jump(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidSpecifier;
+                return Error::InvalidInstruction;
         },
 
         return exc.GetCode();,
@@ -1911,6 +1912,198 @@ OPR CPU::Allocate(CPU& cpu) noexcept
         return Error::Ok;,
         
         return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::PowRegister(CPU& cpu) noexcept
+{
+    try_catch(
+        float base;
+        float power;
+        OpCodes op { cpu.board.assembly.Rom().Read(cpu.state.pc-1) };
+        RegisterModeFlags reg1 { cpu.board.assembly.Rom().Read(cpu.state.pc++)};
+        RegisterModeFlags reg2 { cpu.board.assembly.Rom().Read(cpu.state.pc++)};
+
+        switch (op) 
+        {
+            case OpCodes::powri:
+            {
+                base = static_cast<float>(GetRegister32Bit(reg1, cpu.state));
+                power = static_cast<float>(GetRegister32Bit(reg2, cpu.state));
+                sysbit_t res { static_cast<sysbit_t>(std::pow(base, power)) };
+                GetRegister32Bit(reg2, cpu.state) = res;
+                break;
+            }
+
+            case OpCodes::powrf:
+            {
+                char* bytes;
+
+                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state));
+                base = FloatFromBytes(bytes);
+                delete[] bytes;
+                
+                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state));
+                power = FloatFromBytes(bytes);
+                delete[] bytes;
+
+                float res { std::pow(base, power) };
+                bytes = BytesFromFloat(res);
+                GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(bytes);
+                delete[] bytes;
+                break;
+            }
+            
+            case OpCodes::powrb:
+            {
+                base = static_cast<float>(GetRegister8Bit(reg1, cpu.state));
+                power = static_cast<float>(GetRegister8Bit(reg2, cpu.state));
+                uchar_t res { static_cast<uchar_t>(std::pow(base, power)) };
+                GetRegister8Bit(reg2, cpu.state) = res;
+                break;
+            }
+
+            default:
+                return Error::InvalidInstruction;
+        }
+
+        return Error::Ok;, 
+
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::PowStack(CPU& cpu) noexcept
+{
+    try_catch(
+        float base;
+        float power;
+        System::ErrorCode err;
+
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1))) 
+        {
+            case OpCodes::powsi:
+            {
+                base = static_cast<float>(IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+                ));
+                power = static_cast<float>(IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                ));
+
+                err = cpu.PopSome(8);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                sysbit_t res { static_cast<sysbit_t>(std::pow(base, power)) };
+                char* bytes { BytesFromInteger<sysbit_t>(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+
+            case OpCodes::powsf:
+            {
+                base = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data);
+                power = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+
+                err = cpu.PopSome(8);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                float res { std::pow(base, power) };
+                char* bytes { BytesFromFloat(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+            
+            case OpCodes::powsb:
+            {
+                base = static_cast<float>(cpu.board.ram.Read(cpu.state.sp-2));
+                power = static_cast<float>(cpu.board.ram.Read(cpu.state.sp-1));
+
+                err = cpu.PopSome(2);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                uchar_t res { static_cast<uchar_t>(std::pow(base, power)) };
+                err = cpu.Push(res);
+                return err;
+            }
+
+            default:
+                return Error::InvalidInstruction;
+        }
+        , 
+
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::PowConst(CPU& cpu) noexcept
+{
+    try_catch(
+        float base;
+        float power;
+        System::ErrorCode err;
+
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1))) 
+        {
+            case OpCodes::powi:
+            {
+                base = static_cast<float>(IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+                ));
+                power = static_cast<float>(IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc+4, 4).data
+                ));
+                cpu.state.pc += 8;
+
+                sysbit_t res { static_cast<sysbit_t>(std::pow(base, power)) };
+                char* bytes { BytesFromInteger<sysbit_t>(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+
+            case OpCodes::powf:
+            {
+                base = FloatFromBytes(cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data);
+                power = FloatFromBytes(cpu.board.assembly.Rom().ReadSome(cpu.state.pc+4, 4).data);
+                cpu.state.pc += 8;
+
+                float res { std::pow(base, power) };
+                char* bytes { BytesFromFloat(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+            
+            case OpCodes::powb:
+            {
+                base = static_cast<float>(cpu.board.assembly.Rom().Read(cpu.state.pc));
+                power = static_cast<float>(cpu.board.assembly.Rom().Read(cpu.state.pc+1));
+                cpu.state.pc += 2;
+
+                uchar_t res { static_cast<uchar_t>(std::pow(base, power)) };
+                err = cpu.Push(res);
+                return err;
+            }
+
+            default:
+                return Error::InvalidInstruction;
+        }
+        , 
+
+        return exc.GetCode();, 
         return System::ErrorCode::UnhandledException;
     )
 }

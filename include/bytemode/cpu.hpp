@@ -81,6 +81,7 @@ class CPU
         OPFunc(SwapRange) OPFunc(DuplicateRange)
         OPFunc(Repeat)
         OPFunc(Allocate)
+        OPFunc(PowRegister) OPFunc(PowStack) OPFunc(PowConst)
 #undef fn
 #undef arr
 #undef CustomOPF
