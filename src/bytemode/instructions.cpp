@@ -1790,4 +1790,94 @@ OPR CPU::Jump(CPU& cpu) noexcept
         return System::ErrorCode::UnhandledException;
     )
 }
+
+OPR CPU::SwapRange(CPU& cpu) noexcept
+{
+    try_catch(
+        // swr <size: sysbit>  
+        sysbit_t size { IntegerFromBytes<sysbit_t>(
+            cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+        )};
+
+        System::ErrorCode err { Error::Ok };
+        for (sysbit_t midpoint = cpu.state.sp-size; size > 0; size--)
+        {
+            char tmp { cpu.board.ram.Read(cpu.state.sp-size) };
+            err = err == Error::Ok ? cpu.board.ram.Write(
+                cpu.state.sp-size,
+                cpu.board.ram.Read(midpoint-size)   
+            ) : err;
+            err = err == Error::Ok ?
+                cpu.board.ram.Write(midpoint-size, tmp) 
+                : err;
+
+            if (err != Error::Ok)
+                return err;
+        }
+        
+        cpu.state.pc += 4;
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::DuplicateRange(CPU& cpu) noexcept
+{
+    try_catch(
+        // dur <size: sysbit>  
+        sysbit_t size { IntegerFromBytes<sysbit_t>(
+            cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+        )};
+
+        System::ErrorCode err { Error::Ok };
+        cpu.PushSome(
+            cpu.board.ram.ReadSome(cpu.state.sp-size, size)
+        );
+
+        cpu.state.pc += 4;
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::Repeat(CPU& cpu) noexcept
+{
+    try_catch(
+        MemoryModeFlags memMode;
+        NumericModeFlags numMode;
+        const uchar_t compressed { static_cast<uchar_t>(
+            cpu.board.assembly.Rom().Read(cpu.state.pc)
+        )};
+        memMode = MemoryModeFlags(compressed >> 4);
+        numMode = NumericModeFlags(compressed & 0b00001111);
+
+        switch (numMode)
+        {
+            case NumericModeFlags::UInt:
+            case NumericModeFlags::Int:
+            {
+            }
+
+            case NumericModeFlags::UByte:
+            case NumericModeFlags::Byte:
+            {
+            }
+
+            case NumericModeFlags::Float:
+            {
+            }
+
+            default:
+                return System::ErrorCode::InvalidSpecifier;
+        }
+        ,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )   
+}
 #undef OPR

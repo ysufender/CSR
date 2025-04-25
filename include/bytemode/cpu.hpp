@@ -78,6 +78,8 @@ class CPU
         OPFunc(Compare)
         OPFunc(PopInstruction)
         OPFunc(Jump)
+        OPFunc(SwapRange) OPFunc(DuplicateRange)
+        OPFunc(Repeat)
 #undef fn
 #undef arr
 #undef CustomOPF

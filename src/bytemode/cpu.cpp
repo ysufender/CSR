@@ -44,7 +44,9 @@ Error CPU::Cycle() noexcept
         Invert, Invert, Invert, InvertSafe, InvertSafe,
         Compare, Compare,
         PopInstruction, PopInstruction,
-        Jump, Jump
+        Jump, Jump,
+        SwapRange, DuplicateRange,
+        Repeat,
     };
 
     char op;
