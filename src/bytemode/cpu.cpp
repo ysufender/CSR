@@ -52,6 +52,9 @@ Error CPU::Cycle() noexcept
         PowStack, PowStack, PowStack,
         PowConst, PowConst, PowConst,
         /*for obsolete unsigned pow*/NoOperation, NoOperation, NoOperation, NoOperation, NoOperation, NoOperation,
+        SqrtConst, SqrtConst, SqrtConst,
+        SqrtRegister, SqrtRegister, SqrtRegister,
+        SqrtStack, SqrtStack, SqrtStack,
     };
 
     char op;

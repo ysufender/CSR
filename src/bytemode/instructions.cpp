@@ -1,4 +1,5 @@
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <type_traits>
@@ -2038,8 +2039,7 @@ OPR CPU::PowStack(CPU& cpu) noexcept
 
             default:
                 return Error::InvalidInstruction;
-        }
-        , 
+        }, 
 
         return exc.GetCode();, 
         return System::ErrorCode::UnhandledException;
@@ -2100,10 +2100,182 @@ OPR CPU::PowConst(CPU& cpu) noexcept
 
             default:
                 return Error::InvalidInstruction;
-        }
-        , 
+        }, 
 
         return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::SqrtRegister(CPU& cpu) noexcept
+{
+    try_catch(
+        float num;
+        OpCodes op { cpu.board.assembly.Rom().Read(cpu.state.pc-1) };
+        RegisterModeFlags reg { cpu.board.assembly.Rom().Read(cpu.state.pc++)};
+
+        switch (op) 
+        {
+            case OpCodes::sqrri:
+            {
+                num = static_cast<float>(GetRegister32Bit(reg, cpu.state));
+                sysbit_t res { static_cast<sysbit_t>(std::sqrt(num)) };
+                cpu.state.eax = res;
+                break;
+            }
+
+            case OpCodes::sqrrf:
+            {
+                char* bytes;
+
+                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg, cpu.state));
+                num = FloatFromBytes(bytes);
+                delete[] bytes;
+                
+                float res { std::sqrt(num) };
+                bytes = BytesFromFloat(res);
+                cpu.state.eax = IntegerFromBytes<sysbit_t>(bytes);
+                delete[] bytes;
+                break;
+            }
+            
+            case OpCodes::sqrrb:
+            {
+                num = static_cast<float>(GetRegister8Bit(reg, cpu.state));
+                uchar_t res { static_cast<uchar_t>(std::sqrt(num)) };
+                cpu.state.al = res;
+                break;
+            }
+
+            default:
+                return Error::InvalidInstruction;
+        }
+
+        return Error::Ok;, 
+
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::SqrtStack(CPU& cpu) noexcept
+{
+    try_catch(
+        float num;
+        System::ErrorCode err;
+
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1))) 
+        {
+            case OpCodes::sqrsi:
+            {
+                num = static_cast<float>(IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                ));
+
+                err = cpu.PopSome(4);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                sysbit_t res { static_cast<sysbit_t>(std::sqrt(num)) };
+                char* bytes { BytesFromInteger<sysbit_t>(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+
+            case OpCodes::sqrsf:
+            {
+                num = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+
+                err = cpu.PopSome(4);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                float res { std::sqrt(num) };
+                char* bytes { BytesFromFloat(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+            
+            case OpCodes::sqrsb:
+            {
+                num = static_cast<float>(cpu.board.ram.Read(cpu.state.sp-1));
+
+                err = cpu.PopSome(1);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                uchar_t res { static_cast<uchar_t>(std::sqrt(num)) };
+                err = cpu.Push(res);
+                return err;
+            }
+
+            default:
+                return Error::InvalidInstruction;
+        }, 
+
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::SqrtConst(CPU& cpu) noexcept
+{
+    try_catch(
+        float num;
+        System::ErrorCode err;
+
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))    
+        {
+            case OpCodes::sqri:
+            {
+                num = static_cast<float>(IntegerFromBytes<sysbit_t>(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+                ));
+                cpu.state.pc += 4;
+
+                sysbit_t res { static_cast<sysbit_t>(std::sqrt(num)) };
+                char* bytes { BytesFromInteger(res) };
+                err = cpu.PushSome({bytes, 4});
+
+                delete[] bytes;
+                return err;
+            }
+
+            case OpCodes::sqrf:
+            {
+                num = FloatFromBytes(
+                    cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+                ); 
+                cpu.state.pc += 4;
+
+                float res { std::sqrt(num) };
+                char* bytes { BytesFromFloat(res) };
+                err = cpu.PushSome({bytes, 4});
+
+                delete[] bytes;
+                return err;
+            }
+
+            case OpCodes::sqrb:
+            {
+                num = static_cast<float>(cpu.board.assembly.Rom().Read(cpu.state.pc));
+                cpu.state.pc++;
+
+                uchar_t res { static_cast<uchar_t>(std::sqrt(num)) };
+                err = cpu.Push(res);
+
+                return err;
+            }
+
+            default:
+                return System::ErrorCode::InvalidInstruction;
+        },
+
+        return exc.GetCode();,
         return System::ErrorCode::UnhandledException;
     )
 }
