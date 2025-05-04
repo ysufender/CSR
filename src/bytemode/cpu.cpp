@@ -55,6 +55,7 @@ Error CPU::Cycle() noexcept
         SqrtConst, SqrtConst, SqrtConst,
         SqrtRegister, SqrtRegister, SqrtRegister,
         SqrtStack, SqrtStack, SqrtStack,
+        ConditionalJump,
     };
 
     char op;

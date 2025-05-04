@@ -20,6 +20,10 @@
 
 #define Enumc(regn) static_cast<char>(regn)
 #define Is8BitReg(reg) (Enumc(reg) >= Enumc(RegisterModeFlags::al)) && (Enumc(reg) <= Enumc(RegisterModeFlags::flg))
+#define RomSafetyCheck(addr) \
+        if (address < 0 || address > cpu.board.assembly.Rom().Size()) \
+            return Error::ROMAccessError;
+
 
 static sysbit_t& GetRegister32Bit(RegisterModeFlags reg, CPU::State& state)
 {
@@ -1427,28 +1431,16 @@ OPR CPU::RawDataStack(CPU& cpu) noexcept
                 sysbit_t addr { IntegerFromBytes<sysbit_t>(
                     cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
                 )};
-                
                 cpu.state.pc += 4;
 
                 sysbit_t size { IntegerFromBytes<sysbit_t>(
                     cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
                 )};
+                cpu.state.pc += 4;
 
-                System::ErrorCode err;
-                for (; size > 0; size--)
-                {
-                    err = cpu.Push(
-                        cpu.board.assembly.Rom().Read(addr++)
-                    );
-
-                    if (err != System::ErrorCode::Ok)
-                        break;
-                }
-
-                if (err == System::ErrorCode::Ok)
-                    cpu.state.pc += 4;
-
-                return err;
+                return cpu.PushSome(
+                    cpu.board.assembly.Rom().ReadSome(addr, size)
+                );
             }
 
             default:
@@ -1611,16 +1603,17 @@ OPR CPU::Compare(CPU& cpu) noexcept
         const uchar_t compressedModes { static_cast<const uchar_t>(
             cpu.board.assembly.Rom().Read(cpu.state.pc)
         )};
-        cpu.state.sp++;
+        cpu.state.pc++;
+
         Numo numMode { 
             static_cast<char>(compressedModes >> 5) 
+            // 11122222
         };
         const uchar_t compareMode {
-            static_cast<const uchar_t>((compressedModes << 3) >> 3)
+            static_cast<const uchar_t>(compressedModes & 0b00011111)
         };
-        uchar_t& bl { GetRegister8Bit(RegisterModeFlags::bl, cpu.state) };
 
-        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-2)))
         {
             case OpCodes::cmp:
             {
@@ -1633,7 +1626,7 @@ OPR CPU::Compare(CPU& cpu) noexcept
                         cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                     )};
 
-                    bl = CompareVarious(int1, int2, compareMode);
+                    cpu.state.bl = CompareVarious(int1, int2, compareMode);
                 }
                 else if (numMode == Numo::Float)
                 {
@@ -1644,7 +1637,7 @@ OPR CPU::Compare(CPU& cpu) noexcept
                         cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                     )};
 
-                    bl = CompareVarious(float1, float2, compareMode);
+                    cpu.state.bl = CompareVarious(float1, float2, compareMode);
                 }
                 else if (numMode == Numo::Int)
                 {
@@ -1655,7 +1648,7 @@ OPR CPU::Compare(CPU& cpu) noexcept
                         cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                     )};
 
-                    bl = CompareVarious(int1, int2, compareMode);
+                    cpu.state.bl = CompareVarious(int1, int2, compareMode);
                 }
                 else if (numMode == Numo::UByte)
                 {
@@ -1666,15 +1659,16 @@ OPR CPU::Compare(CPU& cpu) noexcept
                         cpu.board.ram.Read(cpu.state.sp-1)
                     )};
 
-                    bl = CompareVarious(byte1, byte2, compareMode);
+                    cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
                 }
                 else
                 {
                     char byte1 { cpu.board.ram.Read(cpu.state.sp-2) };
                     char byte2 { cpu.board.ram.Read(cpu.state.sp-1) };
 
-                    bl = CompareVarious(byte1, byte2, compareMode);
+                    cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
                 }
+                return System::ErrorCode::Ok;
             }
 
             case OpCodes::cmpr:
@@ -1696,36 +1690,37 @@ OPR CPU::Compare(CPU& cpu) noexcept
                 };
 
                 if (numMode == Numo::UInt)
-                    bl = CompareVarious(reg1, reg2, compareMode);
+                    cpu.state.bl = CompareVarious(reg1, reg2, compareMode);
                 else if (numMode == Numo::Float)
-                    bl = CompareVarious(
+                    cpu.state.bl = CompareVarious(
                         static_cast<float>(reg1),
                         static_cast<float>(reg2),
                         compareMode
                     );
                 else if (numMode == Numo::Int)
-                    bl = CompareVarious(
+                    cpu.state.bl = CompareVarious(
                         static_cast<int>(reg1),
                         static_cast<int>(reg2),
                         compareMode
                     );
                 else if (numMode == Numo::UByte)
-                    bl = CompareVarious(
+                    cpu.state.bl = CompareVarious(
                         static_cast<uchar_t>(reg1),
                         static_cast<uchar_t>(reg2),
                         compareMode
                     );
                 else
-                    bl = CompareVarious(
+                    cpu.state.bl = CompareVarious(
                         static_cast<char>(reg1),
                         static_cast<char>(reg2),
                         compareMode
                     );
+                return System::ErrorCode::Ok;
             }
 
             default:
                 return System::ErrorCode::InvalidInstruction;
-        }, 
+        },
         
         return exc.GetCode();, 
         return System::ErrorCode::UnhandledException;
@@ -1763,9 +1758,7 @@ OPR CPU::Jump(CPU& cpu) noexcept
                 )};
 
                 // Safety test, address must be in bounds of rom
-                const sysbit_t romSize { cpu.board.assembly.Rom().Size() };
-                if (address >= romSize) // unsigned. no need for negative check
-                    return Error::ROMAccessError; 
+                RomSafetyCheck(address);
 
                 cpu.state.pc = address;
                 return Error::Ok;
@@ -1778,9 +1771,9 @@ OPR CPU::Jump(CPU& cpu) noexcept
                 )};
                 
                 // Safety test, address must be in bounds of rom
-                const sysbit_t romSize { cpu.board.assembly.Rom().Size() };
-                if (address >= romSize) // unsigned. no need for negative check
-                    return Error::ROMAccessError;
+                RomSafetyCheck(address);
+
+                LOGD("Address: ", std::to_string(address));
 
                 cpu.state.pc = address;
                 return Error::Ok;
@@ -2278,5 +2271,35 @@ OPR CPU::SqrtConst(CPU& cpu) noexcept
         return exc.GetCode();,
         return System::ErrorCode::UnhandledException;
     )
+}
+
+OPR CPU::ConditionalJump(CPU& cpu) noexcept
+{
+    try_catch(
+        OpCodes op { OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)) };
+        sysbit_t address;
+
+        if (cpu.state.bl == 0)
+            address = cpu.state.pc + ((op == OpCodes::cnd) ? 4 : 1);
+        else if (op == OpCodes::cnd)
+            address = IntegerFromBytes<sysbit_t>(
+                cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data 
+            );
+        else if (op == OpCodes::cndr)
+            address = GetRegister32Bit(
+                RegisterModeFlags(cpu.board.assembly.Rom().Read(cpu.state.pc)),
+                cpu.state
+            );
+        else
+            return System::ErrorCode::InvalidInstruction;
+
+        // Safety test, address must be in bounds of rom
+        RomSafetyCheck(address);
+        cpu.state.pc = address;
+        return System::ErrorCode::Ok;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    ) 
 }
 #undef OPR

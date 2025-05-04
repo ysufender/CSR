@@ -83,6 +83,7 @@ class CPU
         OPFunc(Allocate)
         OPFunc(PowRegister) OPFunc(PowStack) OPFunc(PowConst)
         OPFunc(SqrtRegister) OPFunc(SqrtStack) OPFunc(SqrtConst)
+        OPFunc(ConditionalJump)
 #undef fn
 #undef arr
 #undef CustomOPF
