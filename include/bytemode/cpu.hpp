@@ -24,6 +24,7 @@ class CPU
 
             sysbit_t pc { 0 };
             sysbit_t sp { 0 };
+            sysbit_t bp { 0 };
 
             uchar_t al { 0 };
             uchar_t bl { 0 };
@@ -84,6 +85,7 @@ class CPU
         OPFunc(PowRegister) OPFunc(PowStack) OPFunc(PowConst)
         OPFunc(SqrtRegister) OPFunc(SqrtStack) OPFunc(SqrtConst)
         OPFunc(ConditionalJump)
+        OPFunc(CallFunc)
 #undef fn
 #undef arr
 #undef CustomOPF

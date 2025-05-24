@@ -29,7 +29,8 @@ Board::~Board()
 {
     std::cout << "\nCPU\n" << std::hex << std::uppercase
         << "pc : " << static_cast<sysbit_t>(this->cpu.DumpState().pc) 
-        << " sp : " << static_cast<sysbit_t>(this->cpu.DumpState().sp) << '\n' 
+        << " sp : " << static_cast<sysbit_t>(this->cpu.DumpState().sp) 
+        << " bp : " << static_cast<sysbit_t>(this->cpu.DumpState().bp) << '\n' 
         << "eax : " << static_cast<sysbit_t>(this->cpu.DumpState().eax) 
         << " ebx : " << static_cast<sysbit_t>(this->cpu.DumpState().ebx)
         << " ecx : " << static_cast<sysbit_t>(this->cpu.DumpState().ecx) 

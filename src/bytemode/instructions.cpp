@@ -1773,8 +1773,6 @@ OPR CPU::Jump(CPU& cpu) noexcept
                 // Safety test, address must be in bounds of rom
                 RomSafetyCheck(address);
 
-                LOGD("Address: ", std::to_string(address));
-
                 cpu.state.pc = address;
                 return Error::Ok;
             }
@@ -2301,5 +2299,60 @@ OPR CPU::ConditionalJump(CPU& cpu) noexcept
         return exc.GetCode();,
         return System::ErrorCode::UnhandledException;
     ) 
+}
+
+OPR CPU::CallFunc(CPU &cpu) noexcept
+{
+    try_catch(
+        OpCodes op { OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)) };
+
+        if (cpu.state.sp < cpu.state.bl)
+            return System::ErrorCode::RAMAccessError;
+
+        // Create callstack
+        //  - Store bp
+        //  - Store pc
+        //  - Change bp
+        // Copy params
+
+        // Store bp
+        char* bytes { BytesFromInteger(cpu.state.bp) };
+        cpu.PushSome({bytes, 4});
+        delete[] bytes;
+
+        // Store pc 
+        bytes = BytesFromInteger(cpu.state.pc);
+        cpu.PushSome({bytes, 4});
+        delete[] bytes;
+
+        // Change pc 
+        cpu.state.bp = cpu.state.sp;
+
+        // Copy params 
+        if (cpu.state.bl != 0)
+        {
+            Slice params { cpu.board.ram.ReadSome(cpu.state.sp-8-cpu.state.bl, cpu.state.bl) };
+            cpu.PushSome(params);
+        }
+
+        sysbit_t address;
+        if (op == OpCodes::cal)
+            address = IntegerFromBytes<sysbit_t>(
+                cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+            );
+        if (op == OpCodes::calr)
+            address = GetRegister32Bit( 
+                RegisterModeFlags(
+                    cpu.board.assembly.Rom().Read(cpu.state.pc)
+                ),
+                cpu.state
+            );
+
+        cpu.state.pc = address;
+        return System::ErrorCode::Ok;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
 }
 #undef OPR
