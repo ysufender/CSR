@@ -21,7 +21,7 @@
 #define Enumc(regn) static_cast<char>(regn)
 #define Is8BitReg(reg) (Enumc(reg) >= Enumc(RegisterModeFlags::al)) && (Enumc(reg) <= Enumc(RegisterModeFlags::flg))
 #define RomSafetyCheck(addr) \
-        if (address < 0 || address > cpu.board.assembly.Rom().Size()) \
+        if (address < 12 || address > cpu.board.assembly.Rom().Size()) \
             return Error::ROMAccessError;
 
 
