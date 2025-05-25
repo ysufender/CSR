@@ -87,6 +87,7 @@ class CPU
         OPFunc(ConditionalJump)
         OPFunc(CallFunc)
         OPFunc(MulStack) OPFunc(MulRegister)  OPFunc(MulSafe)
+        OPFunc(DivStack) OPFunc(DivRegister)  OPFunc(DivSafe)
 #undef fn
 #undef arr
 #undef CustomOPF

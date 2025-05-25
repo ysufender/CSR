@@ -60,6 +60,9 @@ Error CPU::Cycle() noexcept
         MulStack, MulStack, MulStack,
         MulRegister, MulRegister, MulRegister,
         MulSafe, MulSafe, MulSafe,
+        DivStack, DivStack, DivStack,
+        DivRegister, DivRegister, DivRegister,
+        DivSafe, DivSafe, DivSafe,
     };
 
     char op;

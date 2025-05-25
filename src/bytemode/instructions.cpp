@@ -2393,9 +2393,9 @@ OPR CPU::MulRegister(CPU& cpu) noexcept
             
             case OpCodes::mulrb:
             {
-                uchar_t rhs { GetRegister8Bit(reg1, cpu.state) };
-                uchar_t& lhs { GetRegister8Bit(reg2, cpu.state) };
-                lhs += rhs;
+                uchar_t lhs { GetRegister8Bit(reg1, cpu.state) };
+                uchar_t& rhs { GetRegister8Bit(reg2, cpu.state) };
+                rhs *= lhs;
                 break;
             }
 
@@ -2433,7 +2433,7 @@ OPR CPU::MulStack(CPU& cpu) noexcept
                 if (err != System::ErrorCode::Ok)
                     return err;
 
-                sysbit_t res { lhs + rhs };
+                sysbit_t res { lhs * rhs };
                 char* bytes { BytesFromInteger<sysbit_t>(res) };
                 err = cpu.PushSome({bytes, 4});
                 delete[] bytes;
@@ -2470,7 +2470,7 @@ OPR CPU::MulStack(CPU& cpu) noexcept
                 if (err != System::ErrorCode::Ok)
                     return err;
 
-                uchar_t res { static_cast<uchar_t>(lhs + rhs) };
+                uchar_t res { static_cast<uchar_t>(lhs * rhs) };
                 err = cpu.Push(res);
                 return err;
             }
@@ -2503,7 +2503,7 @@ OPR CPU::MulSafe(CPU& cpu) noexcept
                     cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                 )};
 
-                sysbit_t res { lhs + rhs };
+                sysbit_t res { lhs * rhs };
                 char* bytes { BytesFromInteger<sysbit_t>(res) };
                 err = cpu.PushSome({bytes, 4});
                 delete[] bytes;
@@ -2532,7 +2532,7 @@ OPR CPU::MulSafe(CPU& cpu) noexcept
                 uchar_t lhs { static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-2)) };
                 uchar_t rhs { static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-1)) };
 
-                uchar_t res { static_cast<uchar_t>(lhs + rhs) };
+                uchar_t res { static_cast<uchar_t>(lhs * rhs) };
                 err = cpu.Push(res);
                 return err;
             }
@@ -2546,4 +2546,193 @@ OPR CPU::MulSafe(CPU& cpu) noexcept
     )
 }
 
+OPR CPU::DivRegister(CPU& cpu) noexcept
+{
+    try_catch(
+        OpCodes op { cpu.board.assembly.Rom().Read(cpu.state.pc-1) };
+        RegisterModeFlags reg1 { cpu.board.assembly.Rom().Read(cpu.state.pc++)};
+        RegisterModeFlags reg2 { cpu.board.assembly.Rom().Read(cpu.state.pc++)};
+
+        switch (op) 
+        {
+            case OpCodes::divri:
+            {
+                sysbit_t lhs { GetRegister32Bit(reg1, cpu.state) };
+                sysbit_t& rhs { GetRegister32Bit(reg2, cpu.state) };
+                rhs = lhs / rhs;
+                break;
+            }
+
+            case OpCodes::divrf:
+            {
+                char* bytes;
+                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state));
+                float lhs { FloatFromBytes(bytes) };
+                delete[] bytes;
+                
+                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state));
+                float rhs { FloatFromBytes(bytes) };
+                delete[] bytes;
+
+                bytes = BytesFromFloat(lhs / rhs);
+                GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(bytes);
+                delete[] bytes;
+
+                break;
+            }
+            
+            case OpCodes::divrb:
+            {
+                uchar_t lhs { GetRegister8Bit(reg1, cpu.state) };
+                uchar_t& rhs { GetRegister8Bit(reg2, cpu.state) };
+                rhs = lhs / rhs;
+                break;
+            }
+
+            default:
+                return Error::InvalidInstruction;
+        }
+
+        return Error::Ok;, 
+
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::DivStack(CPU& cpu) noexcept
+{
+    try_catch(
+        System::ErrorCode err;
+
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1))) 
+        {
+            case OpCodes::divi:
+            {
+                if (cpu.state.sp < 4)
+                    return System::ErrorCode::RAMAccessError;
+
+                sysbit_t lhs { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+                )};
+                sysbit_t rhs { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                )};
+
+                err = cpu.PopSome(8);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                sysbit_t res { lhs / rhs };
+                char* bytes { BytesFromInteger<sysbit_t>(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+
+            case OpCodes::divf:
+            {
+                if (cpu.state.sp < 4)
+                    return System::ErrorCode::RAMAccessError;
+
+                float lhs { FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data) };
+                float rhs { FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data) };
+
+                err = cpu.PopSome(8);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                float res { lhs / rhs };
+                char* bytes { BytesFromFloat(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+            
+            case OpCodes::divb:
+            {
+                uchar_t lhs { static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-2)) };
+                uchar_t rhs { static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-1)) };
+
+                err = cpu.PopSome(2);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+
+                uchar_t res { static_cast<uchar_t>(lhs / rhs) };
+                err = cpu.Push(res);
+                return err;
+            }
+
+            default:
+                return Error::InvalidInstruction;
+        }, 
+
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::DivSafe(CPU& cpu) noexcept
+{
+    try_catch(
+        System::ErrorCode err;
+
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1))) 
+        {
+            case OpCodes::divsi:
+            {
+                if (cpu.state.sp < 4)
+                    return System::ErrorCode::RAMAccessError;
+
+                sysbit_t lhs { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+                )};
+                sysbit_t rhs { IntegerFromBytes<sysbit_t>(
+                    cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+                )};
+
+                sysbit_t res { lhs / rhs };
+                char* bytes { BytesFromInteger<sysbit_t>(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+
+            case OpCodes::divsf:
+            {
+                if (cpu.state.sp < 4)
+                    return System::ErrorCode::RAMAccessError;
+
+                float lhs { FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data) };
+                float rhs { FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data) };
+
+                float res { lhs / rhs };
+                char* bytes { BytesFromFloat(res) };
+                err = cpu.PushSome({bytes, 4});
+                delete[] bytes;
+
+                return err;
+            }
+            
+            case OpCodes::divsb:
+            {
+                uchar_t lhs { static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-2)) };
+                uchar_t rhs { static_cast<uchar_t>(cpu.board.ram.Read(cpu.state.sp-1)) };
+
+                uchar_t res { static_cast<uchar_t>(lhs / rhs) };
+                err = cpu.Push(res);
+                return err;
+            }
+
+            default:
+                return Error::InvalidInstruction;
+        }, 
+
+        return exc.GetCode();, 
+        return System::ErrorCode::UnhandledException;
+    )
+}
 #undef OPR
