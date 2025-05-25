@@ -57,6 +57,9 @@ Error CPU::Cycle() noexcept
         SqrtStack, SqrtStack, SqrtStack,
         ConditionalJump, ConditionalJump,
         CallFunc, CallFunc,
+        MulStack, MulStack, MulStack,
+        MulRegister, MulRegister, MulRegister,
+        MulSafe, MulSafe, MulSafe,
     };
 
     char op;

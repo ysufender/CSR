@@ -86,6 +86,7 @@ class CPU
         OPFunc(SqrtRegister) OPFunc(SqrtStack) OPFunc(SqrtConst)
         OPFunc(ConditionalJump)
         OPFunc(CallFunc)
+        OPFunc(MulStack) OPFunc(MulRegister)  OPFunc(MulSafe)
 #undef fn
 #undef arr
 #undef CustomOPF
