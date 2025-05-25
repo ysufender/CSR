@@ -63,7 +63,8 @@ Error CPU::Cycle() noexcept
         DivStack, DivStack, DivStack,
         DivRegister, DivRegister, DivRegister,
         DivSafe, DivSafe, DivSafe,
-        Return
+        Return,
+        Deallocate,
     };
 
     char op;

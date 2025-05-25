@@ -66,7 +66,8 @@ MAKE_ENUM(CompareModeFlags, les, 21, CMPER, OUT_CLASS)
     E(cal) E(calr) \
     E(muli) E(mulf) E(mulb) E(mulri) E(mulrf) E(mulrb) E(mulsi) E(mulsf) E(mulsb) \
     E(divi) E(divf) E(divb) E(divri) E(divrf) E(divrb) E(divsi) E(divsf) E(divsb) \
-    E(ret)
+    E(ret) \
+    E(del)
 MAKE_ENUM(OpCodes, nop, 0, OPER, OUT_CLASS)
 #undef OPER
 

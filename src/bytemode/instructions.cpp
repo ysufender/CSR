@@ -1893,13 +1893,7 @@ OPR CPU::Repeat(CPU& cpu) noexcept
 OPR CPU::Allocate(CPU& cpu) noexcept
 {
     try_catch(
-        // alc <size: sysbit>
-        const sysbit_t size { IntegerFromBytes<sysbit_t>(
-            cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
-        )};
-        cpu.state.pc += 4;
-
-        const sysbit_t address { cpu.board.ram.Allocate(size) };
+        const sysbit_t address { cpu.board.ram.Allocate(cpu.state.ecx) };
         cpu.state.ebx = address;
         return Error::Ok;,
         
@@ -2769,5 +2763,19 @@ OPR CPU::Return(CPU& cpu) noexcept
     cpu.state.pc = pcToReturnTo;
 
     return err;
+}
+
+OPR CPU::Deallocate(CPU& cpu) noexcept
+{
+    try_catch(
+        if (cpu.state.ebx < 0 || cpu.board.ram.Size() <= cpu.state.ebx)
+            return System::ErrorCode::RAMAccessError;
+
+        Error err { cpu.board.ram.Deallocate(cpu.state.ebx, cpu.state.ecx) };
+        return err;,
+        
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
 }
 #undef OPR
