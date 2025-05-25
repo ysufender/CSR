@@ -88,6 +88,7 @@ class CPU
         OPFunc(CallFunc)
         OPFunc(MulStack) OPFunc(MulRegister)  OPFunc(MulSafe)
         OPFunc(DivStack) OPFunc(DivRegister)  OPFunc(DivSafe)
+        OPFunc(Return)
 #undef fn
 #undef arr
 #undef CustomOPF

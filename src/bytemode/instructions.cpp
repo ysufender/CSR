@@ -2321,7 +2321,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
         delete[] bytes;
 
         // Store pc 
-        bytes = BytesFromInteger(cpu.state.pc);
+        bytes = BytesFromInteger(cpu.state.pc + (op == OpCodes::cal ? 4 : 1));
         cpu.PushSome({bytes, 4});
         delete[] bytes;
 
@@ -2734,5 +2734,40 @@ OPR CPU::DivSafe(CPU& cpu) noexcept
         return exc.GetCode();, 
         return System::ErrorCode::UnhandledException;
     )
+}
+
+OPR CPU::Return(CPU& cpu) noexcept
+{ 
+    // callstack is:
+    //  bp 4bytes
+    //  pc 4bytes
+    // current bp is AFTER the callstack
+
+    if (cpu.state.sp - (cpu.state.bp + 8) < cpu.state.bl)
+        return System::ErrorCode::StackUnderflow;
+
+    sysbit_t bpToReturnTo { IntegerFromBytes<sysbit_t>(
+        cpu.board.ram.ReadSome(cpu.state.bp - 8, 4).data
+    )};
+    sysbit_t pcToReturnTo { IntegerFromBytes<sysbit_t>(
+        cpu.board.ram.ReadSome(cpu.state.bp - 4, 4).data
+    )};
+
+    System::ErrorCode err;
+    if (cpu.state.bl != 0)
+    {
+        Slice returnValues { cpu.board.ram.ReadSome(
+            cpu.state.sp - cpu.state.bl,
+            cpu.state.bl
+        )};
+        err = cpu.board.ram.WriteSome(cpu.state.bp - 8, returnValues);
+    }
+
+    cpu.PopSome(cpu.state.sp - (cpu.state.bp - 8) - cpu.state.bl);
+
+    cpu.state.bp = bpToReturnTo;
+    cpu.state.pc = pcToReturnTo;
+
+    return err;
 }
 #undef OPR
