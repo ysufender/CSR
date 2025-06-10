@@ -90,6 +90,10 @@ class CPU
         OPFunc(DivStack) OPFunc(DivRegister)  OPFunc(DivSafe)
         OPFunc(Return)
         OPFunc(Deallocate)
+        OPFunc(Sub32) OPFunc(SubFloat) OPFunc(Sub8)
+        OPFunc(SubReg)
+        OPFunc(SubSafe32) OPFunc(SubSafeFloat) OPFunc(SubSafe8)
+
 #undef fn
 #undef arr
 #undef CustomOPF

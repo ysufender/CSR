@@ -60,14 +60,14 @@ MAKE_ENUM(CompareModeFlags, les, 21, CMPER, OUT_CLASS)
     E(rep) \
     E(alc) \
     E(powri) E(powrf) E(powrb) E(powsi) E(powsf) E(powsb) E(powi) E(powf) E(powb) \
-    E(powrui) E(powrub) E(powsui) E(powsub) E(powui) E(powub) \
     E(sqri) E(sqrf) E(sqrb) E(sqrri) E(sqrrf) E(sqrrb) E(sqrsi) E(sqrsf) E(sqrsb) \
     E(cnd) E(cndr) \
     E(cal) E(calr) \
     E(muli) E(mulf) E(mulb) E(mulri) E(mulrf) E(mulrb) E(mulsi) E(mulsf) E(mulsb) \
     E(divi) E(divf) E(divb) E(divri) E(divrf) E(divrb) E(divsi) E(divsf) E(divsb) \
     E(ret) \
-    E(del)
+    E(del) \
+    E(subi) E(subf) E(subb) E(subri) E(subrf) E(subrb) E(subsi) E(subsf) E(subsb)
 MAKE_ENUM(OpCodes, nop, 0, OPER, OUT_CLASS)
 #undef OPER
 

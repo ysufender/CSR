@@ -51,7 +51,6 @@ Error CPU::Cycle() noexcept
         PowRegister, PowRegister, PowRegister,
         PowStack, PowStack, PowStack,
         PowConst, PowConst, PowConst,
-        /*for obsolete unsigned pow*/NoOperation, NoOperation, NoOperation, NoOperation, NoOperation, NoOperation,
         SqrtConst, SqrtConst, SqrtConst,
         SqrtRegister, SqrtRegister, SqrtRegister,
         SqrtStack, SqrtStack, SqrtStack,
@@ -65,6 +64,7 @@ Error CPU::Cycle() noexcept
         DivSafe, DivSafe, DivSafe,
         Return,
         Deallocate,
+        SubSafe32, SubSafeFloat, SubSafe8,
     };
 
     char op;

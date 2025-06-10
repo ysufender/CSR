@@ -2778,4 +2778,202 @@ OPR CPU::Deallocate(CPU& cpu) noexcept
         return System::ErrorCode::UnhandledException;
     )
 }
+
+OPR CPU::Sub32(CPU& cpu) noexcept
+{
+    try_catch(
+        sysbit_t rhs;
+        sysbit_t lhs;
+        rhs = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        cpu.PopSome(4);
+        lhs = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        cpu.PopSome(4);
+
+        char* data { BytesFromInteger(lhs-rhs) };
+        Error err { cpu.PushSome({
+            data,
+            4
+        })};
+
+        delete[] data;
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::SubFloat(CPU& cpu) noexcept
+{
+    try_catch(
+        float rhs;
+        float lhs;
+        rhs = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        cpu.PopSome(4);
+        lhs = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        cpu.PopSome(4);
+
+        char* data { BytesFromFloat<char>(lhs-rhs) };
+        Error err { cpu.PushSome({
+            data,
+            4
+        })};
+
+        delete[] data;
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::Sub8(CPU& cpu) noexcept
+{
+    try_catch(
+        uchar_t rhs;
+        uchar_t lhs;
+        rhs = cpu.board.ram.Read(cpu.state.sp-1);
+        cpu.Pop();
+        lhs = cpu.board.ram.Read(cpu.state.sp-1);
+        cpu.Pop();
+        
+        Error err { cpu.Push(lhs-rhs) };
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::SubReg(CPU& cpu) noexcept
+{
+    try_catch(
+        OpCodes op { cpu.board.assembly.Rom().Read(cpu.state.pc-1) };
+        RegisterModeFlags regLhs { cpu.board.assembly.Rom().Read(cpu.state.pc) };
+        RegisterModeFlags regRhs { cpu.board.assembly.Rom().Read(cpu.state.pc+1) };
+        
+        if (
+            /*case 1*/ 
+            ((op == OpCodes::subrb)
+            &&
+            (!Is8BitReg(regLhs) || !Is8BitReg(regRhs)))
+            ||
+
+            /*case 2*/
+            ((op != OpCodes::subrb)
+            &&
+            (Is8BitReg(regLhs) || Is8BitReg(regRhs)))
+        )
+            CRASH(System::ErrorCode::InvalidSpecifier,
+                "In ", cpu.board.Stringify(), ", PC: ", std::to_string(cpu.state.pc-1),
+                " ", OpCodesString(op),
+                " ", RegisterModeFlagsString(regLhs),
+                " ", RegisterModeFlagsString(regRhs),
+                " Given registers are not compatible with given numeric type."
+            );
+
+        cpu.state.pc+=2;
+
+        if (Is8BitReg(regLhs))
+        {
+            uchar_t regLhsRef { GetRegister8Bit(regLhs, cpu.state) };
+            uchar_t& regRhsRef { GetRegister8Bit(regRhs, cpu.state) };
+            regLhsRef -= regRhsRef;
+        }
+        else if (op == OpCodes::subrf)
+        {
+            sysbit_t regLhsRef { GetRegister32Bit(regLhs, cpu.state) };
+            sysbit_t& regRhsRef { GetRegister32Bit(regRhs, cpu.state) };
+
+            char* data { BytesFromInteger(regLhsRef) };
+            float floatLhs { FloatFromBytes(
+                data
+            )};
+            delete[] data;
+
+            data = BytesFromInteger(regRhsRef);
+            float floatRhs { FloatFromBytes(
+                data
+            )};
+            delete[] data;
+
+            data = BytesFromFloat(floatLhs-floatRhs);
+            regRhsRef = IntegerFromBytes<sysbit_t>(
+                data
+            );
+            delete[] data;
+        }
+        else
+        {
+            sysbit_t regLhsRef { GetRegister32Bit(regLhs, cpu.state) };
+            sysbit_t& regRhsRef { GetRegister32Bit(regRhs, cpu.state) };
+            regLhsRef -= regRhsRef;
+        }
+
+        return System::ErrorCode::Ok;,
+
+        return exc.GetCode();,
+        return Error::UnhandledException;
+    )
+}
+
+OPR CPU::SubSafe32(CPU& cpu) noexcept
+{
+    try_catch(
+        sysbit_t rhs;
+        sysbit_t lhs;
+        rhs = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        lhs = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data);
+
+        char* data { BytesFromInteger(lhs-rhs) };
+        Error err { cpu.PushSome({
+            data,
+            4
+        })};
+        delete[] data;
+
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::SubSafeFloat(CPU& cpu) noexcept
+{
+    try_catch(
+        float rhs;
+        float lhs;
+        rhs = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
+        lhs = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data);
+
+        char* data { BytesFromFloat<char>(lhs-rhs) };
+        Error err { cpu.PushSome({
+            data,
+            4
+        })};
+        delete[] data;
+
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::SubSafe8(CPU& cpu) noexcept
+{
+    try_catch(
+        uchar_t rhs;
+        uchar_t lhs;
+        rhs = cpu.board.ram.Read(cpu.state.sp-1);
+        lhs = cpu.board.ram.Read(cpu.state.sp-2);
+        
+        Error err { cpu.Push(lhs-rhs) };
+        return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
 #undef OPR
