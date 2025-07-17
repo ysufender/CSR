@@ -24,7 +24,7 @@ MAKE_ENUM(MemoryModeFlags, Stack, 6, MEMOR, OUT_CLASS)
 
 #define REGOR(E) \
     E(ebx) E(ecx) E(edx) E(esi) E(edi) \
-    E(pc) E(sp) \
+    E(pc) E(sp) E(bp) \
     E(al) E(bl) E(cl) E(dl) \
     E(flg)
 MAKE_ENUM(RegisterModeFlags, eax, 8, REGOR, OUT_CLASS)

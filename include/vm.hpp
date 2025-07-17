@@ -18,9 +18,6 @@ class VM : IMessageObject
         struct VMSettings
         {
             bool strictMessages;
-#ifndef NDEBUG
-            bool step;
-#endif
         };
 
         VM(VM const&) = delete;
@@ -55,10 +52,9 @@ class VM : IMessageObject
     private:
         AssemblyCollection assemblies;
         AssemblyIDCollection asmIds;
-
         VMSettings settings;
 
-        sysbit_t GenerateNewAssemblyID() const;
-
         VM() { }
+
+        sysbit_t GenerateNewAssemblyID() const;
 };

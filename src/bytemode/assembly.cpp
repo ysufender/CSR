@@ -105,9 +105,10 @@ const std::string& Assembly::Stringify() const noexcept
 
 sysbit_t Assembly::GenerateNewBoardID() const
 {
-    sysbit_t id { static_cast<sysbit_t>(this->boards.size()) };
-    while (this->boards.contains(id))
-        id++;
+    sysbit_t id { 0 };
+    for (; id <= std::numeric_limits<sysbit_t>::max(); id++)
+        if (!this->boards.contains(id))
+            break;
     return id;
 }
 

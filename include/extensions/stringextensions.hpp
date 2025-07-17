@@ -22,4 +22,5 @@ namespace Extensions::String
     std::string Concat(const std::vector<std::string_view>& strings);
 
     std::string Join(const std::vector<std::string>& strings, char delimiter);
+    size_t Hash(std::string_view str);
 }

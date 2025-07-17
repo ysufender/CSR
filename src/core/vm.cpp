@@ -36,9 +36,10 @@ const Assembly& VM::GetAssembly(sysbit_t id) const
 
 sysbit_t VM::GenerateNewAssemblyID() const
 {
-    sysbit_t id { static_cast<sysbit_t>(this->assemblies.size()) };
-    while (this->asmIds.contains(id))
-        id++;
+    sysbit_t id { 0 };
+    for (; id <= std::numeric_limits<sysbit_t>::max(); id++)
+        if (!this->asmIds.contains(id))
+            break;
     return id;
 }
 
@@ -49,6 +50,9 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
 
     if (this->assemblies.size() >= std::numeric_limits<sysbit_t>::max())
         return System::ErrorCode::Bad;
+
+    // Load shared library associated with the assembly
+    LOGW("TODO: Shared library while adding new assembly.");
 
     settings.id = this->GenerateNewAssemblyID();
     this->assemblies.emplace(settings.name, rval(settings));

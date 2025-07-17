@@ -45,7 +45,11 @@ struct System
     E(MemoryOverflow) \
     E(NotImplemented) \
     E(FragmentedHeap) \
-    E(StackUnderflow)
+    E(StackUnderflow) \
+    E(DuplicateSysBind) \
+    E(InvalidKey) \
+    E(DLLLoadError) \
+    E(DLLSymbolError)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

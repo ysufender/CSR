@@ -97,9 +97,10 @@ Board::Board(class Assembly& assembly, sysbit_t id)
 
 uchar_t Board::GenerateNewProcessID() const
 {
-    uchar_t id { static_cast<uchar_t>(this->processes.size()) };
-    while (this->processes.contains(id))
-        id++;
+    uchar_t id { 0 };
+    for (; id <= std::numeric_limits<uchar_t>::max(); id++)
+        if (!this->processes.contains(id))
+            break;
     return id;
 }
 

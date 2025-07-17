@@ -1,16 +1,16 @@
-#include <array>
-#include <cmath>
+#include <type_traits>
 #include <cstring>
 #include <string>
-#include <type_traits>
+#include <array>
+#include <cmath>
 
-#include "CSRConfig.hpp"
+#include "extensions/syntaxextensions.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/instructions.hpp"
 #include "bytemode/assembly.hpp"
 #include "bytemode/board.hpp"
 #include "bytemode/cpu.hpp"
-#include "extensions/syntaxextensions.hpp"
+#include "CSRConfig.hpp"
 #include "system.hpp"
 
 #define OPR Error
@@ -38,6 +38,7 @@ static sysbit_t& GetRegister32Bit(RegisterModeFlags reg, CPU::State& state)
         case RegisterModeFlags::edi: return state.edi;
         case RegisterModeFlags::pc: return state.pc;
         case RegisterModeFlags::sp: return state.sp;
+        case RegisterModeFlags::bp: return state.bp;
         default: 
             CRASH(
                 System::ErrorCode::InvalidSpecifier,
@@ -54,6 +55,7 @@ static uchar_t& GetRegister8Bit(RegisterModeFlags reg, CPU::State& state)
     {
         case RegisterModeFlags::al: return state.al;
         case RegisterModeFlags::bl: return state.bl;
+        case RegisterModeFlags::cl: return state.cl;
         case RegisterModeFlags::dl: return state.dl;
         case RegisterModeFlags::flg: return state.flg;
         default:
@@ -2298,11 +2300,30 @@ OPR CPU::ConditionalJump(CPU& cpu) noexcept
 OPR CPU::CallFunc(CPU &cpu) noexcept
 {
     try_catch(
-        OpCodes op { OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)) };
-
         if (cpu.state.sp < cpu.state.bl)
             return System::ErrorCode::RAMAccessError;
 
+        OpCodes op { OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)) };
+        sysbit_t address;
+        if (op == OpCodes::cal)
+            address = IntegerFromBytes<sysbit_t>(
+                cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
+            );
+        if (op == OpCodes::calr)
+            address = GetRegister32Bit( 
+                RegisterModeFlags(
+                    cpu.board.assembly.Rom().Read(cpu.state.pc)
+                ),
+                cpu.state
+            );
+
+        // (cpu.state.flg & 1) is the syscall flag
+        // make syscall
+        if (cpu.state.flg & 1)
+        {
+        }
+
+        // normal call
         // Create callstack
         //  - Store bp
         //  - Store pc
@@ -2323,27 +2344,16 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
         cpu.state.bp = cpu.state.sp;
 
         // Copy params 
+        System::ErrorCode err;
         if (cpu.state.bl != 0)
         {
             Slice params { cpu.board.ram.ReadSome(cpu.state.sp-8-cpu.state.bl, cpu.state.bl) };
-            cpu.PushSome(params);
+            err = cpu.PushSome(params);
         }
 
-        sysbit_t address;
-        if (op == OpCodes::cal)
-            address = IntegerFromBytes<sysbit_t>(
-                cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
-            );
-        if (op == OpCodes::calr)
-            address = GetRegister32Bit( 
-                RegisterModeFlags(
-                    cpu.board.assembly.Rom().Read(cpu.state.pc)
-                ),
-                cpu.state
-            );
 
         cpu.state.pc = address;
-        return System::ErrorCode::Ok;,
+        return err;,
 
         return exc.GetCode();,
         return System::ErrorCode::UnhandledException;
@@ -2737,7 +2747,7 @@ OPR CPU::Return(CPU& cpu) noexcept
     //  pc 4bytes
     // current bp is AFTER the callstack
 
-    if (cpu.state.sp - (cpu.state.bp + 8) < cpu.state.bl)
+    if (cpu.state.sp - cpu.state.bp < cpu.state.bl)
         return System::ErrorCode::StackUnderflow;
 
     sysbit_t bpToReturnTo { IntegerFromBytes<sysbit_t>(
@@ -2747,6 +2757,7 @@ OPR CPU::Return(CPU& cpu) noexcept
         cpu.board.ram.ReadSome(cpu.state.bp - 4, 4).data
     )};
 
+
     System::ErrorCode err;
     if (cpu.state.bl != 0)
     {
@@ -2754,9 +2765,12 @@ OPR CPU::Return(CPU& cpu) noexcept
             cpu.state.sp - cpu.state.bl,
             cpu.state.bl
         )};
-        err = cpu.board.ram.WriteSome(cpu.state.bp - 8, returnValues);
+        err = cpu.board.ram.WriteSome(cpu.state.bp - 8 - cpu.state.bl, returnValues);
     }
 
+    //  bp-8       bp sp
+    //    |         ||             
+    // 00|0000|0000|00
     cpu.PopSome(cpu.state.sp - (cpu.state.bp - 8) - cpu.state.bl);
 
     cpu.state.bp = bpToReturnTo;

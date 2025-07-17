@@ -26,9 +26,11 @@ CPU::CPU(Board& board) : board(board), state()
 Error CPU::Cycle() noexcept
 {
     static constexpr OperationFunction ops[] = {
-        NoOperation, StoreThirtyTwo, StoreEight, StoreFromSymbol, StoreFromSymbol,
+        NoOperation,
+        StoreThirtyTwo, StoreEight, StoreFromSymbol, StoreFromSymbol,
         LoadFromStack, LoadFromStack, ReadFromHeap, ReadFromHeap, ReadFromRegister,
-        Move, Move, Move, Add32, AddFloat, Add8, AddReg, AddReg, AddReg,
+        Move, Move, Move,
+        Add32, AddFloat, Add8, AddReg, AddReg, AddReg,
         AddSafe32, AddSafeFloat, AddSafe8,
         MemCopy,
         Increment, Increment, Increment, IncrementReg, IncrementReg, IncrementReg,
@@ -64,6 +66,7 @@ Error CPU::Cycle() noexcept
         DivSafe, DivSafe, DivSafe,
         Return,
         Deallocate,
+        Sub32, SubFloat, Sub8, SubReg, SubReg, SubReg,
         SubSafe32, SubSafeFloat, SubSafe8,
     };
 

@@ -7,6 +7,7 @@ add_library(bytemode
         ram.cpp
         rom.cpp
         instructions.cpp
+        syscall.cpp
 )
 
 target_link_libraries(bytemode

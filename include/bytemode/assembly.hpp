@@ -7,6 +7,7 @@
 #include "CSRConfig.hpp"
 #include "message.hpp"
 #include "system.hpp"
+#include "bytemode/syscall.hpp"
 #include "bytemode/board.hpp"
 #include "bytemode/rom.hpp"
 
@@ -53,10 +54,14 @@ class Assembly : IMessageObject
 
         const std::string& Stringify() const noexcept;
 
+        const SysCallHandler& SysCallHandler() const noexcept
+        { return this->syscallHandler; }
+
     private:
         ROM rom { *this };
         AssemblySettings settings;
         BoardCollection boards;
+        class SysCallHandler syscallHandler;
 
         mutable std::string reprStr;
 

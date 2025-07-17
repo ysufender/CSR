@@ -7,17 +7,20 @@
 
 ## Runtime
 
-- [ ] Basic Runtime Structure
-    - [ ] VM
-        - [ ] Dispatch Messages
-    - [ ] Assembly
-        - [ ] Dispatch Messages
-        - [ ] ROM
-    - [ ] Board
-        - [ ] RAM
-            - [ ] Read byte
-            - [ ] Read bytes
-            - [ ]
-        - [ ] CPU
-        - [ ] Process
-            - [ ] Dispatch Messages
+- [x] Basic Runtime Structure
+    - [x] VM
+        - [x] Dispatch Messages
+    - [x] Assembly
+        - [x] Dispatch Messages
+        - [x] ROM
+    - [x] Board
+        - [x] RAM
+        - [x] CPU
+        - [x] Process
+
+## Ideas
+
+- VM should check for the same named dll/so/dylib file and load it, then call the initialization
+function for it to set up the syscall handlers and such.
+- Handle the error cases for GenerateNewXID for VM, Assembly and Board.
+- Finish MakeFunctionHandler

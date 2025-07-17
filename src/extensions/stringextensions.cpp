@@ -77,4 +77,10 @@ namespace Extensions::String
 
         return ss.str();
     }
+
+    size_t Hash(std::string_view str)
+    {
+        static constexpr auto hasher { std::hash<std::string_view>{} };;
+        return hasher(str);
+    }
 }
