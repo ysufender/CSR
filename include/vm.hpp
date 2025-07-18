@@ -18,6 +18,10 @@ class VM : IMessageObject
         struct VMSettings
         {
             bool strictMessages;
+            bool unsafe;
+#ifndef NDEBUG
+            bool step;
+#endif
         };
 
         VM(VM const&) = delete;
@@ -47,7 +51,9 @@ class VM : IMessageObject
         inline const VMSettings& GetSettings() const noexcept
         { return this->settings; }
 
-        Error Run(VMSettings&& settings);
+        Error Setup(VMSettings settings) noexcept;
+
+        Error Run() noexcept;
 
     private:
         AssemblyCollection assemblies;

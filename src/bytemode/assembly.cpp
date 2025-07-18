@@ -20,10 +20,10 @@
 //
 // Assembly Implementation
 //
-Assembly::Assembly(Assembly::AssemblySettings&& settings)
-{
-    this->settings = settings;
-}
+Assembly::Assembly(Assembly::AssemblySettings&& settings) :
+    settings(settings),
+    syscallHandler()
+{ }
 
 Error Assembly::Load() noexcept
 {
@@ -59,7 +59,7 @@ Error Assembly::Load() noexcept
     bytecode.seekg(0, std::ios::end);
     IStreamPos(bytecode, length, {
         bytecode.close();
-        return System::ErrorCode::Bad;
+        return System::ErrorCode::FileIOError;
     });
     bytecode.seekg(0, std::ios::beg);
 
@@ -75,11 +75,10 @@ Error Assembly::Load() noexcept
         return System::ErrorCode::Ok;
 
     // initialize the initial board.
+    System::ErrorCode err;
     try_catch(
         if (this->boards.size() == 0)
-        {
-            this->AddBoard();
-        },
+            err = this->AddBoard();,
 
         LOGE(System::LogLevel::Medium, this->Stringify(), " ROM access error while initializing Board.");
         return exc.GetCode();,
@@ -88,7 +87,7 @@ Error Assembly::Load() noexcept
         return System::ErrorCode::UnhandledException;
     );
 
-    return System::ErrorCode::Ok;
+    return err;
 }
 
 const std::string& Assembly::Stringify() const noexcept

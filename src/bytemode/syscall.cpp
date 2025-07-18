@@ -1,17 +1,20 @@
-#include <dlfcn.h>
 #include <string>
 #include <string_view>
 
-#include "extensions/stringextensions.hpp"
 #include "extensions/syntaxextensions.hpp"
 #include "bytemode/syscall.hpp"
 #include "CSRConfig.hpp"
+#include "platform.hpp"
 #include "system.hpp"
 
-SysCallHandler::SysCallHandler(SysFunctionMap&& map)
-{
-    this->boundFuncs = map;
-}
+SysCallHandler::SysCallHandler() :
+    boundFuncs(),
+    dlList()
+{ }
+
+SysCallHandler::SysCallHandler(SysFunctionMap map) :
+    boundFuncs(rval(map))
+{ }
 
 Error SysCallHandler::BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept
 {
@@ -22,7 +25,7 @@ Error SysCallHandler::BindFunction(sysbit_t id, SysFunctionHandler handler) noex
     return Error::Ok;
 }
 
-Error SysCallHandler::UnbindFunciton(sysbit_t id) noexcept
+Error SysCallHandler::UnbindFunction(sysbit_t id) noexcept
 {
     if (!boundFuncs.contains(id))
         return Error::InvalidKey;
@@ -33,22 +36,20 @@ Error SysCallHandler::UnbindFunciton(sysbit_t id) noexcept
 const SysFunctionHandler& SysCallHandler::operator[](sysbit_t id) const
 {
     if (!boundFuncs.contains(id))
-        LOGE(
-            System::LogLevel::High,
+        CRASH(
+            Error::InvalidKey,
             "Error while syscall, no handler with key ", std::to_string(id), "."
         ); 
     return boundFuncs.at(id);
 }
 
-Error SysCallHandler::LoadDll(std::string_view dllPath) noexcept
+dlID_t SysCallHandler::LoadDl(std::string_view dllPath) 
 {
-    dllID_t dll;
+    dlID_t dll { DLLoad(dllPath) };
 
-#if defined(_WIN32) || defined(__CYGWIN__)
-    dll = LoadLibrary(dllPath.data());
-
-    if (!hGetProcIDDLL)
+    if (!dll)
     {
+#if defined(_WIN32) || defined(__CYGWIN__)
         DWORD errID { GetLastError() };
         LPSTR messageBuffer { nullptr };
         size_t size = FormatMessageA(
@@ -64,54 +65,31 @@ Error SysCallHandler::LoadDll(std::string_view dllPath) noexcept
         );
         std::string errMsg { messageBuffer, size };
         LocalFree(messageBuffer);
+#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
+        std::string errMsg { dlerror() };
+#endif
 
-        LOGE(
-            System::LogLevel::Medium,
-            "Couldn't load DLL ", dllPath,
+        CRASH(
+            Error::DLLoadError,
+            "Couldn't load DL ", dllPath,
             "\n\tInfo: ", errMsg
         );
-        return Error::DLLLoadError;
-    }
-#elif defined(unix) || defined(__unix) || defined(__unix__)
-    dll = dlopen(dllPath.data(), RTLD_NOW);
-
-    if (!dll)
-    {
-        LOGE(
-            System::LogLevel::Medium,
-            "Couldn't load DLL ", dllPath,
-            ".\n\tInfo: ", dlerror()
-        );
-        return Error::DLLLoadError;
     }
 
+#if defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
     dlerror();
 #endif
 
-    dllList.emplace(dll);
-    return Error::Ok;
+    dlList.emplace(dll);
+    return dll;
 }
 
-Error SysCallHandler::MakeFunctionHandler(std::string_view functionName) const noexcept
+sysfnh_t SysCallHandler::MakeFunctionHandler(dlID_t dll, std::string_view functionName) const
 {
-    sysfnh_t handler { nullptr };
-
-    for (dllID_t dll : dllList)
-    {
-        if (handler)
-            break;
-
-#if defined(_WIN32) || defined(__CYGWIN__)
-        handler = reinterpret_cast<sysfnh_t>(GetProcAddress(dll, functionName.data()));
-#elif defined(unix) || defined(__unix) || defined(__unix__)
-        handler = reinterpret_cast<sysfnh_t>(dlsym(dll, functionName.data()));
-#endif
-    }
+    sysfnh_t handler { DLSym<sysfnh_t>(dll, functionName) };
 
     if (handler)
-    {
-        boundFuncs[GenerateNewFuncionID()] = handler;
-    }
+        return handler;
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     DWORD errID { GetLastError() };
@@ -129,14 +107,14 @@ Error SysCallHandler::MakeFunctionHandler(std::string_view functionName) const n
     );
     std::string errMsg { messageBuffer, size };
     LocalFree(messageBuffer);
-#elif defined(unix) || defined(__unix) || defined(__unix__)
+#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
     std::string  errMsg { dlerror() };
 #endif
 
-    LOGE(
-        System::LogLevel::Medium,
+    CRASH(
+        Error::DLSymbolError,
         "Couldn't get symbol ", functionName,
         "\n\tInfo: ", errMsg
     );
-    return Error::DLLSymbolError;
+    return nullptr;
 }

@@ -26,10 +26,16 @@ int csrmain(int argc, char** args)
             PrintHeader();
         else
         {
-            if (flags.GetFlag<CLIParser::FlagType::Bool>("jit"))
-                LOGW("JIT support is currently unavailable. The program will use the standart execution.");
             if (flags.GetFlag<CLIParser::FlagType::Bool>("no-new"))
                 LOGW("Single-process runtime is currently unavailable. A new instance will be created.");
+
+            VM::GetVM().Setup({
+                .strictMessages = !flags.GetFlag<CLIParser::FlagType::Bool>("no-strict-messages"),
+                .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
+#ifndef NDEBUG
+                .step = flags.GetFlag<CLIParser::FlagType::Bool>("step"),
+#endif
+            });
 
             std::vector<std::string> files { flags.GetFlag<CLIParser::FlagType::StringList>("exe") };
 
@@ -39,11 +45,14 @@ int csrmain(int argc, char** args)
             for (const std::filesystem::path& file : files)
             {
                 errc = VM::GetVM().AddAssembly({
-                // /*jit =*/ flags.GetFlag<CLIParser::FlagType::Bool>("jit"), 
-                .jit = false,
-                .name = file.filename().generic_string(),
-                .path = file,
-                /*type = will be set by the Assembly class*/
+#ifdef ENABLE_JIT
+                    .jit = flags.GetFlag<CLIParser::FlagType::Bool>("jit"),
+#else
+                    .jit = false,
+#endif
+                    .name = file.filename().generic_string(),
+                    .path = file,
+                    /*type = will be set by the Assembly class*/
                 });
 
                 switch (errc) 
@@ -51,21 +60,27 @@ int csrmain(int argc, char** args)
                     case System::ErrorCode::Bad:
                         LOGE(System::LogLevel::Medium, "Can't register assembly '", file.filename().generic_string(), "', it already exists.");
                         break;
+                    case System::ErrorCode::IndexOutOfBounds:
+                        LOGE(System::LogLevel::Medium, "Can't register assembly '", file.filename().generic_string(), "', VM has reached the max number of assemblies.");
+                        break;
                     case System::ErrorCode::SourceFileNotFound:
                         LOGE(System::LogLevel::Medium, "File at given path '", file.generic_string(), "' can't be found.");
                         break;
-                    case System::ErrorCode::UnsupportedFileType:
-                    default:
+                    case System::ErrorCode::FileIOError:
+                        LOGE(System::LogLevel::Medium, "Couldn't open assembly '", file.generic_string(), "'.");
                         break;
+                    case System::ErrorCode::UnsupportedFileType:
+                        LOGE(System::LogLevel::Medium, "Couldn't open assembly '", file.generic_string(), "'.");
+                        break;
+                    case System::ErrorCode::Ok:
+                        break;
+                    default:
+                        LOGE(System::LogLevel::Medium, "Error, '", System::ErrorCodeString(errc), "'");
                 }
             }
 
-            errc = VM::GetVM().Run({
-                .strictMessages = !flags.GetFlag<CLIParser::FlagType::Bool>("no-strict-messages"),
-#ifndef NDEBUG
-                .step = flags.GetFlag<CLIParser::FlagType::Bool>("step"),
-#endif
-            });
+            if (VM::GetVM().Assemblies().size() > 0)
+                errc = VM::GetVM().Run();
         } 
     }
     catch (const CSRException& exc)
@@ -82,7 +97,9 @@ int csrmain(int argc, char** args)
         return 1;
     }
 
-    std::cout << std::endl;
+    std::cout << 
+        "Exited With " << static_cast<int>(errc) << " (" <<
+        System::ErrorCodeString(errc) << ")" << std::endl;
     return static_cast<int>(errc);
 }
 
@@ -115,11 +132,15 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
     parser.AddFlag<FlagType::Bool>("help", "Print this help text.");
     parser.AddFlag<FlagType::Bool>("version", "Print version.");
     parser.Separator();
+#ifdef ENABLE_JIT
     parser.AddFlag<FlagType::Bool>("jit", "Mark this execution as JIT target.");
+#endif
     parser.AddFlag<FlagType::Bool>("no-new", "Do not create a new instance of CSR, use an already running one.");
-    parser.AddFlag<FlagType::Bool>("no-strict-messages", "Strictly verifies messages in each checkpoint.");
+    parser.AddFlag<FlagType::Bool>("no-strict-messages", "Don't strictly verify messages in each checkpoint when dispatching.", true);
     parser.Separator();
     parser.AddFlag<FlagType::StringList>("exe", "Executable files to execute.");
+    parser.Separator();
+    parser.AddFlag<FlagType::Bool>("unsafe", "Load extender dll of each executable.");
 #ifndef NDEBUG
     parser.Separator();
     parser.AddFlag<FlagType::Bool>("step", "Run the VM once every input.");
@@ -132,6 +153,7 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
     parser.BindFlag("n", "no-new");
     parser.BindFlag("nsm", "no-strict-messages");
     parser.BindFlag("e", "exe");
+    parser.BindFlag("u", "unsafe");
 
     return parser.Parse();
 }

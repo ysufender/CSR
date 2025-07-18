@@ -48,8 +48,10 @@ struct System
     E(StackUnderflow) \
     E(DuplicateSysBind) \
     E(InvalidKey) \
-    E(DLLLoadError) \
-    E(DLLSymbolError)
+    E(DLLoadError) \
+    E(DLSymbolError) \
+    E(VMError) \
+    E(DLInitError)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

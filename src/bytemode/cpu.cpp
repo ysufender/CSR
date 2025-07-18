@@ -86,9 +86,7 @@ Error CPU::Cycle() noexcept
 
     if (sizeof(ops)/8 > op)
     {
-        //std::cout << '\n' << this->state.pc << '\n';
-        //LOGD(this->board.GetExecutingProcess().Stringify(), "::CPU read op ", OpCodesString(op));
-        this->state.pc++; // pc points to either the next op or the first operand
+        this->state.pc++;
         code = ops[op](*this);
 
         if (code == System::ErrorCode::Ok)

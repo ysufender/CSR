@@ -2316,11 +2316,53 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                 ),
                 cpu.state
             );
+        const Slice params { cpu.board.ram.ReadSome(cpu.state.sp-8-cpu.state.bl, cpu.state.bl) };
 
         // (cpu.state.flg & 1) is the syscall flag
         // make syscall
         if (cpu.state.flg & 1)
         {
+            if (op == OpCodes::cal)
+                cpu.state.pc += 4;
+           
+            // address is now the function id
+            const char* const ret {
+                cpu.board.assembly.SysCallHandler()(address, params.data)
+            };
+
+            System::ErrorCode err { ret[0] };
+
+            if (err != Error::Ok)
+            {
+                LOGE(
+                    System::LogLevel::Medium,
+                    "Error in syscall ",
+                    std::to_string(address),
+                    " ", System::ErrorCodeString(err)
+                );
+                return err;
+            }
+
+            if (ret[1] != 0)
+            {
+                Slice retVal (ret+2, ret[1]);
+                err = cpu.board.ram.WriteSome(cpu.state.sp - cpu.state.bl, retVal);
+
+                if (err != Error::Ok)
+                {
+                    LOGE(
+                        System::LogLevel::Medium,
+                        "Error in syscall, ",
+                        std::to_string(address),
+                        " couldn't handle return values."
+                    );
+                    return err;
+                }
+
+                cpu.state.sp += (-cpu.state.bl) + retVal.size;
+            }
+
+            delete[] ret;
         }
 
         // normal call
@@ -2345,12 +2387,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
 
         // Copy params 
         System::ErrorCode err;
-        if (cpu.state.bl != 0)
-        {
-            Slice params { cpu.board.ram.ReadSome(cpu.state.sp-8-cpu.state.bl, cpu.state.bl) };
-            err = cpu.PushSome(params);
-        }
-
+        err = cpu.PushSome(params);
 
         cpu.state.pc = address;
         return err;,
@@ -2768,9 +2805,6 @@ OPR CPU::Return(CPU& cpu) noexcept
         err = cpu.board.ram.WriteSome(cpu.state.bp - 8 - cpu.state.bl, returnValues);
     }
 
-    //  bp-8       bp sp
-    //    |         ||             
-    // 00|0000|0000|00
     cpu.PopSome(cpu.state.sp - (cpu.state.bp - 8) - cpu.state.bl);
 
     cpu.state.bp = bpToReturnTo;

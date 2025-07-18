@@ -31,6 +31,7 @@ class Assembly : IMessageObject
             sysbit_t id;
         };
 
+
         Assembly() = delete;
         Assembly(AssemblySettings&& settings);
 
@@ -54,7 +55,7 @@ class Assembly : IMessageObject
 
         const std::string& Stringify() const noexcept;
 
-        const SysCallHandler& SysCallHandler() const noexcept
+        class SysCallHandler& SysCallHandler() noexcept
         { return this->syscallHandler; }
 
     private:

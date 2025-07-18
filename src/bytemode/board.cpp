@@ -58,6 +58,7 @@ Board::~Board()
             std::cout << "\n0x" << std::hex << std::uppercase << i+ram.StackSize() << " |";
         std::cout << ' ' << std::hex << std::uppercase << (sysbit_t)ram.Read(i+ram.StackSize()) << " |";
     }
+    std::cout << '\n';
 }
 #endif
 

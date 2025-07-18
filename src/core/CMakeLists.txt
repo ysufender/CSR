@@ -5,6 +5,7 @@ add_library(core
         vm.cpp
         message.cpp
         slice.cpp
+        platform.cpp
 )
 
 target_link_libraries(core

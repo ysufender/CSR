@@ -22,5 +22,4 @@
 
 - VM should check for the same named dll/so/dylib file and load it, then call the initialization
 function for it to set up the syscall handlers and such.
-- Handle the error cases for GenerateNewXID for VM, Assembly and Board.
 - Finish MakeFunctionHandler
