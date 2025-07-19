@@ -26,10 +26,6 @@ class Board : IMessageObject
         Board(Board&&) = delete;
         Board(class Assembly& assembly, sysbit_t id);
 
-#ifndef NDEBUG
-        ~Board();
-#endif
-
         const class Assembly& Assembly() const 
         { return this->assembly; }
 

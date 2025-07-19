@@ -82,11 +82,11 @@ add_subdirectory(lib)
 add_subdirectory(src)
 
 # Add postbuild commands here
-add_custom_command(TARGET csr POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${LIBSTDJASM_OUTPUT_DIR}"
-            "${PROJECT_BINARY_DIR}/bin/${OUTPUT_PATH}/"
-)
+#add_custom_command(TARGET csr POST_BUILD
+#    COMMAND ${CMAKE_COMMAND} -E copy_directory
+#            "${LIBSTDJASM_OUTPUT_DIR}"
+#            "${PROJECT_BINARY_DIR}/bin/${OUTPUT_PATH}/"
+#)
 #end_command
 
 target_link_libraries(csr

@@ -97,9 +97,9 @@ int csrmain(int argc, char** args)
         return 1;
     }
 
-    std::cout << 
-        "Exited With " << static_cast<int>(errc) << " (" <<
-        System::ErrorCodeString(errc) << ")" << std::endl;
+    //std::cout << 
+        //"\nExited With " << static_cast<int>(errc) << " (" <<
+        //System::ErrorCodeString(errc) << ")" << std::endl;
     return static_cast<int>(errc);
 }
 

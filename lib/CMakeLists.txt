@@ -9,6 +9,11 @@ add_subdirectory(libstdjasm)
 set(LIBSTDJASM_OUTPUT_DIR ${LIBSTDJASM_OUTPUT_DIR} PARENT_SCOPE)
 #end_command
 
+set_target_properties(stdjasm
+    PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/${OUTPUT_PATH}/"
+)
+
 # Link subdirectories here
 target_link_libraries(libs
     INTERFACE
