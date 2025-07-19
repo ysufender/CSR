@@ -73,8 +73,7 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     }
 
     // Load and set up standard library dlls and functions
-    LOGW("TODO: Set up standard library");
-    std::filesystem::path stdlibPath { GetExePath().parent_path().replace_filename("libstdjasm") };
+    std::filesystem::path stdlibPath { GetExePath().parent_path().append("libstdjasm.lib") };
 #if defined(_WIN32) || defined(__CYGWIN__)
     stdlibPath.replace_extension("dll");
 #elif defined(unix) || defined(__unix) || defined(__unix__)
@@ -98,7 +97,7 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     }
 
     extInit_t stdlibInit { DLSym<extInit_t>(stdlib, "STDLibInit") };
-    if (!stdlibInit(&this->asmIds.at(settings.id)->SysCallHandler()))
+    if (stdlibInit(&this->asmIds.at(settings.id)->SysCallHandler()) != static_cast<char>(Error::Ok))
     {
         LOGE(System::LogLevel::Medium, "Failed to load standard library for assembly ", settings.path.generic_string());
         this->RemoveAssembly(settings.id);
@@ -139,7 +138,7 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     }
 
     extInit_t extenderInit { DLSym<extInit_t>(extDl, "InitExtender") };
-    if (!extenderInit(&this->asmIds.at(settings.id)->SysCallHandler()))
+    if (extenderInit(&this->asmIds.at(settings.id)->SysCallHandler()) != static_cast<char>(Error::Ok))
     {
         LOGE(System::LogLevel::Medium, "Failed to initialize extender for assembly ", settings.path.generic_string());
         this->RemoveAssembly(settings.id);

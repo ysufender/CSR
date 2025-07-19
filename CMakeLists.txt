@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.30)
 
 project(CSR
-    VERSION 1.0.0
+    VERSION 0.1.0
     DESCRIPTION "Common Script Runtime for JASM Bytecode"
     LANGUAGES CXX
 )

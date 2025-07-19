@@ -2316,7 +2316,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                 ),
                 cpu.state
             );
-        const Slice params { cpu.board.ram.ReadSome(cpu.state.sp-8-cpu.state.bl, cpu.state.bl) };
+        const Slice params { cpu.board.ram.ReadSome(cpu.state.sp-cpu.state.bl, cpu.state.bl) };
 
         // (cpu.state.flg & 1) is the syscall flag
         // make syscall
@@ -2363,6 +2363,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
             }
 
             delete[] ret;
+            return Error::Ok;
         }
 
         // normal call

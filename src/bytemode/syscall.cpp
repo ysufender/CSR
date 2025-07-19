@@ -16,21 +16,27 @@ SysCallHandler::SysCallHandler(SysFunctionMap map) :
     boundFuncs(rval(map))
 { }
 
-Error SysCallHandler::BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept
+SysCallHandler::~SysCallHandler()
 {
-    if (boundFuncs.contains(id))
-        return Error::DuplicateSysBind;
-
-    boundFuncs[id] = rval(handler);
-    return Error::Ok;
+    for (dlID_t id : dlList)
+        DLUnload(id);
 }
 
-Error SysCallHandler::UnbindFunction(sysbit_t id) noexcept
+char SysCallHandler::BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept
+{
+    if (boundFuncs.contains(id))
+        return (char)Error::DuplicateSysBind;
+
+    boundFuncs[id] = rval(handler);
+    return (char)Error::Ok;
+}
+
+char SysCallHandler::UnbindFunction(sysbit_t id) noexcept
 {
     if (!boundFuncs.contains(id))
-        return Error::InvalidKey;
+        return (char)Error::InvalidKey;
     boundFuncs.erase(id);
-    return Error::Ok;
+    return (char)Error::Ok;
 }
 
 const SysFunctionHandler& SysCallHandler::operator[](sysbit_t id) const

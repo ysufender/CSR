@@ -12,7 +12,7 @@ dlID_t DLLoad(std::string_view path)
 bool DLUnload(dlID_t dlID)
 {
 #if defined(_WIN32) || defined(__CYGWIN__)
-    return FreeLibrary(path.data());
+    return FreeLibrary(dlID);
 #elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
     return dlclose(dlID);
 #endif
