@@ -1,3 +1,6 @@
 [submodule "lib/CLIParser"]
 	path = lib/CLIParser
 	url = https://github.com/ysufender/CLIParser.git
+[submodule "lib/libstdjasm"]
+	path = lib/libstdjasm
+	url = https://github.com/ysufender/libstdjasm.git

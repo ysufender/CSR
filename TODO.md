@@ -18,8 +18,18 @@
         - [x] CPU
         - [x] Process
 
-## Ideas
+- [ ] Advanced Runtime
+    - [x] Standard library (loading part, the standard library itself is at [it's own repo](https://github.com/ysufender/libstdjasm))
+    - [ ] C++ Callbacks
+        - [x] Loading extender DL and calling their initializer functions to bind function handlers.
+        - [x] Calling functions using cal/calr instructions
+        - [x] Passing parameters to callbacks
+        - [ ] Retrieving return values from callbacks (probably works but I didn't test them yet)
+    - [ ] Proper Concurrency
 
-- VM should check for the same named dll/so/dylib file and load it, then call the initialization
-function for it to set up the syscall handlers and such.
-- Finish MakeFunctionHandler
+## Notes
+
+- If you see the mentions of "C++ callback" around the project, know that it isn't only C++. As long as you have a C ABI compatible binary and you follow
+the VM regulations (correct Initializer/FunctionHandler signatures) you can call any language from the bytecode.
+
+## Ideas

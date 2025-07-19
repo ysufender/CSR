@@ -56,8 +56,8 @@ set(OUTPUT_PATH "" CACHE STRING "")
 # File Configures
 #
 configure_file(
-    ${CMAKE_SOURCE_DIR}/CSRConfig.hpp.in
-    ${CMAKE_BINARY_DIR}/include/CSRConfig.hpp
+    ${PROJECT_SOURCE_DIR}/CSRConfig.hpp.in
+    ${PROJECT_BINARY_DIR}/include/CSRConfig.hpp
     @ONLY
 )
 
@@ -67,19 +67,27 @@ add_executable(csr
 
 set_target_properties(csr
     PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/${OUTPUT_PATH}/lib"
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin//${OUTPUT_PATH}/lib"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/${OUTPUT_PATH}/"
+        ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/${OUTPUT_PATH}/lib"
+        LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin//${OUTPUT_PATH}/lib"
+        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/${OUTPUT_PATH}/"
 )
 
 include_directories(
-        ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_BINARY_DIR}/include
+        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_BINARY_DIR}/include
 )
 
 # After the include call so everything includes those above
 add_subdirectory(lib)
 add_subdirectory(src)
+
+# Add postbuild commands here
+add_custom_command(TARGET csr POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${LIBSTDJASM_OUTPUT_DIR}"
+            "${PROJECT_BINARY_DIR}/bin/${OUTPUT_PATH}/"
+)
+#end_command
 
 target_link_libraries(csr
     PUBLIC 
