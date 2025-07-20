@@ -27,6 +27,13 @@ class RAM
             // allocation map will hold 1 bit for each cell. 
             // so each byte refers to 8 cells. heap size must
             // be multiple of 8
+#ifndef NDEBUG
+            if (heapSize % 8 != 0)
+                CRASH(
+                    Error::Bad,
+                    "heap size must be a multiple of 8."
+                );
+#endif
         }
 
         RAM& operator=(RAM&& other);

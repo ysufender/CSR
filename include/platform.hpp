@@ -8,7 +8,6 @@
 
     using dlID_t = HINSTANCE;
     using sym_t = FARPROC
-#define SYSFN (*__cdecl)
 #elif defined(unix) || defined(__unix) || defined(__unix__)
     #include <dlfcn.h>
     #include <unistd.h>
@@ -16,7 +15,6 @@
 
     using dlID_t = void*;
     using sym_t = void*;
-#define SYSFN (*)
 #elif defined(__APPLE__) || defined(__MACH__)
     #include <dlfcn.h>
     #include <mach-o/dyld.h>
@@ -24,8 +22,9 @@
 
     using dlID_t = void*;
     using sym_t = void*;
-#define SYSFN (*)
 #endif
+
+#define SYSFN (*)
 
 dlID_t DLLoad(std::string_view path);
 bool DLUnload(dlID_t dlID);

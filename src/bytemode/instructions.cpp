@@ -2326,9 +2326,13 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                 cpu.state.pc += 4;
            
             // address is now the function id
-            const char* const ret {
+            std::unique_ptr<const char[]> ret {
                 cpu.board.assembly.SysCallHandler()(address, params.data)
             };
+
+            // function is void and returned without and error
+            if (ret == nullptr)
+                return Error::Ok;
 
             System::ErrorCode err { ret[0] };
 
@@ -2345,7 +2349,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
 
             if (ret[1] != 0)
             {
-                Slice retVal (ret+2, ret[1]);
+                Slice retVal (&ret[2], ret[1]);
                 err = cpu.board.ram.WriteSome(cpu.state.sp - cpu.state.bl, retVal);
 
                 if (err != Error::Ok)
@@ -2362,7 +2366,6 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                 cpu.state.sp += (-cpu.state.bl) + retVal.size;
             }
 
-            delete[] ret;
             return Error::Ok;
         }
 

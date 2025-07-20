@@ -1,7 +1,7 @@
 #include <cassert>
-#include <memory>
 #include <string>
 
+#include "bytemode/instructions.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/assembly.hpp"
 #include "bytemode/cpu.hpp"
@@ -67,7 +67,7 @@ Error CPU::Cycle() noexcept
         Return,
         Deallocate,
         Sub32, SubFloat, Sub8, SubReg, SubReg, SubReg,
-        SubSafe32, SubSafeFloat, SubSafe8,
+        SubSafe32, SubSafeFloat, SubSafe8
     };
 
     char op;
@@ -154,18 +154,6 @@ Error CPU::Pop() noexcept
         return System::ErrorCode::IndexOutOfBounds;
     }
 
-    //Error errc { this->board.ram.Write(this->state.sp, 0) };
-    //
-    //if (errc == System::ErrorCode::Ok)
-    //    this->state.sp--;
-    //else
-    //    LOGE(
-    //        System::LogLevel::Medium,
-    //        "In ", this->board.GetExecutingProcess().Stringify(),
-    //        " error while popping value onto stack. Error code: ",
-    //        System::ErrorCodeString(errc)
-    //    );
-
     this->state.sp--;
     return Error::Ok;
 }
@@ -210,21 +198,6 @@ Error CPU::PopSome(const sysbit_t size) noexcept
 
         return System::ErrorCode::IndexOutOfBounds;
     }
-
-    //// This part is for when we want to set popped memory to zero.
-    ///  So no need. Why did I even write this?
-    //std::unique_ptr<char[]> zeros { std::make_unique<char[]>(size) };
-    //Error errc { this->board.ram.WriteSome(this->state.sp-size, {zeros.get(), size}) };
-    //
-    //if (errc == System::ErrorCode::Ok)
-    //    this->state.sp-=size;
-    //else
-    //    LOGE(
-    //        System::LogLevel::Medium,
-    //        "In ", this->board.GetExecutingProcess().Stringify(),
-    //        " error while popping value onto stack. Error code: ",
-    //        System::ErrorCodeString(errc)
-    //    );
 
     this->state.sp -= size;
     return Error::Ok;

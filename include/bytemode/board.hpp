@@ -53,7 +53,7 @@ class Board : IMessageObject
 
         class Assembly& assembly;
         RAM ram { *this };
-        CPU cpu; 
+        CPU cpu;
 
         mutable std::string reprStr;
 };

@@ -14,10 +14,10 @@
 // arr[1] is returned value size in bytes
 // rest is returned data 
 // must be freed by CSR
-using SysFunctionHandler = const char* const SYSFN(const char* const);
+using SysFunctionHandler = const char* const SYSFN(const char* const) noexcept;
+using sysfnh_t = SysFunctionHandler;
 
 using SysFunctionMap = std::unordered_map<sysbit_t, SysFunctionHandler>;
-using sysfnh_t = const char* const SYSFN(const char* const);
 using DLList = std::unordered_set<dlID_t>;
 
 // Interface for dynamic libraries to bind functions and extend the script capabilities
@@ -30,7 +30,7 @@ class ISysCallHandler
 
 // Initializer function signature for extender DLs
 // name must be specifically InitExtender
-using extInit_t = char SYSFN (ISysCallHandler*);
+using extInit_t = char SYSFN (ISysCallHandler*) noexcept;
 
 class SysCallHandler : public ISysCallHandler
 {

@@ -33,3 +33,6 @@
 the VM regulations (correct Initializer/FunctionHandler signatures) you can call any language from the bytecode.
 
 ## Ideas
+
+- Create a ByteIterator to return an iterator from `BytesFromX` functions instead of doing
+memory allocations. It'll improve the performance methinks.

@@ -143,8 +143,8 @@ Error Assembly::Run() noexcept
     if (code != System::ErrorCode::Ok)
         return code;
 
-    // Send Shutdown Signal to VM
-    if (this->boards.size() == 0)
+    // Send Shutdown Signal to VM if the Assembly is not a runtime Library
+    if (this->boards.size() == 0 && this->settings.type != AssemblyType::Library)
     {
         std::unique_ptr<char[]> data { new char[5] };
         char* id { BytesFromInteger<sysbit_t, char>(this->settings.id) };
