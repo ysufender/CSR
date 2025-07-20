@@ -2327,7 +2327,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
            
             // address is now the function id
             std::unique_ptr<const char[]> ret {
-                cpu.board.assembly.SysCallHandler()(address, params.data)
+                cpu.board.assembly.SysCallHandler()(address, (params.size != 0) ? params.data : nullptr)
             };
 
             // function is void and returned without and error
