@@ -27,7 +27,7 @@ Here is the helper text from the current version of CSR:
 
 Common Script Runtime (CSR)
         Description: Common Script Runtime for JASM Bytecode
-        Version: 0.1.0
+        Version: 0.1.1
         Enable JIT: Unavailable
 
 Available Flags:

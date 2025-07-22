@@ -502,20 +502,21 @@ OPR CPU::MemCopy(CPU& cpu) noexcept
         sysbit_t toAddr { GetRegister32Bit(RegisterModeFlags::ebx, cpu.state) };
         sysbit_t size { GetRegister32Bit(RegisterModeFlags::ecx, cpu.state) };
 
-        auto modeCheck = [&cpu](MemoryModeFlags flag, sysbit_t addr) -> bool {
-            if (flag == MemoryModeFlags::Stack)
-                return (addr < cpu.board.ram.StackSize());
-            return ((addr >= cpu.board.ram.StackSize()) && (addr < cpu.board.ram.Size()));
-        };
-
-        if (!modeCheck(from, fromAddr) || !modeCheck(to, toAddr))
-            CRASH(
-                System::ErrorCode::RAMAccessError,
-                "In ", cpu.board.Stringify(), nameof(MemCopy) , " missmatching memory modes and addresses.\n",
-                "From Flag: ", MemoryModeFlagsString(from), " From Addr: ", std::to_string(fromAddr),
-                "\nTo Flag: ", MemoryModeFlagsString(to), " To Addr: ", std::to_string(toAddr),
-                "\n Heap Start: ", std::to_string(cpu.board.ram.StackSize())
-            );
+        // Disable stupid mode check
+//        auto modeCheck = [&cpu](MemoryModeFlags flag, sysbit_t addr) -> bool {
+//            if (flag == MemoryModeFlags::Stack)
+//                return (addr < cpu.board.ram.StackSize());
+//            return ((addr >= cpu.board.ram.StackSize()) && (addr < cpu.board.ram.Size()));
+//        };
+//
+//        if (!modeCheck(from, fromAddr) || !modeCheck(to, toAddr))
+//            CRASH(
+//                System::ErrorCode::RAMAccessError,
+//                "In ", cpu.board.Stringify(), nameof(MemCopy) , " missmatching memory modes and addresses.\n",
+//                "From Flag: ", MemoryModeFlagsString(from), " From Addr: ", std::to_string(fromAddr),
+//                "\nTo Flag: ", MemoryModeFlagsString(to), " To Addr: ", std::to_string(toAddr),
+//                "\n Heap Start: ", std::to_string(cpu.board.ram.StackSize())
+//            );
         
         if ((toAddr + size) > cpu.board.ram.Size())
             CRASH(
@@ -862,7 +863,6 @@ OPR CPU::Decrement(CPU& cpu) noexcept
 
             case OpCodes::dcrf:
             {
-                std::cout << "SP: " << cpu.state.sp << '\n';
                 if (cpu.state.sp < 4)
                     CRASH(
                         System::ErrorCode::Bad,
@@ -2329,6 +2329,8 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                 cpu.board.assembly.SysCallHandler()(address, (params.size != 0) ? params.data : nullptr)
             };
 
+            cpu.state.bl = ret == nullptr ? 0 : ret[1];
+
             // function is void and returned without and error
             if (ret.get() == nullptr)
                 return Error::Ok;
@@ -2383,14 +2385,14 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
         cpu.PushSome({bytes, 4});
         delete[] bytes;
 
-        // Change pc 
+        // Change pc and bp
+        cpu.state.pc = address;
         cpu.state.bp = cpu.state.sp;
 
         // Copy params 
         System::ErrorCode err;
         err = cpu.PushSome(params);
 
-        cpu.state.pc = address;
         return err;,
 
         return exc.GetCode();,
@@ -2795,21 +2797,23 @@ OPR CPU::Return(CPU& cpu) noexcept
         cpu.board.ram.ReadSome(cpu.state.bp - 4, 4).data
     )};
 
-
     System::ErrorCode err;
+    
     if (cpu.state.bl != 0)
     {
         Slice returnValues { cpu.board.ram.ReadSome(
             cpu.state.sp - cpu.state.bl,
             cpu.state.bl
         )};
-        cpu.PopSome(cpu.state.sp - cpu.state.bp);
-        err = cpu.PushSome(returnValues);
+        cpu.PopSome(cpu.state.sp - cpu.state.bp + 8);
+        cpu.PushSome(returnValues);
     }
+    else
+        cpu.PopSome(cpu.state.sp - cpu.state.bp + 8);
 
     cpu.state.bp = bpToReturnTo;
     cpu.state.pc = pcToReturnTo;
-
+    
     return err;
 }
 
