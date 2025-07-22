@@ -1,4 +1,3 @@
-#include <type_traits>
 #include <cstring>
 #include <string>
 #include <array>
@@ -2331,7 +2330,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
             };
 
             // function is void and returned without and error
-            if (ret == nullptr)
+            if (ret.get() == nullptr)
                 return Error::Ok;
 
             System::ErrorCode err { ret[0] };
@@ -2349,8 +2348,8 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
 
             if (ret[1] != 0)
             {
-                Slice retVal (&ret[2], ret[1]);
-                err = cpu.board.ram.WriteSome(cpu.state.sp - cpu.state.bl, retVal);
+                Slice retVal (ret.get()+2, ret[1]);
+                err = cpu.PushSome(retVal);
 
                 if (err != Error::Ok)
                 {
@@ -2362,8 +2361,6 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                     );
                     return err;
                 }
-
-                cpu.state.sp += (-cpu.state.bl) + retVal.size;
             }
 
             return Error::Ok;
@@ -2806,10 +2803,9 @@ OPR CPU::Return(CPU& cpu) noexcept
             cpu.state.sp - cpu.state.bl,
             cpu.state.bl
         )};
-        err = cpu.board.ram.WriteSome(cpu.state.bp - 8 - cpu.state.bl, returnValues);
+        cpu.PopSome(cpu.state.sp - cpu.state.bp);
+        err = cpu.PushSome(returnValues);
     }
-
-    cpu.PopSome(cpu.state.sp - (cpu.state.bp - 8) - cpu.state.bl);
 
     cpu.state.bp = bpToReturnTo;
     cpu.state.pc = pcToReturnTo;
@@ -2930,7 +2926,7 @@ OPR CPU::SubReg(CPU& cpu) noexcept
         {
             uchar_t regLhsRef { GetRegister8Bit(regLhs, cpu.state) };
             uchar_t& regRhsRef { GetRegister8Bit(regRhs, cpu.state) };
-            regLhsRef -= regRhsRef;
+            regRhsRef = regLhsRef - regRhsRef;
         }
         else if (op == OpCodes::subrf)
         {
@@ -2959,7 +2955,7 @@ OPR CPU::SubReg(CPU& cpu) noexcept
         {
             sysbit_t regLhsRef { GetRegister32Bit(regLhs, cpu.state) };
             sysbit_t& regRhsRef { GetRegister32Bit(regRhs, cpu.state) };
-            regLhsRef -= regRhsRef;
+            regRhsRef = regLhsRef - regRhsRef;
         }
 
         return System::ErrorCode::Ok;,
