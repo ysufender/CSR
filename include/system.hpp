@@ -11,7 +11,7 @@
 #include "CLIParser.hpp"
 
 #ifndef NDEBUG
-    #define LOGD(...) System::LogInternal(Extensions::String::Concat({__VA_ARGS__}), __FILE__, __LINE__)
+    #define LOGD(...) System::LogInternal(Extensions::String::Concat({"[DEBUG] ", __VA_ARGS__}), __FILE__, __LINE__)
 #else
     #define LOGD(...)
 #endif

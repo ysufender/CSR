@@ -96,7 +96,12 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
         return code;
     }
 
-    extInit_t stdlibInit { DLSym<extInit_t>(stdlib, "STDLibInit") };
+    stdlibInit_t stdlibInit { DLSym<stdlibInit_t>(stdlib, "STDLibInit") };
+    if (!stdlibInit)
+    {
+        LOGE(System::LogLevel::Medium, "Failed to initialize standard library. No symbol STDLibInit found.");
+        return Error::DLInitError;
+    }
     if (stdlibInit(&this->asmIds.at(settings.id)->SysCallHandler()) != static_cast<char>(Error::Ok))
     {
         LOGE(System::LogLevel::Medium, "Failed to load standard library for assembly ", settings.path.generic_string());
@@ -108,7 +113,7 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     if (!this->settings.unsafe)
         return code;
 
-    std::filesystem::path dlPath { settings.path };
+    std::filesystem::path dlPath { GetExePath().parent_path().append("lib"+settings.path.filename().string()) };
 #if defined(_WIN32) || defined(__CYGWIN__)
     dlPath.replace_extension("dll");
 #elif defined(unix) || defined(__unix) || defined(__unix__)
@@ -118,27 +123,36 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
 #endif
     
     LOG("Loading ",
-        dlPath.filename().generic_string(),
+        dlPath.string(),
         " for assembly ",
-        settings.path.filename().generic_string()
+        settings.path.filename().string()
     );
 
     dlID_t extDl;
     try_catch(
-        extDl = this->asmIds.at(settings.id)->SysCallHandler().LoadDl(dlPath.generic_string());,
+        extDl = this->asmIds.at(settings.id)->SysCallHandler().LoadDl(dlPath.string());,
         code = exc.GetCode();,
         code = Error::UnhandledException; 
     )
 
     if (code != Error::Ok)
     {
-        LOGE(System::LogLevel::Medium, "Failed to load extender DL for assembly ", settings.path.generic_string());
+        LOGE(System::LogLevel::Medium, "Failed to load extender DL for assembly ", settings.path.string());
         this->RemoveAssembly(settings.id);
         return code;
     }
 
+    LOGD("Calling InitExtender for", dlPath.string());
+
     extInit_t extenderInit { DLSym<extInit_t>(extDl, "InitExtender") };
-    if (extenderInit(&this->asmIds.at(settings.id)->SysCallHandler()) != static_cast<char>(Error::Ok))
+    if (!extenderInit)
+    {
+        LOGE(System::LogLevel::Medium, "Failed to initialize extender. No symbol InitExtender found.");
+        return Error::DLInitError;
+    }
+
+    ISysCallHandler* handlerPtr { &this->asmIds.at(settings.id)->SysCallHandler() };
+    if (extenderInit(handlerPtr, &SysCallBinder, &SysCallUnbinder) != static_cast<char>(Error::Ok))
     {
         LOGE(System::LogLevel::Medium, "Failed to initialize extender for assembly ", settings.path.generic_string());
         this->RemoveAssembly(settings.id);

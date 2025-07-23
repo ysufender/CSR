@@ -124,3 +124,13 @@ sysfnh_t SysCallHandler::MakeFunctionHandler(dlID_t dll, std::string_view functi
     );
     return nullptr;
 }
+
+char SysCallBinder(void *scallH, sysbit_t id, SysFunctionHandler handler) noexcept
+{
+    return reinterpret_cast<ISysCallHandler*>(scallH)->BindFunction(id, handler);
+}
+
+char SysCallUnbinder(void *scallH, sysbit_t id) noexcept
+{
+    return reinterpret_cast<ISysCallHandler*>(scallH)->UnbindFunction(id);
+}

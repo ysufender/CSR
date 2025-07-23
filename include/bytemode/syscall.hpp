@@ -20,17 +20,24 @@ using sysfnh_t = SysFunctionHandler;
 using SysFunctionMap = std::unordered_map<sysbit_t, SysFunctionHandler>;
 using DLList = std::unordered_set<dlID_t>;
 
-// Interface for dynamic libraries to bind functions and extend the script capabilities
+// ~Interface for dynamic libraries to bind functions and extend the script capabilities~
+// Only for standard library
 class ISysCallHandler
 {
     public:
         virtual char BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept = 0;
         virtual char UnbindFunction(sysbit_t id) noexcept = 0;
 };
+using stdlibInit_t = char SYSFN(ISysCallHandler*) noexcept;
+using fnBinder_t = char SYSFN(void*, sysbit_t, SysFunctionHandler) noexcept;
+using fnUnbinder_t = char SYSFN(void*, sysbit_t) noexcept;
+
+char SysCallBinder(void* scallH, sysbit_t id, SysFunctionHandler handler) noexcept;
+char SysCallUnbinder(void* scallH, sysbit_t id) noexcept;
 
 // Initializer function signature for extender DLs
 // name must be specifically InitExtender
-using extInit_t = char SYSFN (ISysCallHandler*) noexcept;
+using extInit_t = char SYSFN (void*, fnBinder_t, fnUnbinder_t) noexcept;
 
 class SysCallHandler : public ISysCallHandler
 {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "system.hpp"
 #include <filesystem>
 #include <string_view>
 
@@ -33,9 +34,15 @@ std::filesystem::path GetExePath();
 template<typename T>
 T DLSym(dlID_t dlID, std::string_view name)
 {
+    dlID_t addr;
 #if defined(_WIN32) || defined(__CYGWIN__)
-    return reinterpret_cast<T>(GetProcAddress(dlID, name.data()));
+    addr = GetProcAddress(dlID, name.data());
+    if (addr)
+        return reinterpret_cast<T>(addr);
 #elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
-    return reinterpret_cast<T>(dlsym(dlID, name.data()));
+    addr = dlsym(dlID, name.data());
+    if (addr)
+        return reinterpret_cast<T>(addr);
 #endif   
+    return nullptr;
 }
