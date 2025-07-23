@@ -296,17 +296,20 @@ give life to it. So now we're here, just because I wanteed to call some native f
 Now, technically, as long as a dynamic library has the following qualifications:
 
 1- Is in the same directory as the script file and has the same name. For example `proj/script.so` is the extender for `proj/script.jef`.
-2- Has an `InitExtender` function following the signature `char __cdecl InitExtender(ISysCallHandler*)` that's name isn't mangled and is following C ABI.
-3- Binds functions to ids using `ISysCallHandler::BindFunction(uint32_t, SysFunctionHandler)` where `SysFunctionHandler` is the
-function signature `const char* const __cdecl FunctionName(const char* const)`.
+2- Has an `InitExtender` function following the signature `char InitExtender(void*, fnBinder_t, fnUnbinder_tfnBinder_t, fnUnbinder_t)` 
+that's name isn't mangled and is following C ABI, where fnBinder_t is `char (void*, sysbit_t, SysFunctionHandler)` and fnUnbinder_t is
+`char (void*, sysbit_t)` and `SysFunctionHandler` is the function signature 
+`const char* const (const char* const)`
+3- Binds functions to ids using the passed fnBinder_t like `binder(handler, id, fn)` where handler
+is the `void*` passed to `InitExtender`.
 
-it can bind functions to ids in an Assembly's SysCallHandler, which can then be called by the `cal` instruction. `cal`
+can bind functions to ids in an Assembly's SysCallHandler, which can then be called by the `cal` instruction. `cal`
 instruction works the same for native calls, `bl` contains the parameter size in bytes and the top of the stack contains
 the parameters of that size. The passed address must be the function id bound to that specific system call.
 
 JASM Standard Library is literally just a bunch of bindings for native calls. The `libstdjasm` dynamic library resides beside
 the `csr` executable and when an Assembly is added to the VM, the VM loads that library and calls it's `STDLibInit` function which
-has the same signature as `InitExtender`s. The passed `ISysCallHandler*` is the pointer to the SysCallHandler of the added Assembly.
+has the signature `char STDLibInit(ISysCallHandler*)`s. The passed `ISysCallHandler*` is the pointer to the SysCallHandler of the added Assembly.
 So standard function calls can be done using syscalls!
 
 ### Calling Native Functions
@@ -342,32 +345,30 @@ value would be pushed to the stack just like it is pushed when calling JASM func
 ### Extenders
 
 I explained what extenders are in the main header [Native Callbacks](#native-callbacks).
-Now I want to give an example on how to create an extender using the `PrintLine` function of the
-standard library.
+Now I want to give an example on how to create an extender by binding a `PrintLine` function.
 
 ```cpp
-// libstdjasm.cpp
-
 #if defined(_WIN32) || defined(__CYGWIN__)
 #define API(type) extern "C" type __declspec(dllexport) __cdecl 
 #elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
 #define API(type) extern "C" type
 #endif
 
-API(char) STDLibInit(ISysCallHandler* handler)
+using binder_t = char (*)(void*, sysbit_t, SysFunctionHandler) noexcept;
+using unbinder_t = char (*)(void*, sysbit_t) noexcept;
+
+API(char) InitExtender(void* handler, binder_t binder, unbinder_t unbinder)
 {
-    handler->BindFunction(0, &PrintLineHandler);
+    binder(handler, 13, &PrintLineHandler);
     return 0;
 }
 ```
 
-The `STDLibInit ` is literally the same as an `InitExtender` just with a different name. As you can see
-it binds the function `PrintLineHandler` to id 0 for the given handler, which happens to be the handler
-of the Assembly that is currently being added. Let's take a look at the `PrintLineHandler` function.
+As you can see, the InitExtender function binds the function `PrintLineHandler` to id 13
+for the given handler, which happens to be the handler of the Assembly that is currently 
+being added. Let's take a look at the `PrintLineHandler` function.
 
 ```cpp
-// handlers.cpp
-
 #if defined(_WIN32) || defined(__CYGWIN__)
 #define HANDLER const char* const __cdecl 
 #elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
@@ -395,26 +396,7 @@ exited correctly and doesn't have a return type. The `new char[2] { 1, 0 }` is t
 handlers. The first byte is return code, `System::ErrorCode::Bad` in this case. The second byte is the
 return size in bytes, since the function is void it's 0 in this case.
 
-As you can see, the standard library is basically an extender for every Assembly the VM contains. If we
-use the same `handlers.cpp` but use the code below instead of using `libstdjasm.cpp`
-
-```cpp
-// scriptextender.cpp
-
-#if defined(_WIN32) || defined(__CYGWIN__)
-#define API(type) extern "C" type __declspec(dllexport) __cdecl 
-#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
-#define API(type) extern "C" type
-#endif
-
-API(char) InitExtender(ISysCallHandler* handler)
-{
-    handler->BindFunction(0, &PrintLineHandler);
-    return 0;
-}
-```
-
-Now we made it a proper extender! For a script named `somescript.jef`, if we compile the code to a file
+Just like that, we made a proper extender! For a script named `somescript.jef`, if we compile the code to a file
 name `somescript.so` (or `.dll` or `.dylib` depending on your OS) and run `csr` with `--unsafe` flag,
 it'll extend the script!
 
@@ -430,6 +412,12 @@ There is a pretty good consistency with vtables when using interfaces (pure virt
 And it is pretty consistent on Unix based systems too. So, I created the pure virtual `ISysCallHandler`
 interface to take advantage of that consistency and use it to pass the pointer. Since you won't need the
 internal things of a `SysCallHandler` the interface gives a clean, well, interface too.
+
+Sadly, since the interface `ISysCallHandler` is passable around using a pointer, it still needs to
+be looked up using a vtable. So the extender should know the blueprints of the  interface. And since
+ISysCallHandler is a C++ abstract function, it isn't really compatible with C ABI so although it can
+be passed around, it can't be fiddled with. So only the standard library uses ISysCallHandler since 
+the standard library itself is also written in C++.
 
 ### About Parameters
 
