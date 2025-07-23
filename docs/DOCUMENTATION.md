@@ -145,8 +145,8 @@ A running instance of CSR can only have one VM, which holds at least as many Ass
 the executable scripts that has been passed to CSR, which hold multiple Boards that hold multiple
 Processes to enable:
 
-1- Illusional concurrency via interrupting Processes that are connected to the same Board, and
-2- True concurrency via duplicating Assemblies or Assemblies having multiple Boards.
+1) Illusional concurrency via interrupting Processes that are connected to the same Board, and  
+2) True concurrency via duplicating Assemblies or Assemblies having multiple Boards.
 
 Note that since each board has its own RAM, it is perfectly fine to run them on different threads
 without the fear of deadlocks, since they won't be accessing the same resource and depending
@@ -156,14 +156,14 @@ on one another.
 
 VM is the godfather of the runtime. Its responsibilities are:
 
-1- Managing Assemblies
-    - Adding assemblies and loading the standard library and the extenders for them
-    - Removing assemblies when they send the shutdown signals
-    - Handling any possible unhandled error that is thrown and isn't handled within
+1) Managing Assemblies  
+    - Adding assemblies and loading the standard library and the extenders for them  
+    - Removing assemblies when they send the shutdown signals  
+    - Handling any possible unhandled error that is thrown and isn't handled within  
     the Assemblies
-2- Managin interassembly communication by being a checkpoint for assemblies, and from time
+2) Managin interassembly communication by being a checkpoint for assemblies, and from time
 to time, handling the messages directly without passing them anywhere.
-3- Running the assemblies.
+3) Running the assemblies.
 
 As for now, only the 1st and 3rd responsibilities are done and the 2nd is partly done.
 VM acts as a checkpoint for messages, passes messagess between Assemblies and handles
@@ -287,20 +287,20 @@ But since SlimScript is slow, ugly and stupid in design, I decided to give up an
 But then, one day I learned about LLVM and was amazed by it. Then I asked myself, why there is no such thing for scripting
 languages? If there was something like that, every scripting language could interact with:
 
-1- Each other, and
-2- Any language that can abide by C ABI and CSR VM extender standards.
+1) Each other, and
+2) Any language that can abide by C ABI and CSR VM extender standards.
 
 So I started to form an IL and an assembler along with a linker for scripting languages to use as a backend. Then I made CSR to
 give life to it. So now we're here, just because I wanteed to call some native functions from scripts.
 
 Now, technically, as long as a dynamic library has the following qualifications:
 
-1- Is in the same directory as the script file and has the same name. For example `proj/script.so` is the extender for `proj/script.jef`.
-2- Has an `InitExtender` function following the signature `char InitExtender(void*, fnBinder_t, fnUnbinder_tfnBinder_t, fnUnbinder_t)` 
+1) Is in the same directory as the script file and has the same name. For example `proj/script.so` is the extender for `proj/script.jef`.
+2) Has an `InitExtender` function following the signature `char InitExtender(void*, fnBinder_t, fnUnbinder_tfnBinder_t, fnUnbinder_t)` 
 that's name isn't mangled and is following C ABI, where fnBinder_t is `char (void*, sysbit_t, SysFunctionHandler)` and fnUnbinder_t is
 `char (void*, sysbit_t)` and `SysFunctionHandler` is the function signature 
 `const char* const (const char* const)`
-3- Binds functions to ids using the passed fnBinder_t like `binder(handler, id, fn)` where handler
+3) Binds functions to ids using the passed fnBinder_t like `binder(handler, id, fn)` where handler
 is the `void*` passed to `InitExtender`.
 
 can bind functions to ids in an Assembly's SysCallHandler, which can then be called by the `cal` instruction. `cal`
