@@ -8,7 +8,9 @@ test/
 
 *.jef
 *.stc
-*.shd
 *.jasm
+*.shd
 *.jo
 *.project.gf
+*.so
+*.o

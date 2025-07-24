@@ -113,7 +113,7 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     if (!this->settings.unsafe)
         return code;
 
-    std::filesystem::path dlPath { GetExePath().parent_path().append("lib"+settings.path.filename().string()) };
+    std::filesystem::path dlPath { std::filesystem::absolute(settings.path.parent_path().append("lib"+settings.path.filename().string())) };
 #if defined(_WIN32) || defined(__CYGWIN__)
     dlPath.replace_extension("dll");
 #elif defined(unix) || defined(__unix) || defined(__unix__)

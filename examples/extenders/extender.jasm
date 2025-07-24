@@ -1,0 +1,11 @@
+.prep
+    org main
+    sts 64
+    sth 0
+.body
+    main:
+        raw 24 "Hello World From JASM IL" ; #push the string size and the string to stack#
+        inc %b &flg 1                       #turn on the syscall flag#
+        mov 28 &bl                          #set bl to total parameter size in bytes#
+        cal 13                              #make a syscall to the bound func with id 13#
+.end
