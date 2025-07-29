@@ -295,11 +295,11 @@ give life to it. So now we're here, just because I wanteed to call some native f
 
 Now, technically, as long as a dynamic library has the following qualifications:
 
-1) Is in the same directory as the script file and has the same name. For example `proj/script.so` is the extender for `proj/script.jef`.
-2) Has an `InitExtender` function following the signature `char InitExtender(void*, fnBinder_t, fnUnbinder_tfnBinder_t, fnUnbinder_t)` 
+1) Is in the same directory as the script file and has the same name. For example `proj/libscript.so` (or dll or dylib) is the extender 
+for `proj/script.jef`.
+2) Has an `InitExtender` function following the signature `char InitExtender(void*, fnBinder_t, fnUnbinder_t)` 
 that's name isn't mangled and is following C ABI, where fnBinder_t is `char (void*, sysbit_t, SysFunctionHandler)` and fnUnbinder_t is
-`char (void*, sysbit_t)` and `SysFunctionHandler` is the function signature 
-`const char* const (const char* const)`
+`char (void*, sysbit_t)` and `SysFunctionHandler` is the function signature `const char* const (const char* const)`
 3) Binds functions to ids using the passed fnBinder_t like `binder(handler, id, fn)` where handler
 is the `void*` passed to `InitExtender`.
 
@@ -339,7 +339,7 @@ Output is:
 ```
 
 As you can see, it is pretty simple. Since the syscall doesn't return anythin in this example,
-nothing is pushed to the stack. But if it were such a syscall that returned a function, the return
+nothing is pushed to the stack. But if it were such a syscall that returned something, the return
 value would be pushed to the stack just like it is pushed when calling JASM functions.
 
 ### Extenders
@@ -359,14 +359,14 @@ using unbinder_t = char (*)(void*, sysbit_t) noexcept;
 
 API(char) InitExtender(void* handler, binder_t binder, unbinder_t unbinder)
 {
-    binder(handler, 13, &PrintLineHandler);
+    binder(handler, 13, &PrintLine);
     return 0;
 }
 ```
 
-As you can see, the InitExtender function binds the function `PrintLineHandler` to id 13
+As you can see, the InitExtender function binds the function `PrintLine` to id 13
 for the given handler, which happens to be the handler of the Assembly that is currently 
-being added. Let's take a look at the `PrintLineHandler` function.
+being added. Let's take a look at the `PrintLine` function.
 
 ```cpp
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -375,7 +375,7 @@ being added. Let's take a look at the `PrintLineHandler` function.
 #define HANDLER const char* const
 #endif
 
-HANDLER PrintLineHandler(const char* const params) noexcept
+HANDLER PrintLine(const char* const params) noexcept
 {
     try
     {
@@ -385,16 +385,17 @@ HANDLER PrintLineHandler(const char* const params) noexcept
     }
     catch (const std::exception&)
     {
-        return new char[2] { 1, 0 };
+        return new char[1] { 1 };
     }
 }
 ```
 
 As you can see, the handler reads the size of the string from the first 4 bytes, then forms a
 `string_view` using the rest of the bytes and the size. `return nullptr` indicates that the function
-exited correctly and doesn't have a return type. The `new char[2] { 1, 0 }` is the return format of
+exited correctly and doesn't have a return type. The `new char[1] { 1 }` is the return format of
 handlers. The first byte is return code, `System::ErrorCode::Bad` in this case. The second byte is the
-return size in bytes, since the function is void it's 0 in this case.
+return size in bytes, since the function is void it should be 0 in this case but we're returning an
+error so the return size and returns are not checked.
 
 Just like that, we made a proper extender! For a script named `somescript.jef`, if we compile the code to a file
 name `somescript.so` (or `.dll` or `.dylib` depending on your OS) and run `csr` with `--unsafe` flag,

@@ -51,7 +51,8 @@ struct System
     E(DLLoadError) \
     E(DLSymbolError) \
     E(VMError) \
-    E(DLInitError)
+    E(DLInitError) \
+    E(DoubleFree)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

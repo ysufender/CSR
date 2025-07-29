@@ -13,7 +13,7 @@ unsafe fn integer_from_btyes(bytes: *const i8) -> u32
     let mut ures: u32 = 0;
     for i in 0..4 {
         ures <<= 8;
-        ures |= (*(bytes.wrapping_add(i))) as u32;
+        ures |= (*(bytes.offset(i))) as u32;
     }
 
     return ures;
@@ -28,7 +28,7 @@ type UnbindT = unsafe extern "C" fn(*mut c_void, u32) -> i8;
 unsafe extern "C" fn print_line(params: *const i8) -> *const i8
 {
     let size = integer_from_btyes(params) as usize; 
-    let bytes = std::slice::from_raw_parts((params as *const u8).wrapping_add(4), size);
+    let bytes = std::slice::from_raw_parts((params as *const u8).offset(4), size);
     let text : String = bytes.iter().map(|&b| b as char).collect();
     println!("\n{}, printed in Rust!", text);
     return std::ptr::null();

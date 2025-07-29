@@ -41,9 +41,10 @@ Print :: proc "cdecl" (params: [^]byte) -> [^]byte {
     context = runtime.default_context()
     size := cast(int)(IntegerFromBytes(params))
     byte_ptr := cast(cstring)(&params[4])
-
+    str: string = strings.clone_from_cstring_bounded(byte_ptr, size) 
+    defer delete(str)
     fmt.println()
-    fmt.println(strings.clone_from_cstring_bounded(byte_ptr, size), "printed in Odin!")
+    fmt.println(str, "printed in Odin!")
     return nil
 }
 
