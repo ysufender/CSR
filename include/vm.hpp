@@ -42,9 +42,16 @@ class VM : IMessageObject
         Error ReceiveMessage(const Message message) noexcept override;
         Error SendMessage(const Message message) noexcept override;
 
-        const Assembly& GetAssembly(const std::string& name) const;
-        const Assembly& GetAssembly(const std::string&& name) const;
-        const Assembly& GetAssembly(sysbit_t id) const;
+//        const Assembly& GetAssembly(const std::string& name) const;
+//        const Assembly& GetAssembly(const std::string&& name) const;
+
+        inline const Assembly& GetAssembly(sysbit_t id) const
+        {
+            if (!this->asmIds.contains(id))
+                CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given id'", std::to_string(id), "' couldn't be found.");
+            return *(this->asmIds.at(id));
+        }
+
         Error AddAssembly(Assembly::AssemblySettings&& settings) noexcept;
         Error RemoveAssembly(sysbit_t id) noexcept;
 
@@ -62,5 +69,17 @@ class VM : IMessageObject
 
         VM() { }
 
-        sysbit_t GenerateNewAssemblyID() const;
+        inline sysbit_t GenerateNewAssemblyID()
+        {
+            sysbit_t id { 0 };
+            for (; id <= std::numeric_limits<sysbit_t>::max(); id++)
+                if (!this->asmIds.contains(id))
+                    break;
+
+            // Since AddAssembly returns Error::Bad when asm count is max, no need to
+            // error check here because it'll always find an id. Same with all GenerateNewXID
+            // around the codebase.
+
+            return id;
+        }
 };

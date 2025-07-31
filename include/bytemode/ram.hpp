@@ -34,27 +34,55 @@ class RAM
                 );
         }
 
-        RAM& operator=(RAM&& other);
+        inline RAM& operator=(RAM&& other)
+        {
+            this->stackSize = other.stackSize;
+            this->heapSize = other.heapSize;
+            this->data = rval(other.data);
+            this->allocationMap = rval(other.allocationMap);
 
-        char Read(const sysbit_t address) const;
-        Error Write(const sysbit_t address, char value) noexcept;
+            return *this;
+        }
 
-        const Slice ReadSome(const sysbit_t address, const sysbit_t size) const;
+        inline char Read(const sysbit_t address) const
+        {
+            if (address >= (this->stackSize+this->heapSize) || address < 0)
+                crashRead(address); 
+            return this->data[address];
+        }
+
+        inline Error Write(const sysbit_t address, char value) noexcept
+        {
+            if (address >= (this->stackSize+this->heapSize) || address < 0)
+                return System::ErrorCode::RAMAccessError;
+            this->data[address] = value; 
+            return System::ErrorCode::Ok;
+        }
+
+        inline const Slice ReadSome(const sysbit_t address, const sysbit_t size) const
+        {
+            if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
+                crashRead(address); 
+
+            return { this->data.get()+address, size };
+        }
+
         Error WriteSome(const sysbit_t address, const Slice values) noexcept;
 
         sysbit_t Allocate(sysbit_t size);
         Error Deallocate(const sysbit_t address, const sysbit_t size) noexcept;
 
-        sysbit_t Size() const noexcept
+        inline constexpr sysbit_t Size() const noexcept
         { return heapSize+stackSize; }
 
-        sysbit_t StackSize() const noexcept
+        inline constexpr sysbit_t StackSize() const noexcept
         { return stackSize; }
 
-        sysbit_t HeapSize() const noexcept
+        inline constexpr sysbit_t HeapSize() const noexcept
         { return heapSize; }
 
     private:
+        void crashRead(const sysbit_t address) const;
         std::unique_ptr<uchar_t[]> allocationMap;
         std::unique_ptr<char[]> data;
         sysbit_t stackSize;

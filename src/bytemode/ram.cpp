@@ -1,52 +1,27 @@
 #include "CSRConfig.hpp"
-#include "extensions/syntaxextensions.hpp"
 #include "bytemode/board.hpp"
 #include "system.hpp"
-#include <bitset>
 #include <cassert>
+#include <cstring>
 #include <string>
 #include "bytemode/ram.hpp"
 
 //
 // RAM Implementation
 //
-char RAM::Read(const sysbit_t address) const
+void RAM::crashRead(const sysbit_t address) const
 {
-    if (address >= (this->stackSize+this->heapSize) || address < 0)
-        CRASH(
-            System::ErrorCode::RAMAccessError, 
-            "Error in ", this->board.Stringify(),
-            " Attempt to read out of bounds memory ", std::to_string(address)
-        );
-    
-    return this->data[address];
-}
-
-const Slice RAM::ReadSome(const sysbit_t address, const sysbit_t size) const
-{
-    if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
-        CRASH(
-            System::ErrorCode::RAMAccessError, 
-            "Error in ", this->board.Stringify(),
-            " Attempt to read out of bounds memory ", std::to_string(address)
-        );
-
-    return {
-        this->data.get()+address,
-        size
-    };}
-
-Error RAM::Write(const sysbit_t address, char value) noexcept
-{
-    if (address >= (this->stackSize+this->heapSize) || address < 0)
-        return System::ErrorCode::RAMAccessError;
-    this->data[address] = value; 
-    return System::ErrorCode::Ok;
+    CRASH(
+        System::ErrorCode::RAMAccessError, 
+        "Error in ", this->board.Stringify(),
+        " Attempt to read out of bounds memory ", std::to_string(address)
+    );
 }
 
 Error RAM::WriteSome(const sysbit_t address, const Slice values) noexcept
 {
-    if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+values.size) > this->stackSize+this->heapSize)
+    const sysbit_t limit { this->stackSize+this->heapSize };
+    if (address >= limit || address < 0 || (address+values.size) > limit)
     {
         LOGE(
             System::LogLevel::Medium, 
@@ -57,26 +32,8 @@ Error RAM::WriteSome(const sysbit_t address, const Slice values) noexcept
         return System::ErrorCode::RAMAccessError;
     }
 
-    System::ErrorCode status { System::ErrorCode::Ok };
-    for(sysbit_t i = 0; i < values.size; i++)
-    {
-        status = this->Write(address+i, values[i]);
-
-        if (status != System::ErrorCode::Ok)
-        {
-            LOGE(
-                System::LogLevel::Medium,
-                "Error in ",
-                this->board.Stringify(), 
-                ". Can't write to RAM address ", std::to_string(address),
-                ". Error code: ", System::ErrorCodeString(status)
-            );
-            break;
-        }
-            
-    }
-
-    return status;
+    std::memcpy(this->data.get()+address, values.data, values.size);
+    return System::ErrorCode::Ok;
 }
 
 sysbit_t RAM::Allocate(sysbit_t size)
@@ -156,14 +113,4 @@ Error RAM::Deallocate(const sysbit_t address, const sysbit_t size) noexcept
     }
 
     return System::ErrorCode::Ok;
-}
-
-RAM& RAM::operator=(RAM&& other)
-{
-    this->stackSize = other.stackSize;
-    this->heapSize = other.heapSize;
-    this->data = rval(other.data);
-    this->allocationMap = rval(other.allocationMap);
-
-    return *this;
 }

@@ -193,19 +193,21 @@ OPR CPU::ReadFromRegister(CPU& cpu) noexcept
     try_catch(
         RegisterModeFlags reg { cpu.board.assembly.Rom().Read(cpu.state.pc) };
         sysbit_t size { Is8BitReg(reg) ? sysbit_t{1} : sysbit_t{4} };
-        char* data;
+        System::ErrorCode err;
 
         if (Is8BitReg(reg))
-            data = BytesFromInteger<uchar_t>(GetRegister8Bit(reg, cpu.state));
+        {
+            char data[1];
+            BytesFromInteger<uchar_t>(GetRegister8Bit(reg, cpu.state), data);
+            err = cpu.PushSome({ data, size });
+        }
         else
-            data = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg, cpu.state));
-
-        Error err = cpu.PushSome({
-            data,
-            size
-        });
+        {
+            char data[4];
+            BytesFromInteger<sysbit_t>(GetRegister32Bit(reg, cpu.state), data);
+            err = cpu.PushSome({ data, size });
+        }
         
-        delete[] data;
         cpu.state.pc++;
         return err;,
 
@@ -301,13 +303,10 @@ OPR CPU::Add32(CPU& cpu) noexcept
         int2 = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
         cpu.PopSome(4);
 
-        char* data { BytesFromInteger(int1+int2) };
-        Error err { cpu.PushSome({
-            data,
-            4
-        })};
+        char data[4];
+        BytesFromInteger(int1+int2, data);
+        Error err { cpu.PushSome({ data, 4 })};
 
-        delete[] data;
         return err;,
 
         return exc.GetCode();,
@@ -325,13 +324,10 @@ OPR CPU::AddFloat(CPU& cpu) noexcept
         float2 = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
         cpu.PopSome(4);
 
-        char* data { BytesFromFloat<char>(float1+float2) };
-        Error err { cpu.PushSome({
-            data,
-            4
-        })};
+        char data[4];
+        BytesFromFloat<char>(float1+float2, data);
+        Error err { cpu.PushSome({ data, 4 })};
 
-        delete[] data;
         return err;,
 
         return exc.GetCode();,
@@ -397,23 +393,15 @@ OPR CPU::AddReg(CPU& cpu) noexcept
             sysbit_t reg1ref { GetRegister32Bit(reg1, cpu.state) };
             sysbit_t& reg2ref { GetRegister32Bit(reg2, cpu.state) };
 
-            char* data { BytesFromInteger(reg1ref) };
-            float float1 { FloatFromBytes(
-                data
-            )};
-            delete[] data;
+            char data[4];
+            BytesFromInteger(reg1ref, data);
+            float float1 { FloatFromBytes( data)};
 
-            data = BytesFromInteger(reg2ref);
-            float float2 { FloatFromBytes(
-                data
-            )};
-            delete[] data;
+            BytesFromInteger(reg2ref, data);
+            float float2 { FloatFromBytes( data)};
 
-            data = BytesFromFloat(float1+float2);
-            reg2ref = IntegerFromBytes<sysbit_t>(
-                data
-            );
-            delete[] data;
+            BytesFromFloat(float1+float2, data);
+            reg2ref = IntegerFromBytes<sysbit_t>( data);
         }
         else
         {
@@ -437,12 +425,9 @@ OPR CPU::AddSafe32(CPU& cpu) noexcept
         int1 = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
         int2 = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data);
 
-        char* data { BytesFromInteger(int1+int2) };
-        Error err { cpu.PushSome({
-            data,
-            4
-        })};
-        delete[] data;
+        char data[4];
+        BytesFromInteger(int1+int2, data);
+        Error err { cpu.PushSome({ data, 4 })};
 
         return err;,
 
@@ -459,12 +444,9 @@ OPR CPU::AddSafeFloat(CPU& cpu) noexcept
         float1 = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
         float2 = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data);
 
-        char* data { BytesFromFloat<char>(float1+float2) };
-        Error err { cpu.PushSome({
-            data,
-            4
-        })};
-        delete[] data;
+        char data[4];
+        BytesFromFloat<char>(float1+float2, data);
+        Error err { cpu.PushSome({ data, 4 })};
 
         return err;,
 
@@ -568,12 +550,9 @@ OPR CPU::Increment(CPU& cpu) noexcept
                     cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                 )};
 
-                char* data { BytesFromInteger(stack+amount) };
-                Error code { cpu.board.ram.WriteSome(
-                    cpu.state.sp-4,
-                    {data, 4}
-                )};
-                delete[] data;
+                char data[4];
+                BytesFromInteger(stack+amount, data);
+                Error code { cpu.board.ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                 if (code == System::ErrorCode::Ok)
                     cpu.state.pc+=4;
@@ -598,12 +577,9 @@ OPR CPU::Increment(CPU& cpu) noexcept
                     cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data      
                 )};
 
-                char* data { BytesFromFloat(amount+stack) };
-                Error code { cpu.board.ram.WriteSome(
-                    cpu.state.sp-4,
-                    {data, 4}
-                )};
-                delete[] data;
+                char data[4];
+                BytesFromFloat(amount+stack, data);
+                Error code { cpu.board.ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                 if (code == System::ErrorCode::Ok)
                     cpu.state.pc+=4;
@@ -681,17 +657,16 @@ OPR CPU::IncrementReg(CPU& cpu) noexcept
                     cpu.state
                 )};
 
-                char* data { BytesFromInteger(reg) };
+                char data[4];
+                BytesFromInteger(reg, data);
                 float regVal { FloatFromBytes(data)}; 
-                delete[] data;
 
                 float amount { FloatFromBytes(
                     cpu.board.assembly.Rom().ReadSome(cpu.state.pc+1, 4).data      
                 )};
 
-                data = BytesFromFloat(regVal+amount);
+                BytesFromFloat(regVal+amount, data);
                 reg = IntegerFromBytes<sysbit_t>(data);
-                delete[] data;
 
                 cpu.state.pc+=5;
                 return System::ErrorCode::Ok;
@@ -746,12 +721,9 @@ OPR CPU::IncrementSafe(CPU& cpu) noexcept
                     cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                 )};
 
-                char* data { BytesFromInteger(stack+amount) };
-                Error code { cpu.PushSome({
-                    data, 
-                    4
-                })};
-                delete[] data;
+                char data[4];
+                BytesFromInteger(stack+amount, data);
+                Error code { cpu.PushSome({ data, 4 })};
 
                 if (code == System::ErrorCode::Ok)
                     cpu.state.pc+=4;
@@ -776,12 +748,9 @@ OPR CPU::IncrementSafe(CPU& cpu) noexcept
                     cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data      
                 )};
 
-                char* data { BytesFromFloat(amount+stack) };
-                Error code { cpu.PushSome({
-                    data,
-                    4
-                })};
-                delete[] data;
+                char data[4];
+                BytesFromFloat(amount+stack, data);
+                Error code { cpu.PushSome({ data, 4 })};
 
                 if (code == System::ErrorCode::Ok)
                     cpu.state.pc+=4;
@@ -848,12 +817,9 @@ OPR CPU::Decrement(CPU& cpu) noexcept
                     cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                 )};
 
-                char* data { BytesFromInteger(stack - amount) };
-                Error code { cpu.board.ram.WriteSome(
-                    cpu.state.sp-4,
-                    {data, 4}
-                )};
-                delete[] data;
+                char data[4];
+                BytesFromInteger(stack - amount, data);
+                Error code { cpu.board.ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                 if (code == System::ErrorCode::Ok)
                     cpu.state.pc+=4;
@@ -878,12 +844,9 @@ OPR CPU::Decrement(CPU& cpu) noexcept
                     cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data      
                 )};
 
-                char* data { BytesFromFloat(stack - amount) };
-                Error code { cpu.board.ram.WriteSome(
-                    cpu.state.sp-4,
-                    {data, 4}
-                )};
-                delete[] data;
+                char data[4];
+                BytesFromFloat(stack - amount, data);
+                Error code { cpu.board.ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                 if (code == System::ErrorCode::Ok)
                     cpu.state.pc+=4;
@@ -960,17 +923,16 @@ OPR CPU::DecrementReg(CPU& cpu) noexcept
                     cpu.state
                 )};
 
-                char* data { BytesFromInteger(reg) };
+                char data[4];
+                BytesFromInteger(reg, data);
                 float regVal { FloatFromBytes(data)}; 
-                delete[] data;
 
                 float amount { FloatFromBytes(
                     cpu.board.assembly.Rom().ReadSome(cpu.state.pc+1, 4).data      
                 )};
 
-                data = BytesFromFloat(regVal - amount);
+                BytesFromFloat(regVal - amount, data);
                 reg = IntegerFromBytes<sysbit_t>(data);
-                delete[] data;
 
                 cpu.state.pc+=5;
                 return System::ErrorCode::Ok;
@@ -1024,12 +986,9 @@ OPR CPU::DecrementSafe(CPU& cpu) noexcept
                     cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                 )} ;
 
-                char* data { BytesFromInteger(stack - amount) };
-                Error code { cpu.PushSome({
-                    data, 
-                    4
-                })};
-                delete[] data;
+                char data[4];
+                BytesFromInteger(stack - amount, data);
+                Error code { cpu.PushSome({ data, 4 })};
 
                 if (code == System::ErrorCode::Ok)
                     cpu.state.pc+=4;
@@ -1054,12 +1013,9 @@ OPR CPU::DecrementSafe(CPU& cpu) noexcept
                     cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data      
                 )};
 
-                char* data { BytesFromFloat(stack - amount) };
-                Error code { cpu.PushSome({
-                    data,
-                    4
-                })};
-                delete[] data;
+                char data[4];
+                BytesFromFloat(stack - amount, data);
+                Error code { cpu.PushSome({ data, 4 })};
 
                 if (code == System::ErrorCode::Ok)
                     cpu.state.pc+=4;
@@ -1256,23 +1212,17 @@ OPR CPU::SwapTop(CPU& cpu) noexcept
                 )};
 
                 {
-                    char* data { BytesFromInteger(top) };
-                    Error err { cpu.board.ram.WriteSome(
-                        cpu.state.sp-8,
-                        {data, 4} 
-                    )};
-                    delete[] data;
+                    char data[4];
+                    BytesFromInteger(top, data);
+                    Error err { cpu.board.ram.WriteSome( cpu.state.sp-8, {data, 4} )};
 
                     if (err != System::ErrorCode::Ok)
                         return err;
                 }
 
-                char* data { BytesFromInteger(bottom) };
-                Error err { cpu.board.ram.WriteSome(
-                    cpu.state.sp-4,
-                    {data, 4}
-                )};
-                delete[] data;
+                char data[4];
+                BytesFromInteger(bottom, data);
+                Error err { cpu.board.ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                 return err;
             }
@@ -1470,15 +1420,9 @@ OPR CPU::Invert(CPU& cpu) noexcept
 
                 top32 = ~top32;
 
-                char* data { BytesFromInteger(
-                    top32
-                )};
-
-                err = cpu.PushSome({
-                    data,
-                    4
-                });
-                delete[] data;
+                char data[4];
+                BytesFromInteger(top32, data);
+                err = cpu.PushSome({ data, 4 });
 
                 return err;
             }
@@ -1538,15 +1482,9 @@ OPR CPU::InvertSafe(CPU& cpu) noexcept
 
                 top32 = ~top32;
 
-                char* data { BytesFromInteger(
-                    top32
-                )};
-
-                Error err { cpu.PushSome({
-                    data,
-                    4
-                })};
-                delete[] data;
+                char data[4];
+                BytesFromInteger(top32, data);
+                Error err { cpu.PushSome({ data, 4 })};
 
                 return err;
             }
@@ -1925,20 +1863,16 @@ OPR CPU::PowRegister(CPU& cpu) noexcept
 
             case OpCodes::powrf:
             {
-                char* bytes;
-
-                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state));
-                base = FloatFromBytes(bytes);
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state), data);
+                base = FloatFromBytes(data);
                 
-                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state));
-                power = FloatFromBytes(bytes);
-                delete[] bytes;
+                BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state), data);
+                power = FloatFromBytes(data);
 
                 float res { std::pow(base, power) };
-                bytes = BytesFromFloat(res);
-                GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(bytes);
-                delete[] bytes;
+                BytesFromFloat(res, data);
+                GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(data);
                 break;
             }
             
@@ -1985,9 +1919,9 @@ OPR CPU::PowStack(CPU& cpu) noexcept
                     return err;
 
                 sysbit_t res { static_cast<sysbit_t>(std::pow(base, power)) };
-                char* bytes { BytesFromInteger<sysbit_t>(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2002,9 +1936,9 @@ OPR CPU::PowStack(CPU& cpu) noexcept
                     return err;
 
                 float res { std::pow(base, power) };
-                char* bytes { BytesFromFloat(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromFloat(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2052,9 +1986,9 @@ OPR CPU::PowConst(CPU& cpu) noexcept
                 cpu.state.pc += 8;
 
                 sysbit_t res { static_cast<sysbit_t>(std::pow(base, power)) };
-                char* bytes { BytesFromInteger<sysbit_t>(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2066,9 +2000,9 @@ OPR CPU::PowConst(CPU& cpu) noexcept
                 cpu.state.pc += 8;
 
                 float res { std::pow(base, power) };
-                char* bytes { BytesFromFloat(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromFloat(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2112,16 +2046,14 @@ OPR CPU::SqrtRegister(CPU& cpu) noexcept
 
             case OpCodes::sqrrf:
             {
-                char* bytes;
+                char* data;
 
-                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg, cpu.state));
-                num = FloatFromBytes(bytes);
-                delete[] bytes;
+                BytesFromInteger<sysbit_t>(GetRegister32Bit(reg, cpu.state), data);
+                num = FloatFromBytes(data);
                 
                 float res { std::sqrt(num) };
-                bytes = BytesFromFloat(res);
-                cpu.state.eax = IntegerFromBytes<sysbit_t>(bytes);
-                delete[] bytes;
+                BytesFromFloat(res, data);
+                cpu.state.eax = IntegerFromBytes<sysbit_t>(data);
                 break;
             }
             
@@ -2163,9 +2095,9 @@ OPR CPU::SqrtStack(CPU& cpu) noexcept
                     return err;
 
                 sysbit_t res { static_cast<sysbit_t>(std::sqrt(num)) };
-                char* bytes { BytesFromInteger<sysbit_t>(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2179,9 +2111,9 @@ OPR CPU::SqrtStack(CPU& cpu) noexcept
                     return err;
 
                 float res { std::sqrt(num) };
-                char* bytes { BytesFromFloat(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromFloat(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2224,10 +2156,9 @@ OPR CPU::SqrtConst(CPU& cpu) noexcept
                 cpu.state.pc += 4;
 
                 sysbit_t res { static_cast<sysbit_t>(std::sqrt(num)) };
-                char* bytes { BytesFromInteger(res) };
-                err = cpu.PushSome({bytes, 4});
-
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger(res, data);
+                err = cpu.PushSome({data, 4});
                 return err;
             }
 
@@ -2239,10 +2170,9 @@ OPR CPU::SqrtConst(CPU& cpu) noexcept
                 cpu.state.pc += 4;
 
                 float res { std::sqrt(num) };
-                char* bytes { BytesFromFloat(res) };
-                err = cpu.PushSome({bytes, 4});
-
-                delete[] bytes;
+                char data[4];
+                BytesFromFloat(res, data);
+                err = cpu.PushSome({data, 4});
                 return err;
             }
 
@@ -2376,14 +2306,13 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
         // Copy params
 
         // Store bp
-        char* bytes { BytesFromInteger(cpu.state.bp) };
-        cpu.PushSome({bytes, 4});
-        delete[] bytes;
+        char data[4];
+        BytesFromInteger(cpu.state.bp, data);
+        cpu.PushSome({data, 4});
 
         // Store pc 
-        bytes = BytesFromInteger(cpu.state.pc + (op == OpCodes::cal ? 4 : 1));
-        cpu.PushSome({bytes, 4});
-        delete[] bytes;
+        BytesFromInteger(cpu.state.pc + (op == OpCodes::cal ? 4 : 1), data);
+        cpu.PushSome({data, 4});
 
         // Change pc and bp
         cpu.state.pc = address;
@@ -2419,18 +2348,15 @@ OPR CPU::MulRegister(CPU& cpu) noexcept
 
             case OpCodes::mulrf:
             {
-                char* bytes;
-                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state));
-                float lhs { FloatFromBytes(bytes) };
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state), data);
+                float lhs { FloatFromBytes(data) };
                 
-                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state));
-                float rhs { FloatFromBytes(bytes) };
-                delete[] bytes;
+                BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state), data);
+                float rhs { FloatFromBytes(data) };
 
-                bytes = BytesFromFloat(lhs * rhs);
-                GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(bytes);
-                delete[] bytes;
+                BytesFromFloat(lhs * rhs, data);
+                GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(data);
 
                 break;
             }
@@ -2478,9 +2404,9 @@ OPR CPU::MulStack(CPU& cpu) noexcept
                     return err;
 
                 sysbit_t res { lhs * rhs };
-                char* bytes { BytesFromInteger<sysbit_t>(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2498,9 +2424,9 @@ OPR CPU::MulStack(CPU& cpu) noexcept
                     return err;
 
                 float res { lhs * rhs };
-                char* bytes { BytesFromFloat(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromFloat(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2548,9 +2474,9 @@ OPR CPU::MulSafe(CPU& cpu) noexcept
                 )};
 
                 sysbit_t res { lhs * rhs };
-                char* bytes { BytesFromInteger<sysbit_t>(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2564,9 +2490,9 @@ OPR CPU::MulSafe(CPU& cpu) noexcept
                 float rhs { FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data) };
 
                 float res { lhs * rhs };
-                char* bytes { BytesFromFloat(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromFloat(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2609,18 +2535,15 @@ OPR CPU::DivRegister(CPU& cpu) noexcept
 
             case OpCodes::divrf:
             {
-                char* bytes;
-                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state));
-                float lhs { FloatFromBytes(bytes) };
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state), data);
+                float lhs { FloatFromBytes(data) };
                 
-                bytes = BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state));
-                float rhs { FloatFromBytes(bytes) };
-                delete[] bytes;
+                BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state), data);
+                float rhs { FloatFromBytes(data) };
 
-                bytes = BytesFromFloat(lhs / rhs);
-                GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(bytes);
-                delete[] bytes;
+                BytesFromFloat(lhs / rhs, data);
+                GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(data);
 
                 break;
             }
@@ -2668,9 +2591,9 @@ OPR CPU::DivStack(CPU& cpu) noexcept
                     return err;
 
                 sysbit_t res { lhs / rhs };
-                char* bytes { BytesFromInteger<sysbit_t>(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2688,9 +2611,9 @@ OPR CPU::DivStack(CPU& cpu) noexcept
                     return err;
 
                 float res { lhs / rhs };
-                char* bytes { BytesFromFloat(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromFloat(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2738,9 +2661,9 @@ OPR CPU::DivSafe(CPU& cpu) noexcept
                 )};
 
                 sysbit_t res { lhs / rhs };
-                char* bytes { BytesFromInteger<sysbit_t>(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromInteger<sysbit_t>(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2754,9 +2677,9 @@ OPR CPU::DivSafe(CPU& cpu) noexcept
                 float rhs { FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data) };
 
                 float res { lhs / rhs };
-                char* bytes { BytesFromFloat(res) };
-                err = cpu.PushSome({bytes, 4});
-                delete[] bytes;
+                char data[4];
+                BytesFromFloat(res, data);
+                err = cpu.PushSome({data, 4});
 
                 return err;
             }
@@ -2844,13 +2767,9 @@ OPR CPU::Sub32(CPU& cpu) noexcept
         lhs = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
         cpu.PopSome(4);
 
-        char* data { BytesFromInteger(lhs-rhs) };
-        Error err { cpu.PushSome({
-            data,
-            4
-        })};
-
-        delete[] data;
+        char data[4];
+        BytesFromInteger(lhs-rhs, data);
+        Error err { cpu.PushSome({data, 4 })};
         return err;,
 
         return exc.GetCode();,
@@ -2868,13 +2787,9 @@ OPR CPU::SubFloat(CPU& cpu) noexcept
         lhs = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
         cpu.PopSome(4);
 
-        char* data { BytesFromFloat<char>(lhs-rhs) };
-        Error err { cpu.PushSome({
-            data,
-            4
-        })};
-
-        delete[] data;
+        char data[4];
+        BytesFromFloat<char>(lhs-rhs, data);
+        Error err { cpu.PushSome({data, 4 })};
         return err;,
 
         return exc.GetCode();,
@@ -2940,23 +2855,15 @@ OPR CPU::SubReg(CPU& cpu) noexcept
             sysbit_t regLhsRef { GetRegister32Bit(regLhs, cpu.state) };
             sysbit_t& regRhsRef { GetRegister32Bit(regRhs, cpu.state) };
 
-            char* data { BytesFromInteger(regLhsRef) };
-            float floatLhs { FloatFromBytes(
-                data
-            )};
-            delete[] data;
+            char data[4];
+            BytesFromInteger(regLhsRef, data);
+            float floatLhs { FloatFromBytes( data)};
 
-            data = BytesFromInteger(regRhsRef);
-            float floatRhs { FloatFromBytes(
-                data
-            )};
-            delete[] data;
+            BytesFromInteger(regRhsRef, data);
+            float floatRhs { FloatFromBytes(data)};
 
-            data = BytesFromFloat(floatLhs-floatRhs);
-            regRhsRef = IntegerFromBytes<sysbit_t>(
-                data
-            );
-            delete[] data;
+            BytesFromFloat(floatLhs-floatRhs, data);
+            regRhsRef = IntegerFromBytes<sysbit_t>(data);
         }
         else
         {
@@ -2980,12 +2887,9 @@ OPR CPU::SubSafe32(CPU& cpu) noexcept
         rhs = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
         lhs = IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data);
 
-        char* data { BytesFromInteger(lhs-rhs) };
-        Error err { cpu.PushSome({
-            data,
-            4
-        })};
-        delete[] data;
+        char data[4];
+        BytesFromInteger(lhs-rhs, data);
+        Error err { cpu.PushSome({ data, 4 })};
 
         return err;,
 
@@ -3002,12 +2906,9 @@ OPR CPU::SubSafeFloat(CPU& cpu) noexcept
         rhs = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data);
         lhs = FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data);
 
-        char* data { BytesFromFloat<char>(lhs-rhs) };
-        Error err { cpu.PushSome({
-            data,
-            4
-        })};
-        delete[] data;
+        char data[4];
+        BytesFromFloat<char>(lhs-rhs, data);
+        Error err { cpu.PushSome({ data, 4 })};
 
         return err;,
 

@@ -14,3 +14,5 @@ test/
 *.project.gf
 *.so
 *.o
+*perf*
+*massif*

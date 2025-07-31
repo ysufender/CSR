@@ -16,40 +16,19 @@
 //
 // VM Implementation
 //
-const Assembly& VM::GetAssembly(const std::string& name) const
-{
-    if (!this->assemblies.contains(name))
-        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given name '", name, "' couldn't be found.");
-    return this->assemblies.at(name);
-}
-
-const Assembly& VM::GetAssembly(const std::string&& name) const
-{
-    if (!this->assemblies.contains(name))
-        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given name '", name, "' couldn't be found.");
-    return this->assemblies.at(name);
-}
-
-const Assembly& VM::GetAssembly(sysbit_t id) const
-{
-    if (!this->asmIds.contains(id))
-        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given id'", std::to_string(id), "' couldn't be found.");
-    return *(this->asmIds.at(id));
-}
-
-sysbit_t VM::GenerateNewAssemblyID() const
-{
-    sysbit_t id { 0 };
-    for (; id <= std::numeric_limits<sysbit_t>::max(); id++)
-        if (!this->asmIds.contains(id))
-            break;
-
-    // Since AddAssembly returns Error::Bad when asm count is max, no need to
-    // error check here because it'll always find an id. Same with all GenerateNewXID
-    // around the codebase.
-
-    return id;
-}
+//const Assembly& VM::GetAssembly(const std::string& name) const
+//{
+//    if (!this->assemblies.contains(name))
+//        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given name '", name, "' couldn't be found.");
+//    return this->assemblies.at(name);
+//}
+//
+//const Assembly& VM::GetAssembly(const std::string&& name) const
+//{
+//    if (!this->assemblies.contains(name))
+//        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given name '", name, "' couldn't be found.");
+//    return this->assemblies.at(name);
+//}
 
 Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
 {

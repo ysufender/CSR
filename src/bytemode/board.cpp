@@ -123,17 +123,13 @@ Error Board::Run() noexcept
     if (this->processes.size() == 0)
     {
         std::unique_ptr<char[]> data { new char[5] };
-        char* id { BytesFromInteger<sysbit_t, char>(this->id) };
+        char id[4];
+        BytesFromInteger<sysbit_t, char>(this->id, id);
 
         std::memcpy(data.get(), id, sizeof(sysbit_t));
         data[4] = 0;
 
-        delete[] id;
-
-        System::ErrorCode code { this->SendMessage({
-            MessageType::BtoA,
-            rval(data),
-        })};
+        System::ErrorCode code { this->SendMessage({ MessageType::BtoA, rval(data), })};
 
         if (code != System::ErrorCode::Ok)
             CRASH(

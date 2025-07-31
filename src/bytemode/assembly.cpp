@@ -7,6 +7,7 @@
 #include <string>
 #include <tuple>
 #include <utility>
+#include <cstdio>
 
 #include "bytemode/assembly.hpp"
 #include "CSRConfig.hpp"
@@ -138,7 +139,6 @@ Error Assembly::RemoveBoard(sysbit_t id) noexcept
 
 Error Assembly::Run() noexcept
 {
-
     System::ErrorCode code { Error::Ok };
 
     if (!this->messagePool.empty())
@@ -151,17 +151,13 @@ Error Assembly::Run() noexcept
     if (this->boards.size() == 0 && this->settings.type != AssemblyType::Library)
     {
         std::unique_ptr<char[]> data { new char[5] };
-        char* id { BytesFromInteger<sysbit_t, char>(this->settings.id) };
+        char id[4];
+        BytesFromInteger<sysbit_t, char>(this->settings.id, id);
 
         std::memcpy(data.get(), id, sizeof(sysbit_t));
         data[4] = 0;
 
-        delete[] id;
-
-        System::ErrorCode code { this->SendMessage({
-            MessageType::AtoV,
-            rval(data),
-        })};
+        System::ErrorCode code { this->SendMessage({ MessageType::AtoV, rval(data), })};
 
         if (code != System::ErrorCode::Ok)
             CRASH(System::ErrorCode::MessageSendError, "Error, couldn't send shutdown signal to VM");

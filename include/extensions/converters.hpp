@@ -1,83 +1,83 @@
 #pragma once
-
 #include <bit>
-#include <cmath>
+#include <concepts>
+#include <cstdint>
+#include <cstring>
 #include <type_traits>
 
-#include "CSRConfig.hpp"
-
 template<typename T>
-concept byte_t = requires(){
-    std::is_same_v<T, char>;
-    std::is_same_v<T, uchar_t>;
-};
+concept byte_t =
+    std::same_as<T, char> ||
+    std::same_as<T, unsigned char>;
+
+template<typename U>
+inline constexpr U byteswap(U v) noexcept {
+    static_assert(std::is_unsigned_v<U>);
+    if constexpr (sizeof(U)==1) return v;
+    else if constexpr (sizeof(U)==2) {
+        return U((v & 0x00FFu)<<8 |
+                 (v & 0xFF00u)>>8);
+    }
+    else if constexpr (sizeof(U)==4) {
+        return U((v & 0x000000FFu)<<24 |
+                 (v & 0x0000FF00u)<< 8 |
+                 (v & 0x00FF0000u)>> 8 |
+                 (v & 0xFF000000u)>>24);
+    }
+    else if constexpr (sizeof(U)==8) {
+        return U((v & 0x00000000000000FFull)<<56 |
+                 (v & 0x000000000000FF00ull)<<40 |
+                 (v & 0x0000000000FF0000ull)<<24 |
+                 (v & 0x00000000FF000000ull)<< 8 |
+                 (v & 0x000000FF00000000ull)>> 8 |
+                 (v & 0x0000FF0000000000ull)>>24 |
+                 (v & 0x00FF000000000000ull)>>40 |
+                 (v & 0xFF00000000000000ull)>>56);
+    }
+    else {
+        U out = 0;
+        for (size_t i = 0; i < sizeof(U); ++i)
+            out = (out << 8) | ((v >> (i*8)) & 0xFF);
+        return out;
+    }
+}
 
 template<std::integral T, byte_t U>
-T IntegerFromBytes(const U* bytes) noexcept
+inline T IntegerFromBytes(const U* bytes) noexcept
 {
-    if (std::endian::native == std::endian::big)
-        return *reinterpret_cast<T*>(const_cast<uchar_t*>(reinterpret_cast<const uchar_t*>(bytes)));
+    using UTI = std::make_unsigned_t<T>;
+    UTI u{};
+    std::memcpy(&u, bytes, sizeof(u));
+    if constexpr (std::endian::native == std::endian::little)
+        u = byteswap(u);
+    return static_cast<T>(u);
+}
 
-    // bytes must be in big endian order
-    std::make_unsigned_t<T> ures { 0 };
-
-    for (char i = 0; i < sizeof(T); i++)
-    {
-        ures <<= sizeof(uchar_t)*8;
-        ures |= static_cast<uchar_t>(bytes[i]);
-    }
-
-    return static_cast<T>(ures);
+template<std::integral T, byte_t U>
+inline void BytesFromInteger(const T integer, U* bytes) noexcept
+{
+    using UTI = std::make_unsigned_t<T>;
+    UTI u = static_cast<UTI>(integer);
+    if constexpr (std::endian::native == std::endian::little)
+        u = byteswap(u);
+    std::memcpy(bytes, &u, sizeof(u));
 }
 
 template<byte_t T>
-float FloatFromBytes(const T* bytes) noexcept
+inline float FloatFromBytes(const T* bytes) noexcept
 {
-    if (std::endian::native == std::endian::big)
-        return *reinterpret_cast<float*>(const_cast<uchar_t*>(reinterpret_cast<const uchar_t*>(bytes)));
-
-    float returnFloat { 0 };
-    uchar_t* tmpB { reinterpret_cast<uchar_t*>(&returnFloat) };
-
-    tmpB[0] = bytes[3];
-    tmpB[1] = bytes[2];
-    tmpB[2] = bytes[1];
-    tmpB[3] = bytes[0];
-
-    return returnFloat;
+    uint32_t u{};
+    std::memcpy(&u, bytes, sizeof(u));
+    if constexpr (std::endian::native == std::endian::little)
+        u = byteswap(u);
+    return std::bit_cast<float>(u);
 }
 
-// Caller must free the bytes
-template<std::integral T, byte_t U = char>
-U* BytesFromInteger(const T integer) noexcept
+template<byte_t T>
+inline void BytesFromFloat(const float val, T* bytes) noexcept
 {
-    if (std::endian::native == std::endian::big)
-        return reinterpret_cast<U*>(new T{integer});
-
-    // bytes will be in big endian order
-    std::make_unsigned_t<T> uinteger { reinterpret_cast<std::make_unsigned_t<T>>(integer) };
-    uchar_t* bytes { new uchar_t[sizeof(uinteger)] };
-
-    for (char i = 0; i < sizeof(T); i++)
-        bytes[sizeof(uinteger)-1-i] = static_cast<uchar_t>((uinteger >> (i*8)));
-
-    return reinterpret_cast<U*>(bytes);
-}
-
-// Caller must free the bytes
-template<byte_t T = char>
-T* BytesFromFloat(const float val) noexcept
-{
-    if (std::endian::native == std::endian::big)
-        return reinterpret_cast<T*>(new float{val});
-
-    uchar_t* bytes { new uchar_t[4] };
-    const uchar_t* tmpB { reinterpret_cast<const uchar_t*>(&val) };
-
-    bytes[0] = tmpB[3];
-    bytes[1] = tmpB[2];
-    bytes[2] = tmpB[1];
-    bytes[3] = tmpB[0];
-
-    return reinterpret_cast<T*>(bytes);
+    uint32_t u = std::bit_cast<uint32_t>(val);
+    if constexpr (std::endian::native == std::endian::little)
+        u = byteswap(u);
+    std::memcpy(bytes, &u, sizeof(u));
 }

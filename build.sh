@@ -50,12 +50,10 @@ if [ $windows == true ]; then
     fi
 fi
 
+preset="Debug"
 if [ $memtest == true ]; then
     preset="MemTest" 
-fi
-
-preset="Debug"
-if [ $release == true ]; then
+elif [ $release == true ]; then
     preset="Release"
 fi
 

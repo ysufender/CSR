@@ -52,7 +52,9 @@ struct System
     E(DLSymbolError) \
     E(VMError) \
     E(DLInitError) \
-    E(DoubleFree)
+    E(DoubleFree) \
+    E(Shutdown) \
+    E(ProcessInterrupt)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 
