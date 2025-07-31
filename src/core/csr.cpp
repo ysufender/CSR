@@ -108,6 +108,12 @@ void PrintHeader() noexcept
     std::cout << "\nCommon Script Runtime (CSR)"
               << "\n\tDescription: " << CSR_DESCRIPTION
               << "\n\tVersion: " << CSR_VERSION
+              << "\n\tBuild Type: " << 
+#ifndef NDEBUG
+              "Debug"
+#else
+              "Release"
+#endif
               << "\n\tEnable JIT: "
 #ifdef ENABLE_JIT
               << "Available"

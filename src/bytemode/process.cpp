@@ -48,7 +48,9 @@ Error SendShutdown(Process& process)
 
 Error Process::Cycle() noexcept
 {
-    System::ErrorCode code { this->DispatchMessages() };
+    System::ErrorCode code { Error::Ok };
+    if (!this->messagePool.empty())
+        code = this->DispatchMessages();
 
     if (code != System::ErrorCode::Ok)
         LOGE(

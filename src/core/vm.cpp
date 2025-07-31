@@ -198,7 +198,8 @@ Error VM::Run() noexcept
     while (!this->assemblies.empty())
     {
         // Dispatch Messages
-        code = this->DispatchMessages();
+        if (!this->messagePool.empty())
+            code = this->DispatchMessages();
 
         // Run the assemblies
         for (auto& [name, assembly] : this->assemblies)

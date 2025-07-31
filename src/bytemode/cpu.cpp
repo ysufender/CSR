@@ -84,7 +84,7 @@ Error CPU::Cycle() noexcept
         return code;
     }
 
-    if (sizeof(ops)/8 > op)
+    if (sizeof(ops)/sizeof(ops[0]) > op)
     {
         this->state.pc++;
         code = ops[op](*this);

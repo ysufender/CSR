@@ -2797,6 +2797,7 @@ OPR CPU::Return(CPU& cpu) noexcept
         cpu.board.ram.ReadSome(cpu.state.bp - 4, 4).data
     )};
 
+
     System::ErrorCode err;
     
     if (cpu.state.bl != 0)
@@ -2805,11 +2806,13 @@ OPR CPU::Return(CPU& cpu) noexcept
             cpu.state.sp - cpu.state.bl,
             cpu.state.bl
         )};
-        cpu.PopSome(cpu.state.sp - cpu.state.bp + 8);
-        cpu.PushSome(returnValues);
+        err = cpu.PopSome(cpu.state.sp - cpu.state.bp + 8);
+        if (err != System::ErrorCode::Ok)
+            return err;
+        err = cpu.PushSome(returnValues);
     }
     else
-        cpu.PopSome(cpu.state.sp - cpu.state.bp + 8);
+        err = cpu.PopSome(cpu.state.sp - cpu.state.bp + 8);
 
     cpu.state.bp = bpToReturnTo;
     cpu.state.pc = pcToReturnTo;

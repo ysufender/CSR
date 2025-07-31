@@ -138,7 +138,11 @@ Error Assembly::RemoveBoard(sysbit_t id) noexcept
 
 Error Assembly::Run() noexcept
 {
-    System::ErrorCode code { this->DispatchMessages() };
+
+    System::ErrorCode code { Error::Ok };
+
+    if (!this->messagePool.empty())
+        code = this->DispatchMessages();
 
     if (code != System::ErrorCode::Ok)
         return code;
@@ -161,6 +165,7 @@ Error Assembly::Run() noexcept
 
         if (code != System::ErrorCode::Ok)
             CRASH(System::ErrorCode::MessageSendError, "Error, couldn't send shutdown signal to VM");
+        return code;
     }
 
     for (auto& [id, board] : this->boards)
