@@ -7,7 +7,7 @@
 
 int csrmain(int argc, char** args)
 {
-    InitFastOutput();
+    FastCout::Init();
 
     System::ErrorCode errc;
 

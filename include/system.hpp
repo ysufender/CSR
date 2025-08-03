@@ -54,7 +54,8 @@ struct System
     E(DLInitError) \
     E(DoubleFree) \
     E(Shutdown) \
-    E(ProcessInterrupt)
+    E(ProcessInterrupt) \
+    E(IOError)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 
