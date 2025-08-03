@@ -50,7 +50,8 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
 
     if (code != System::ErrorCode::Ok)
     {
-        this->RemoveAssembly(settings.id);
+//        this->RemoveAssembly(settings.id);
+        this->assemblies.erase(settings.name);
         return code;
     }
 
@@ -60,7 +61,8 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     if (code != Error::Ok)
     {
         LOGE(System::LogLevel::Medium, "Failed to load standard library for assembly ", settings.path.generic_string());
-        this->RemoveAssembly(settings.id);
+//        this->RemoveAssembly(settings.id);
+        this->assemblies.erase(settings.name);
         return code;
     }
 
@@ -133,7 +135,8 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     if (code != Error::Ok)
     {
         LOGE(System::LogLevel::Medium, "Failed to load extender DL for assembly ", settings.path.string());
-        this->RemoveAssembly(settings.id);
+        //this->RemoveAssembly(settings.id);
+        this->assemblies.erase(settings.name);
         return code;
     }
 
@@ -149,7 +152,9 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     if (extenderInit(&handler, &SysCallBinder, &SysCallUnbinder) != static_cast<char>(Error::Ok))
     {
         LOGE(System::LogLevel::Medium, "Failed to initialize extender for assembly ", settings.path.generic_string());
-        this->RemoveAssembly(settings.id);
+        //this->RemoveAssembly(settings.id);
+        this->assemblies.erase(settings.name);
+        this->assemblies.erase(settings.name);
         return Error::DLInitError;
     }
 
@@ -192,21 +197,31 @@ Error VM::Run() noexcept
     while (!this->assemblies.empty())
     {
         // Dispatch Messages
-        if (!this->messagePool.empty())
+        if (!this->messagePool.empty() && this->GetSettings().communication)
             code = this->DispatchMessages();
 
         // Run the assemblies
-        for (auto& [name, assembly] : this->assemblies)
+//        for (auto& [name, assembly] : this->assemblies)
+        for (auto it = this->assemblies.begin(); it != this->assemblies.end();)
         {
+            Assembly& assembly { it->second };
+
             try_catch(
                 code = assembly.Run();
                 
+                if (code == System::ErrorCode::Shutdown)
+                {
+                    it = this->assemblies.erase(it);
+                    continue;
+                }
                 if (code != System::ErrorCode::Ok)
                     LOGE(
                         System::LogLevel::Low,
                         "Error while running assembly ", assembly.Stringify(),
                         " Error code: ", System::ErrorCodeString(code) 
-                    );,
+                    );
+
+                it++;,
 
                 LOGE(
                     System::LogLevel::Low, 
@@ -232,7 +247,7 @@ Error VM::Run() noexcept
 #endif
     }
 
-    return code;
+    return code == System::ErrorCode::Shutdown ? System::ErrorCode::Ok : code;
 }
 
 //
@@ -248,8 +263,8 @@ Error VM::DispatchMessages() noexcept
 
         if (message.type() == MessageType::AtoV)
         {
-            if (message.data()[4] == 0)
-                code = this->RemoveAssembly(IntegerFromBytes<sysbit_t>(message.data().get()));
+//            if (message.data()[4] == 0)
+//                code = this->RemoveAssembly(IntegerFromBytes<sysbit_t>(message.data().get()));
         }
         else
         {

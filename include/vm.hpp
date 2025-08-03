@@ -22,6 +22,7 @@ class VM : IMessageObject
 #ifndef NDEBUG
             bool step;
 #endif
+            bool communication;
         };
 
         VM(VM const&) = delete;

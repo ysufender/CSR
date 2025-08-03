@@ -113,7 +113,7 @@ Error Board::Run() noexcept
 {
     // Dispatch messages
     System::ErrorCode code { Error::Ok }; 
-    if (!this->messagePool.empty())
+    if (!this->messagePool.empty() && VM::GetVM().GetSettings().communication)
         code = this->DispatchMessages();
 
     if (code != System::ErrorCode::Ok)
@@ -122,23 +122,24 @@ Error Board::Run() noexcept
     // Send Shutdown Signal to Assembly
     if (this->processes.size() == 0)
     {
-        std::unique_ptr<char[]> data { new char[5] };
-        char id[4];
-        BytesFromInteger<sysbit_t, char>(this->id, id);
-
-        std::memcpy(data.get(), id, sizeof(sysbit_t));
-        data[4] = 0;
-
-        System::ErrorCode code { this->SendMessage({ MessageType::BtoA, rval(data), })};
-
-        if (code != System::ErrorCode::Ok)
-            CRASH(
-                System::ErrorCode::MessageSendError, 
-                "Error in ", this->Stringify(),
-                ". Couldn't send shutdown signal to ", this->Assembly().Stringify()
-            );
-
-        return code;
+//        std::unique_ptr<char[]> data { new char[5] };
+//        char id[4];
+//        BytesFromInteger<sysbit_t, char>(this->id, id);
+//
+//        std::memcpy(data.get(), id, sizeof(sysbit_t));
+//        data[4] = 0;
+//
+//        System::ErrorCode code { this->SendMessage({ MessageType::BtoA, rval(data), })};
+//
+//        if (code != System::ErrorCode::Ok)
+//            CRASH(
+//                System::ErrorCode::MessageSendError, 
+//                "Error in ", this->Stringify(),
+//                ". Couldn't send shutdown signal to ", this->Assembly().Stringify()
+//            );
+//
+//        return code;
+        return System::ErrorCode::Shutdown;
     }
 
     code = this->processes.at(this->currentProcess).Cycle();
@@ -150,6 +151,13 @@ Error Board::Run() noexcept
 //            std::to_string(currentProcess),
 //            ". Error code: ", System::ErrorCodeString(code)
 //        );
+
+    if (code == System::ErrorCode::Shutdown)
+    {
+//        this->RemoveProcess(this->currentProcess);
+        this->processes.erase(this->currentProcess);
+        return System::ErrorCode::Ok;
+    }
 
     return code;
 }
@@ -179,25 +187,25 @@ Error Board::DispatchMessages() noexcept
 
         if (message.type() == MessageType::PtoB)
         {
-            // Process Interrupt, set currentProcess to next
-            if (message.data()[1] == 0)
-            {
-                if (static_cast<uchar_t>(message.data()[0]) != currentProcess) 
-                    return System::ErrorCode::InvalidSpecifier;
-                code = this->ChangeExecutingProcess();
-                if (code != System::ErrorCode::Ok)
-                    LOGE(System::LogLevel::Medium, this->Stringify(), " error while dispatching messages ", System::ErrorCodeString(code));
-            }
-
-            // Process requests Shutdown
-            else if (message.data()[1] == 1)
-            {
-                if (this->currentProcess == message.data()[0])
-                    this->ChangeExecutingProcess(); 
-                code = this->RemoveProcess(message.data()[0]);
-                if (code != System::ErrorCode::Ok)
-                    LOGE(System::LogLevel::Medium, this->Stringify(), " error while dispatching messages ", System::ErrorCodeString(code));
-            }
+//            // Process Interrupt, set currentProcess to next
+//            if (message.data()[1] == 0)
+//            {
+//                if (static_cast<uchar_t>(message.data()[0]) != currentProcess) 
+//                    return System::ErrorCode::InvalidSpecifier;
+//                code = this->ChangeExecutingProcess();
+//                if (code != System::ErrorCode::Ok)
+//                    LOGE(System::LogLevel::Medium, this->Stringify(), " error while dispatching messages ", System::ErrorCodeString(code));
+//            }
+//
+//            // Process requests Shutdown
+//            else if (message.data()[1] == 1)
+//            {
+//                if (this->currentProcess == message.data()[0])
+//                    this->ChangeExecutingProcess(); 
+//                code = this->RemoveProcess(message.data()[0]);
+//                if (code != System::ErrorCode::Ok)
+//                    LOGE(System::LogLevel::Medium, this->Stringify(), " error while dispatching messages ", System::ErrorCodeString(code));
+//            }
         }
 
         this->messagePool.pop();

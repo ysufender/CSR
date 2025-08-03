@@ -16,3 +16,5 @@ test/
 *.o
 *perf*
 *massif*
+.py
+.lua

@@ -141,7 +141,7 @@ Error Assembly::Run() noexcept
 {
     System::ErrorCode code { Error::Ok };
 
-    if (!this->messagePool.empty())
+    if (!this->messagePool.empty() && VM::GetVM().GetSettings().communication)
         code = this->DispatchMessages();
 
     if (code != System::ErrorCode::Ok)
@@ -150,22 +150,26 @@ Error Assembly::Run() noexcept
     // Send Shutdown Signal to VM if the Assembly is not a runtime Library
     if (this->boards.size() == 0 && this->settings.type != AssemblyType::Library)
     {
-        std::unique_ptr<char[]> data { new char[5] };
-        char id[4];
-        BytesFromInteger<sysbit_t, char>(this->settings.id, id);
-
-        std::memcpy(data.get(), id, sizeof(sysbit_t));
-        data[4] = 0;
-
-        System::ErrorCode code { this->SendMessage({ MessageType::AtoV, rval(data), })};
-
-        if (code != System::ErrorCode::Ok)
-            CRASH(System::ErrorCode::MessageSendError, "Error, couldn't send shutdown signal to VM");
-        return code;
+//        std::unique_ptr<char[]> data { new char[5] };
+//        char id[4];
+//        BytesFromInteger<sysbit_t, char>(this->settings.id, id);
+//
+//        std::memcpy(data.get(), id, sizeof(sysbit_t));
+//        data[4] = 0;
+//
+//        System::ErrorCode code { this->SendMessage({ MessageType::AtoV, rval(data), })};
+//
+//        if (code != System::ErrorCode::Ok)
+//            CRASH(System::ErrorCode::MessageSendError, "Error, couldn't send shutdown signal to VM");
+//        return code;
+        return System::ErrorCode::Shutdown;
     }
 
-    for (auto& [id, board] : this->boards)
+//    for (auto& [id, board] : this->boards)
+    for (auto it = this->boards.begin(); it != this->boards.end();)
     {
+        Board& board { it->second };
+
         try_catch(
             code = board.Run();
 
@@ -175,7 +179,10 @@ Error Assembly::Run() noexcept
 //                    "Error while running board ", board.Stringify(),
 //                    " Error code: ", System::ErrorCodeString(code)
 //                );,
-            ,
+            if (code == System::ErrorCode::Shutdown)
+                it = this->boards.erase(it);
+            else
+                it++;,
 
             LOGE(
                 System::LogLevel::Low, 
@@ -189,7 +196,7 @@ Error Assembly::Run() noexcept
         )
     }
 
-    return code;
+    return code == System::ErrorCode::Shutdown ? System::ErrorCode::Ok : code;
 }
 
 //
@@ -204,11 +211,11 @@ Error Assembly::DispatchMessages() noexcept
 
         if (message.type() == MessageType::BtoA)
         {
-            if (message.data()[4] == 0)
-            {
-                sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
-                this->RemoveBoard(id);
-            }
+//            if (message.data()[4] == 0)
+//            {
+//                sysbit_t id { IntegerFromBytes<sysbit_t>(message.data().get()) };
+//                this->RemoveBoard(id);
+//            }
         }
         else
             LOGE(

@@ -1,19 +1,14 @@
-#include <cassert>
-#include <exception>
-#include <filesystem>
-#include <iostream>
-#include <ostream>
-#include <string>
-
-#include "extensions/stringextensions.hpp"
 #include "CSRConfig.hpp"
 #include "CLIParser.hpp"
+#include "fastcout.hpp"
 #include "system.hpp"
 #include "csr.hpp"
 #include "vm.hpp"
 
 int csrmain(int argc, char** args)
 {
+    InitFastOutput();
+
     System::ErrorCode errc;
 
     try
@@ -35,6 +30,7 @@ int csrmain(int argc, char** args)
 #ifndef NDEBUG
                 .step = flags.GetFlag<CLIParser::FlagType::Bool>("step"),
 #endif
+                .communication = flags.GetFlag<CLIParser::FlagType::Bool>("messaging")
             });
 
             std::vector<std::string> files { flags.GetFlag<CLIParser::FlagType::StringList>("exe") };
@@ -143,6 +139,7 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
 #endif
     parser.AddFlag<FlagType::Bool>("no-new", "Do not create a new instance of CSR, use an already running one.");
     parser.AddFlag<FlagType::Bool>("no-strict-messages", "Don't strictly verify messages in each checkpoint when dispatching.", true);
+    parser.AddFlag<FlagType::Bool>("messaging", "Disable communication within VM.", false);
     parser.Separator();
     parser.AddFlag<FlagType::StringList>("exe", "Executable files to execute.");
     parser.Separator();
@@ -158,6 +155,7 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
     parser.BindFlag("v", "version");
     parser.BindFlag("n", "no-new");
     parser.BindFlag("nsm", "no-strict-messages");
+    parser.BindFlag("m", "messaging");
     parser.BindFlag("e", "exe");
     parser.BindFlag("u", "unsafe");
 

@@ -3,6 +3,7 @@
 #include <string>
 
 #include "bytemode/cpu.hpp"
+#include "bytemode/instructions.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/process.hpp"
 #include "bytemode/board.hpp"
@@ -49,7 +50,7 @@ Error SendShutdown(Process& process)
 Error Process::Cycle() noexcept
 {
     System::ErrorCode code { Error::Ok };
-    if (!this->messagePool.empty())
+    if (!this->messagePool.empty() && VM::GetVM().GetSettings().communication)
         code = this->DispatchMessages();
 
     if (code != System::ErrorCode::Ok)
@@ -61,21 +62,23 @@ Error Process::Cycle() noexcept
 
     // Send Shutdown signal to board
     if (this->board.cpu.DumpState().pc >= this->board.assembly.Rom().Size())
-        return SendShutdown(*this);
+        return System::ErrorCode::Shutdown;
+//        return SendShutdown(*this);
 
     OpCodes op { this->board.Assembly().Rom()[this->board.cpu.DumpState().pc] };
 
+    // Unsupported for now
     // New callStack will be initialized, or destroyed
     // either way that means it's interrupt for this process.
     // Send message to Board to switch to the next process.
     // Switch signal
-    if (op == OpCodes::cal || op == OpCodes::calr || op == OpCodes::ret)
-    {
-        std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(2) };
-        data[0] = this->id;
-        data[1] = 0;
-        this->SendMessage({MessageType::PtoB, rval(data)});
-    }
+//    if (op == OpCodes::cal || op == OpCodes::calr || op == OpCodes::ret)
+//    {
+//        std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(2) };
+//        data[0] = this->id;
+//        data[1] = 0;
+//        this->SendMessage({MessageType::PtoB, rval(data)});
+//    }
 
     code = this->board.cpu.Cycle();
 
@@ -87,7 +90,9 @@ Error Process::Cycle() noexcept
         "In ", this->Stringify(),
         " error in CPU cycle. Error code: ", System::ErrorCodeString(code)
     );
-    return SendShutdown(*this);
+
+    return System::ErrorCode::Shutdown;
+//    return SendShutdown(*this);
 }
 
 //
