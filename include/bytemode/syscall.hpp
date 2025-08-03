@@ -2,44 +2,15 @@
 
 #include <unordered_set>
 #include <unordered_map>
-#include <functional>
 
 #include "CSRConfig.hpp"
 #include "platform.hpp"
-#include "system.hpp"
-
-
-// returned char array is special
-// arr[0] is ErrorCode,
-// arr[1] is returned value size in bytes
-// rest is returned data 
-// must be freed by CSR
-using SysFunctionHandler = const char* const SYSFN(const char* const) noexcept;
-using sysfnh_t = SysFunctionHandler;
+#include "nativecalls.hpp"
 
 using SysFunctionMap = std::unordered_map<sysbit_t, SysFunctionHandler>;
 using DLList = std::unordered_set<dlID_t>;
 
-// ~Interface for dynamic libraries to bind functions and extend the script capabilities~
-// Only for standard library
-class ISysCallHandler
-{
-    public:
-        virtual char BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept = 0;
-        virtual char UnbindFunction(sysbit_t id) noexcept = 0;
-};
-using stdlibInit_t = char SYSFN(ISysCallHandler*) noexcept;
-using fnBinder_t = char SYSFN(void*, sysbit_t, SysFunctionHandler) noexcept;
-using fnUnbinder_t = char SYSFN(void*, sysbit_t) noexcept;
-
-char SysCallBinder(void* scallH, sysbit_t id, SysFunctionHandler handler) noexcept;
-char SysCallUnbinder(void* scallH, sysbit_t id) noexcept;
-
-// Initializer function signature for extender DLs
-// name must be specifically InitExtender
-using extInit_t = char SYSFN (void*, fnBinder_t, fnUnbinder_t) noexcept;
-
-class SysCallHandler : public ISysCallHandler
+class SysCallHandler
 {
     public:
         SysCallHandler();
@@ -50,13 +21,13 @@ class SysCallHandler : public ISysCallHandler
         const SysFunctionMap& BoundFunctions() const noexcept
         { return this->boundFuncs; }
 
-        char BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept override;
-        char UnbindFunction(sysbit_t id) noexcept override;
+        char BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept;
+        char UnbindFunction(sysbit_t id) noexcept;
 
         const SysFunctionHandler& operator[](sysbit_t id) const;
 
-        const char* const operator()(sysbit_t id, const char* const params) const noexcept
-        { return (*this)[id](params); }
+        Error operator()(sysbit_t id, char* params) const noexcept
+        { return static_cast<Error>((*this)[id](params)); }
 
         dlID_t LoadDl(std::string_view dlPath);
         sysfnh_t MakeFunctionHandler(dlID_t dl, std::string_view functionName) const;
@@ -65,3 +36,13 @@ class SysCallHandler : public ISysCallHandler
         SysFunctionMap boundFuncs; 
         DLList dlList;
 };
+
+inline char SysCallBinder(void* scallH, sysbit_t id, SysFunctionHandler handler) noexcept
+{
+    return reinterpret_cast<SysCallHandler*>(scallH)->BindFunction(id, handler);
+}
+
+inline char SysCallUnbinder(void* scallH, sysbit_t id) noexcept
+{
+    return reinterpret_cast<SysCallHandler*>(scallH)->UnbindFunction(id);
+}

@@ -26,7 +26,7 @@ class Board : IMessageObject
         Board(Board&&) = delete;
         Board(class Assembly& assembly, sysbit_t id);
 
-        const class Assembly& Assembly() const 
+        inline const class Assembly& Assembly() const 
         { return this->assembly; }
 
         Error DispatchMessages() noexcept; 
@@ -40,7 +40,7 @@ class Board : IMessageObject
 
         const std::string& Stringify() const noexcept;
 
-        const Process& GetExecutingProcess() const noexcept
+        inline const Process& GetExecutingProcess() const noexcept
         { return this->processes.at(this->currentProcess); }
 
         const sysbit_t id;

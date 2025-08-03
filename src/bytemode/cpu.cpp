@@ -1,4 +1,6 @@
 #include <cassert>
+#include <limits>
+#include <memory>
 #include <string>
 
 #include "bytemode/instructions.hpp"
@@ -8,7 +10,10 @@
 #include "CSRConfig.hpp"
 #include "system.hpp"
 
-CPU::CPU(Board& board) : board(board), state()
+CPU::CPU(Board& board) : 
+    board(board),
+    state(),
+    paramBuf(std::make_unique_for_overwrite<char[]>(std::numeric_limits<uchar_t>::max()))
 {
     // Check ROM for stack/heap sizes beforehand.
     char tmp;
@@ -23,95 +28,127 @@ CPU::CPU(Board& board) : board(board), state()
     this->state.pc = IntegerFromBytes<sysbit_t>(&board.Assembly().Rom());
 }
 
-Error CPU::Cycle() noexcept
-{
-    static constexpr OperationFunction ops[] = {
-        NoOperation,
-        StoreThirtyTwo, StoreEight, StoreFromSymbol, StoreFromSymbol,
-        LoadFromStack, LoadFromStack, ReadFromHeap, ReadFromHeap, ReadFromRegister,
-        Move, Move, Move,
-        Add32, AddFloat, Add8, AddReg, AddReg, AddReg,
-        AddSafe32, AddSafeFloat, AddSafe8,
-        MemCopy,
-        Increment, Increment, Increment, IncrementReg, IncrementReg, IncrementReg,
-        IncrementSafe, IncrementSafe, IncrementSafe,
-        Decrement, Decrement, Decrement, DecrementReg, DecrementReg, DecrementReg,
-        DecrementSafe, DecrementSafe, DecrementSafe,
-        BitAnd, BitAnd, BitAnd,
-        BitOr, BitOr, BitOr,
-        BitNor, BitNor, BitNor,
-        SwapTop, SwapTop, SwapTop,
-        DuplicateTop, DuplicateTop,
-        RawDataStack, RawDataStack,
-        Invert, Invert, Invert, InvertSafe, InvertSafe,
-        Compare, Compare,
-        PopInstruction, PopInstruction,
-        Jump, Jump,
-        SwapRange, DuplicateRange,
-        Repeat,
-        Allocate,
-        PowRegister, PowRegister, PowRegister,
-        PowStack, PowStack, PowStack,
-        PowConst, PowConst, PowConst,
-        SqrtConst, SqrtConst, SqrtConst,
-        SqrtRegister, SqrtRegister, SqrtRegister,
-        SqrtStack, SqrtStack, SqrtStack,
-        ConditionalJump, ConditionalJump,
-        CallFunc, CallFunc,
-        MulStack, MulStack, MulStack,
-        MulRegister, MulRegister, MulRegister,
-        MulSafe, MulSafe, MulSafe,
-        DivStack, DivStack, DivStack,
-        DivRegister, DivRegister, DivRegister,
-        DivSafe, DivSafe, DivSafe,
-        Return,
-        Deallocate,
-        Sub32, SubFloat, Sub8, SubReg, SubReg, SubReg,
-        SubSafe32, SubSafeFloat, SubSafe8
+
+Error CPU::Cycle() noexcept {
+    static void* const jumpTable[] = {
+        &&op_NoOperation, &&op_StoreThirtyTwo, &&op_StoreEight, &&op_StoreFromSymbol, &&op_StoreFromSymbol,
+        &&op_LoadFromStack, &&op_LoadFromStack, &&op_ReadFromHeap, &&op_ReadFromHeap, &&op_ReadFromRegister,
+        &&op_Move, &&op_Move, &&op_Move,
+        &&op_Add32, &&op_AddFloat, &&op_Add8, &&op_AddReg, &&op_AddReg, &&op_AddReg,
+        &&op_AddSafe32, &&op_AddSafeFloat, &&op_AddSafe8,
+        &&op_MemCopy,
+        &&op_Increment, &&op_Increment, &&op_Increment, &&op_IncrementReg, &&op_IncrementReg, &&op_IncrementReg,
+        &&op_IncrementSafe, &&op_IncrementSafe, &&op_IncrementSafe,
+        &&op_Decrement, &&op_Decrement, &&op_Decrement, &&op_DecrementReg, &&op_DecrementReg, &&op_DecrementReg,
+        &&op_DecrementSafe, &&op_DecrementSafe, &&op_DecrementSafe,
+        &&op_BitAnd, &&op_BitAnd, &&op_BitAnd,
+        &&op_BitOr, &&op_BitOr, &&op_BitOr,
+        &&op_BitNor, &&op_BitNor, &&op_BitNor,
+        &&op_SwapTop, &&op_SwapTop, &&op_SwapTop,
+        &&op_DuplicateTop, &&op_DuplicateTop,
+        &&op_RawDataStack, &&op_RawDataStack,
+        &&op_Invert, &&op_Invert, &&op_Invert, &&op_InvertSafe, &&op_InvertSafe,
+        &&op_Compare, &&op_Compare,
+        &&op_PopInstruction, &&op_PopInstruction,
+        &&op_Jump, &&op_Jump,
+        &&op_SwapRange, &&op_DuplicateRange,
+        &&op_Repeat, &&op_Allocate,
+        &&op_PowRegister, &&op_PowRegister, &&op_PowRegister,
+        &&op_PowStack, &&op_PowStack, &&op_PowStack,
+        &&op_PowConst, &&op_PowConst, &&op_PowConst,
+        &&op_SqrtConst, &&op_SqrtConst, &&op_SqrtConst,
+        &&op_SqrtRegister, &&op_SqrtRegister, &&op_SqrtRegister,
+        &&op_SqrtStack, &&op_SqrtStack, &&op_SqrtStack,
+        &&op_ConditionalJump, &&op_ConditionalJump,
+        &&op_CallFunc, &&op_CallFunc,
+        &&op_MulStack, &&op_MulStack, &&op_MulStack,
+        &&op_MulRegister, &&op_MulRegister, &&op_MulRegister,
+        &&op_MulSafe, &&op_MulSafe, &&op_MulSafe,
+        &&op_DivStack, &&op_DivStack, &&op_DivStack,
+        &&op_DivRegister, &&op_DivRegister, &&op_DivRegister,
+        &&op_DivSafe, &&op_DivSafe, &&op_DivSafe,
+        &&op_Return, &&op_Deallocate,
+        &&op_Sub32, &&op_SubFloat, &&op_Sub8, &&op_SubReg, &&op_SubReg, &&op_SubReg,
+        &&op_SubSafe32, &&op_SubSafeFloat, &&op_SubSafe8
     };
 
-    char op;
-    System::ErrorCode code { this->board.Assembly().Rom().TryRead(this->state.pc, op) };
-
-    if (code != System::ErrorCode::Ok)
-    {
-        LOGE(
-            System::LogLevel::Medium, 
-            "In ", this->board.Stringify(),
-            ", error while trying to read the instructions from ROM. Exit code: ",
-            System::ErrorCodeString(code)
-        );
+    uchar_t op;
+    System::ErrorCode code = board.Assembly().Rom().TryRead(state.pc, reinterpret_cast<char&>(op));
+    if ( code != System::ErrorCode::Ok) [[unlikely]] {
+        LOGE(System::LogLevel::Medium, board.Stringify(), " ROM read error: ", System::ErrorCodeString(code));
         return code;
     }
 
-    if (sizeof(ops)/sizeof(ops[0]) > op)
-    {
-        this->state.pc++;
-        code = ops[op](*this);
-
-        if (code == System::ErrorCode::Ok)
-            return code;
-
-        LOGE(
-            System::LogLevel::Medium,
-            "In ", this->board.Stringify(),
-            ", error while executing the instruction ", OpCodesString(op),
-            ". Error code: ", System::ErrorCodeString(code)
-        );
-
-        return code;
+    if (op >= std::size(jumpTable)) [[unlikely]] {
+        LOGE(System::LogLevel::Medium, board.Stringify(), " invalid opcode '", OpCodesString(op), "' at PC=", std::to_string(state.pc));
+        return System::ErrorCode::InvalidInstruction;
     }
 
-    LOGE(
-        System::LogLevel::Low,
-        "In ", this->board.Stringify(),
-        ", error while executing the instruction '", OpCodesString(op), 
-        "' at ROM index '", std::to_string(this->state.pc),
-        "'. Instruction hasn't been implemented yet or instruction is wrong."
-    );
+    state.pc++;
+    goto *jumpTable[op];
 
-    return System::ErrorCode::InvalidInstruction;
+op_NoOperation:         return NoOperation(*this);
+op_StoreThirtyTwo:      return StoreThirtyTwo(*this);
+op_StoreEight:          return StoreEight(*this);
+op_StoreFromSymbol:     return StoreFromSymbol(*this);
+op_LoadFromStack:       return LoadFromStack(*this);
+op_ReadFromHeap:        return ReadFromHeap(*this);
+op_ReadFromRegister:    return ReadFromRegister(*this);
+op_Move:                return Move(*this);
+op_Add32:               return Add32(*this);
+op_AddFloat:            return AddFloat(*this);
+op_Add8:                return Add8(*this);
+op_AddReg:              return AddReg(*this);
+op_AddSafe32:           return AddSafe32(*this);
+op_AddSafeFloat:        return AddSafeFloat(*this);
+op_AddSafe8:            return AddSafe8(*this);
+op_MemCopy:             return MemCopy(*this);
+op_Increment:           return Increment(*this);
+op_IncrementReg:        return IncrementReg(*this);
+op_IncrementSafe:       return IncrementSafe(*this);
+op_Decrement:           return Decrement(*this);
+op_DecrementReg:        return DecrementReg(*this);
+op_DecrementSafe:       return DecrementSafe(*this);
+op_BitAnd:              return BitAnd(*this);
+op_BitOr:               return BitOr(*this);
+op_BitNor:              return BitNor(*this);
+op_SwapTop:             return SwapTop(*this);
+op_DuplicateTop:        return DuplicateTop(*this);
+op_RawDataStack:        return RawDataStack(*this);
+op_Invert:              return Invert(*this);
+op_InvertSafe:          return InvertSafe(*this);
+op_Compare:             return Compare(*this);
+op_PopInstruction:      return PopInstruction(*this);
+op_Jump:                return Jump(*this);
+op_SwapRange:           return SwapRange(*this);
+op_DuplicateRange:      return DuplicateRange(*this);
+op_Repeat:              return Repeat(*this);
+op_Allocate:            return Allocate(*this);
+op_PowRegister:         return PowRegister(*this);
+op_PowStack:            return PowStack(*this);
+op_PowConst:            return PowConst(*this);
+op_SqrtConst:           return SqrtConst(*this);
+op_SqrtRegister:        return SqrtRegister(*this);
+op_SqrtStack:           return SqrtStack(*this);
+op_ConditionalJump:     return ConditionalJump(*this);
+op_CallFunc:            return CallFunc(*this);
+op_MulStack:            return MulStack(*this);
+op_MulRegister:         return MulRegister(*this);
+op_MulSafe:             return MulSafe(*this);
+op_DivStack:            return DivStack(*this);
+op_DivRegister:         return DivRegister(*this);
+op_DivSafe:             return DivSafe(*this);
+op_Return:              return Return(*this);
+op_Deallocate:          return Deallocate(*this);
+op_Sub32:               return Sub32(*this);
+op_SubFloat:            return SubFloat(*this);
+op_Sub8:                return Sub8(*this);
+op_SubReg:              return SubReg(*this);
+op_SubSafe32:           return SubSafe32(*this);
+op_SubSafeFloat:        return SubSafeFloat(*this);
+op_SubSafe8:            return SubSafe8(*this);
 }
+
 
 Error CPU::Push(const char value) noexcept 
 {

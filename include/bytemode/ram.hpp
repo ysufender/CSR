@@ -44,6 +44,8 @@ class RAM
             return *this;
         }
 
+        inline const char* const operator&() const { return this->data.get(); }
+
         inline char Read(const sysbit_t address) const
         {
             if (address >= (this->stackSize+this->heapSize) || address < 0)

@@ -508,11 +508,11 @@ OPR CPU::MemCopy(CPU& cpu) noexcept
                 "\nMemory Size: ", std::to_string(cpu.board.ram.Size())
             );
 
-        if (to == MemoryModeFlags::Stack && (toAddr + size) >= cpu.board.ram.StackSize())
-            LOGW(
-                "In ", cpu.board.Stringify(), nameof(MemCopy), 
-                " instruction will overflow from stack and overwrite heap."
-            );
+//        if (to == MemoryModeFlags::Stack && (toAddr + size) >= cpu.board.ram.StackSize())
+//            LOGW(
+//                "In ", cpu.board.Stringify(), nameof(MemCopy), 
+//                " instruction will overflow from stack and overwrite heap."
+//            );
 
         Slice dataToCopy { cpu.board.ram.ReadSome(fromAddr, size) };
         Error code { cpu.board.ram.WriteSome(toAddr, dataToCopy) };
@@ -2245,27 +2245,21 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                 ),
                 cpu.state
             );
-        const Slice params { cpu.board.ram.ReadSome(cpu.state.sp-cpu.state.bl, cpu.state.bl) };
 
         // (cpu.state.flg & 1) is the syscall flag
         // make syscall
         if (cpu.state.flg & 1)
         {
+            std::memcpy(cpu.paramBuf.get(), &cpu.board.ram+cpu.state.sp-cpu.state.bl, cpu.state.bl);
+            cpu.state.sp -= cpu.state.bl;
+
             if (op == OpCodes::cal)
                 cpu.state.pc += 4;
            
             // address is now the function id
-            std::unique_ptr<const char[]> ret {
-                cpu.board.assembly.SysCallHandler()(address, (params.size != 0) ? params.data : nullptr)
+            System::ErrorCode err {
+                cpu.board.assembly.SysCallHandler()(address, cpu.paramBuf.get())
             };
-
-            cpu.state.bl = ret == nullptr ? 0 : ret[1];
-
-            // function is void and returned without and error
-            if (ret.get() == nullptr)
-                return Error::Ok;
-
-            System::ErrorCode err { ret[0] };
 
             if (err != Error::Ok)
             {
@@ -2278,9 +2272,15 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                 return err;
             }
 
-            if (ret[1] != 0)
+            cpu.state.bl = cpu.paramBuf[0];
+
+            // function is void and returned without and error
+            if (cpu.state.bl == 0)
+                return Error::Ok;
+
+            if (cpu.state.bl != 0)
             {
-                Slice retVal (ret.get()+2, ret[1]);
+                Slice retVal (&cpu.paramBuf[1], cpu.state.bl);
                 err = cpu.PushSome(retVal);
 
                 if (err != Error::Ok)
@@ -2294,21 +2294,26 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                     return err;
                 }
             }
-
             return Error::Ok;
         }
 
         // normal call
+        // Copy params beforehand
         // Create callstack
         //  - Store bp
         //  - Store pc
         //  - Change bp
-        // Copy params
+
+        //const Slice params { cpu.board.ram.ReadSome(cpu.state.sp-cpu.state.bl, cpu.state.bl) };
+        Slice params (&cpu.board.ram+cpu.state.sp-cpu.state.bl, cpu.state.bl);
+        cpu.state.sp += 8 - cpu.state.bl;
+        cpu.board.ram.WriteSome(cpu.state.sp, params);
+        cpu.state.sp -= cpu.state.bl + 8;
 
         // Store bp
         char data[4];
         BytesFromInteger(cpu.state.bp, data);
-        cpu.PushSome({data, 4});
+        System::ErrorCode err = cpu.PushSome({data, 4});
 
         // Store pc 
         BytesFromInteger(cpu.state.pc + (op == OpCodes::cal ? 4 : 1), data);
@@ -2319,9 +2324,12 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
         cpu.state.bp = cpu.state.sp;
 
         // Copy params 
-        System::ErrorCode err;
-        err = cpu.PushSome(params);
-
+//        System::ErrorCode err;
+//        Slice params(cpu.paramBuf.get(), cpu.state.bl);
+//        err = cpu.board.ram.WriteSome(cpu.state.sp, params);
+//        if (err != System::ErrorCode::Ok)
+//            return err;
+        cpu.state.sp += params.size;
         return err;,
 
         return exc.GetCode();,

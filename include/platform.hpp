@@ -25,8 +25,6 @@
     using sym_t = void*;
 #endif
 
-#define SYSFN (*)
-
 dlID_t DLLoad(std::string_view path);
 bool DLUnload(dlID_t dlID);
 std::filesystem::path GetExePath();
