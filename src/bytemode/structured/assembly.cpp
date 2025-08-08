@@ -9,14 +9,14 @@
 #include <utility>
 #include <cstdio>
 
-#include "bytemode/assembly.hpp"
+#include "bytemode/structured/assembly.hpp"
 #include "CSRConfig.hpp"
 #include "extensions/converters.hpp"
 #include "extensions/streamextensions.hpp"
 #include "extensions/syntaxextensions.hpp"
-#include "message.hpp"
+#include "bytemode/structured/message.hpp"
 #include "system.hpp"
-#include "vm.hpp"
+#include "bytemode/structured/vm.hpp"
 
 //
 // Assembly Implementation
@@ -64,7 +64,7 @@ Error Assembly::Load() noexcept
     });
     bytecode.seekg(0, std::ios::beg);
 
-    std::unique_ptr<char[]> data { new char[length] };
+    std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(length) };
     bytecode.read(data.get(), length);
     bytecode.close();
 

@@ -4,7 +4,8 @@
 #include <string>
 
 #include "CSRConfig.hpp"
-#include "bytemode/assembly.hpp"
+#include "bytemode/nativecalls.hpp"
+#include "bytemode/structured/assembly.hpp"
 #include "message.hpp"
 #include "system.hpp"
 
@@ -30,13 +31,13 @@ class VM : IMessageObject
         VM& operator=(VM const&) = delete;
         VM& operator=(VM const&&) = delete;
 
-        static inline VM& GetVM() noexcept
+        static VM_INLINE VM& GetVM() noexcept
         {
             static VM singletonVM { };
             return singletonVM; 
         }
 
-        inline const AssemblyCollection& Assemblies() const noexcept 
+        VM_INLINE const AssemblyCollection& Assemblies() const noexcept 
         { return this->assemblies; }
 
         Error DispatchMessages() noexcept override;
@@ -46,7 +47,7 @@ class VM : IMessageObject
 //        const Assembly& GetAssembly(const std::string& name) const;
 //        const Assembly& GetAssembly(const std::string&& name) const;
 
-        inline const Assembly& GetAssembly(sysbit_t id) const
+        VM_INLINE const Assembly& GetAssembly(sysbit_t id) const
         {
             if (!this->asmIds.contains(id))
                 CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given id'", std::to_string(id), "' couldn't be found.");
@@ -56,8 +57,10 @@ class VM : IMessageObject
         Error AddAssembly(Assembly::AssemblySettings&& settings) noexcept;
         Error RemoveAssembly(sysbit_t id) noexcept;
 
-        inline const VMSettings& GetSettings() const noexcept
+        VM_INLINE const VMSettings& GetSettings() const noexcept
         { return this->settings; }
+
+        VM_INLINE VMContext& GetContext() { return context; }
 
         Error Setup(VMSettings settings) noexcept;
 
@@ -67,10 +70,11 @@ class VM : IMessageObject
         AssemblyCollection assemblies;
         AssemblyIDCollection asmIds;
         VMSettings settings;
+        VMContext context;
 
         VM() { }
 
-        inline sysbit_t GenerateNewAssemblyID()
+        VM_INLINE sysbit_t GenerateNewAssemblyID()
         {
             sysbit_t id { 0 };
             for (; id <= std::numeric_limits<sysbit_t>::max(); id++)

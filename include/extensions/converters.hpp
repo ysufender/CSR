@@ -1,4 +1,5 @@
 #pragma once
+#include "CSRConfig.hpp"
 #include <bit>
 #include <concepts>
 #include <cstdint>
@@ -11,7 +12,7 @@ concept byte_t =
     std::same_as<T, unsigned char>;
 
 template<typename U>
-inline constexpr U byteswap(U v) noexcept {
+VM_INLINE constexpr U byteswap(U v) noexcept {
     static_assert(std::is_unsigned_v<U>);
     if constexpr (sizeof(U)==1) return v;
     else if constexpr (sizeof(U)==2) {
@@ -43,7 +44,7 @@ inline constexpr U byteswap(U v) noexcept {
 }
 
 template<std::integral T, byte_t U>
-inline T IntegerFromBytes(const U* bytes) noexcept
+VM_INLINE T IntegerFromBytes(const U* bytes) noexcept
 {
     using UTI = std::make_unsigned_t<T>;
     UTI u{};
@@ -54,7 +55,7 @@ inline T IntegerFromBytes(const U* bytes) noexcept
 }
 
 template<std::integral T, byte_t U>
-inline void BytesFromInteger(const T integer, U* bytes) noexcept
+VM_INLINE void BytesFromInteger(const T integer, U* bytes) noexcept
 {
     using UTI = std::make_unsigned_t<T>;
     UTI u = static_cast<UTI>(integer);
@@ -64,7 +65,7 @@ inline void BytesFromInteger(const T integer, U* bytes) noexcept
 }
 
 template<byte_t T>
-inline float FloatFromBytes(const T* bytes) noexcept
+VM_INLINE float FloatFromBytes(const T* bytes) noexcept
 {
     uint32_t u{};
     std::memcpy(&u, bytes, sizeof(u));
@@ -74,7 +75,7 @@ inline float FloatFromBytes(const T* bytes) noexcept
 }
 
 template<byte_t T>
-inline void BytesFromFloat(const float val, T* bytes) noexcept
+VM_INLINE void BytesFromFloat(const float val, T* bytes) noexcept
 {
     uint32_t u = std::bit_cast<uint32_t>(val);
     if constexpr (std::endian::native == std::endian::little)

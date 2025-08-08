@@ -1,6 +1,7 @@
 #include <string>
 #include <string_view>
 
+#include "bytemode/nativecalls.hpp"
 #include "extensions/syntaxextensions.hpp"
 #include "bytemode/syscall.hpp"
 #include "CSRConfig.hpp"
@@ -25,28 +26,18 @@ SysCallHandler::~SysCallHandler()
 char SysCallHandler::BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept
 {
     if (boundFuncs.contains(id))
-        return (char)Error::DuplicateSysBind;
+        return ReturnCode::DuplicateSysBind;
 
     boundFuncs[id] = rval(handler);
-    return (char)Error::Ok;
+    return ReturnCode::Ok;
 }
 
 char SysCallHandler::UnbindFunction(sysbit_t id) noexcept
 {
     if (!boundFuncs.contains(id))
-        return (char)Error::InvalidKey;
+        return ReturnCode::InvalidKey;
     boundFuncs.erase(id);
-    return (char)Error::Ok;
-}
-
-const SysFunctionHandler& SysCallHandler::operator[](sysbit_t id) const
-{
-    if (!boundFuncs.contains(id))
-        CRASH(
-            Error::InvalidKey,
-            "Error while syscall, no handler with key ", std::to_string(id), "."
-        ); 
-    return boundFuncs.at(id);
+    return ReturnCode::Ok;
 }
 
 dlID_t SysCallHandler::LoadDl(std::string_view dllPath) 

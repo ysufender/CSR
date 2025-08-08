@@ -3,10 +3,10 @@
 #include <memory>
 #include <string>
 
-#include "bytemode/instructions.hpp"
+#include "bytemode/structured/instructions.hpp"
 #include "extensions/converters.hpp"
-#include "bytemode/assembly.hpp"
-#include "bytemode/cpu.hpp"
+#include "bytemode/structured/assembly.hpp"
+#include "bytemode/structured/cpu.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
 
@@ -16,7 +16,7 @@ CPU::CPU(Board& board) :
     paramBuf(std::make_unique_for_overwrite<char[]>(std::numeric_limits<uchar_t>::max()))
 {
     // Check ROM for stack/heap sizes beforehand.
-    char tmp;
+    uchar_t tmp;
     System::ErrorCode code;
     for (int i = 0; i < 12; i++)
     {
@@ -69,11 +69,14 @@ Error CPU::Cycle() noexcept {
         &&op_DivSafe, &&op_DivSafe, &&op_DivSafe,
         &&op_Return, &&op_Deallocate,
         &&op_Sub32, &&op_SubFloat, &&op_Sub8, &&op_SubReg, &&op_SubReg, &&op_SubReg,
-        &&op_SubSafe32, &&op_SubSafeFloat, &&op_SubSafe8
+        &&op_SubSafe32, &&op_SubSafeFloat, &&op_SubSafe8,
+        &&op_IncrementLocal, &&op_IncrementLocal, &&op_IncrementLocal,
+        &&op_ReadLocal, &&op_ReadLocal,
+        &&op_CompareJump
     };
 
     uchar_t op;
-    System::ErrorCode code = board.Assembly().Rom().TryRead(state.pc, reinterpret_cast<char&>(op));
+    System::ErrorCode code = board.Assembly().Rom().TryRead(state.pc, op);
     if ( code != System::ErrorCode::Ok) [[unlikely]] {
         LOGE(System::LogLevel::Medium, board.Stringify(), " ROM read error: ", System::ErrorCodeString(code));
         return code;
@@ -147,6 +150,9 @@ op_SubReg:              return SubReg(*this);
 op_SubSafe32:           return SubSafe32(*this);
 op_SubSafeFloat:        return SubSafeFloat(*this);
 op_SubSafe8:            return SubSafe8(*this);
+op_IncrementLocal:      return IncrementLocal(*this);
+op_ReadLocal:           return ReadLocal(*this);
+op_CompareJump:         return CompareJump(*this);
 }
 
 

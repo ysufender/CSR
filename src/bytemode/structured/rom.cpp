@@ -1,9 +1,9 @@
 #include <string>
 
 #include "CSRConfig.hpp"
-#include "bytemode/assembly.hpp"
+#include "bytemode/structured/assembly.hpp"
 #include "system.hpp"
-#include "bytemode/rom.hpp"
+#include "bytemode/structured/rom.hpp"
 
 //
 // ROM Implementation
@@ -17,7 +17,7 @@ void ROM::operatorCrash(const sysbit_t index) const
     );
 }
 
-Error ROM::TryRead(const sysbit_t index, char& data, const std::function<void()> failAct) const noexcept
+Error ROM::TryRead(const sysbit_t index, uchar_t& data, const std::function<void()> failAct) const noexcept
 {
     System::ErrorCode isOk { index >= this->size || index < 0 };
 

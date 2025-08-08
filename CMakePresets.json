@@ -15,7 +15,7 @@
                 "CMAKE_CXX_COMPILER": "g++",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "CMAKE_CXX_STANDARD": "20",
-                "CMAKE_CXX_STANDART_REQUIRED": true,
+                "CMAKE_CXX_STANDARD_REQUIRED": true,
 
                 "ENABLE_JIT": "OFF",
                 "OUTPUT_PATH": ""
@@ -36,7 +36,8 @@
             "inherits": "default",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "OUTPUT_PATH": "Debug"
+                "OUTPUT_PATH": "Debug",
+                "CMAKE_CXX_FLAGS": "-O1 -g -fno-omit-frame-pointer"
             }
         },
         {

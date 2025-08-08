@@ -14,12 +14,12 @@
 
 #include "extensions/syntaxextensions.hpp"
 #include "extensions/converters.hpp"
-#include "bytemode/assembly.hpp"
-#include "bytemode/board.hpp"
+#include "bytemode/structured/assembly.hpp"
+#include "bytemode/structured/board.hpp"
 #include "CSRConfig.hpp"
-#include "message.hpp"
+#include "bytemode/structured/message.hpp"
 #include "system.hpp"
-#include "vm.hpp"
+#include "bytemode/structured/vm.hpp"
 
 //
 // Board Implementation

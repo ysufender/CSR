@@ -1,10 +1,10 @@
 #include "CSRConfig.hpp"
-#include "bytemode/board.hpp"
+#include "bytemode/structured/board.hpp"
 #include "system.hpp"
 #include <cassert>
 #include <cstring>
 #include <string>
-#include "bytemode/ram.hpp"
+#include "bytemode/structured/ram.hpp"
 
 //
 // RAM Implementation

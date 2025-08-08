@@ -13,14 +13,14 @@
 uint32_t IntegerFromBytes(const char* bytes) noexcept
 {
     if (std::endian::native == std::endian::big)
-        return *const_cast<uint32_t*>(reinterpret_cast<const uint32_t*>(reinterpret_cast<const uint8_t*>(bytes)));
+        return *const_cast<uint32_t*>(reinterpret_cast<const uint32_t*>(reinterpret_cast<const uchar*>(bytes)));
 
     uint32_t ures { 0 };
 
     for (uint32_t i = 0; i < sizeof(uint32_t); i++)
     {
-        ures <<= sizeof(uint8_t)*8;
-        ures |= static_cast<uint8_t>(bytes[i]);
+        ures <<= sizeof(uchar)*8;
+        ures |= static_cast<uchar>(bytes[i]);
     }
 
     return ures;

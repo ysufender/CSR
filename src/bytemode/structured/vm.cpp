@@ -5,12 +5,12 @@
 #include "bytemode/syscall.hpp"
 #include "extensions/syntaxextensions.hpp"
 #include "extensions/converters.hpp"
-#include "bytemode/assembly.hpp"
+#include "bytemode/structured/assembly.hpp"
 #include "CSRConfig.hpp"
 #include "platform.hpp"
-#include "message.hpp"
+#include "bytemode/structured/message.hpp"
 #include "system.hpp"
-#include "vm.hpp"
+#include "bytemode/structured/vm.hpp"
 
 Error InitStandardLibrary(SysCallHandler&);
 
@@ -119,7 +119,7 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     dlPath.replace_extension("dylib");
 #endif
     
-    LOG("Loading ",
+    LOGD("Loading ",
         dlPath.string(),
         " for assembly ",
         settings.path.filename().string()
@@ -149,7 +149,7 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
         return Error::DLInitError;
     }
 
-    if (extenderInit(&handler, &SysCallBinder, &SysCallUnbinder) != static_cast<char>(Error::Ok))
+    if (extenderInit(&context) != static_cast<char>(Error::Ok))
     {
         LOGE(System::LogLevel::Medium, "Failed to initialize extender for assembly ", settings.path.generic_string());
         //this->RemoveAssembly(settings.id);

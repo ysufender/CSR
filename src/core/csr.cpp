@@ -1,9 +1,10 @@
 #include "CSRConfig.hpp"
 #include "CLIParser.hpp"
+#include "bytemode/flat/flatvm.hpp"
 #include "fastcout.hpp"
 #include "system.hpp"
 #include "csr.hpp"
-#include "vm.hpp"
+#include "bytemode/structured/vm.hpp"
 
 int csrmain(int argc, char** args)
 {
@@ -19,12 +20,12 @@ int csrmain(int argc, char** args)
             PrintHelp(flags);
         else if (flags.GetFlag<CLIParser::FlagType::Bool>("version"))
             PrintHeader();
-        else
+        else if (!flags.GetFlag<CLIParser::FlagType::Bool>("flat"))
         {
             if (flags.GetFlag<CLIParser::FlagType::Bool>("no-new"))
                 LOGW("Single-process runtime is currently unavailable. A new instance will be created.");
 
-            VM::GetVM().Setup({
+            VM::GetVM().Setup(VM::VMSettings {
                 .strictMessages = !flags.GetFlag<CLIParser::FlagType::Bool>("no-strict-messages"),
                 .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
 #ifndef NDEBUG
@@ -40,6 +41,7 @@ int csrmain(int argc, char** args)
 
             for (const std::filesystem::path& file : files)
             {
+                LOGE(System::LogLevel::High, "Structured VM is not compatible with the current JASM. Use FlatVM by using -f flag");
                 errc = VM::GetVM().AddAssembly({
 #ifdef ENABLE_JIT
                     .jit = flags.GetFlag<CLIParser::FlagType::Bool>("jit"),
@@ -78,6 +80,19 @@ int csrmain(int argc, char** args)
             if (VM::GetVM().Assemblies().size() > 0)
                 errc = VM::GetVM().Run();
         } 
+        else
+        {
+            std::vector<std::string> exec { flags.GetFlag<CLIParser::FlagType::StringList>("exe") };
+            if (exec.size() > 1)
+                LOGW("FlatVM requires a single executable. Only the first executable will be used.");
+
+            FlatVM vm {FlatVM::VMSettings {
+                .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
+                .path = exec.at(0)
+            }};
+
+            errc = vm.Run();
+        }
     }
     catch (const CSRException& exc)
     {
@@ -93,9 +108,10 @@ int csrmain(int argc, char** args)
         return 1;
     }
 
-    //std::cout << 
-        //"\nExited With " << static_cast<int>(errc) << " (" <<
-        //System::ErrorCodeString(errc) << ")" << std::endl;
+    if (errc != Error::Ok)
+        std::cout << 
+            "\nExited With " << static_cast<int>(errc) << " (" <<
+            System::ErrorCodeString(errc) << ")" << std::endl;
     return static_cast<int>(errc);
 }
 
@@ -137,13 +153,15 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
 #ifdef ENABLE_JIT
     parser.AddFlag<FlagType::Bool>("jit", "Mark this execution as JIT target.");
 #endif
-    parser.AddFlag<FlagType::Bool>("no-new", "Do not create a new instance of CSR, use an already running one.");
+    parser.Separator();
+    parser.AddFlag<CLIParser::FlagType::Bool>("flat", "Run a flat VM without the whole VM structure.", false);
+    parser.AddFlag<FlagType::Bool>("no-new", "Do not create a new instance of CSR, use an already running one.", false);
     parser.AddFlag<FlagType::Bool>("no-strict-messages", "Don't strictly verify messages in each checkpoint when dispatching.", true);
-    parser.AddFlag<FlagType::Bool>("messaging", "Disable communication within VM.", false);
+    parser.AddFlag<FlagType::Bool>("messaging", "Enable communication within VM.", false);
     parser.Separator();
     parser.AddFlag<FlagType::StringList>("exe", "Executable files to execute.");
     parser.Separator();
-    parser.AddFlag<FlagType::Bool>("unsafe", "Load extender dll of each executable.");
+    parser.AddFlag<FlagType::Bool>("unsafe", "Load extender dll of each executable.", false);
 #ifndef NDEBUG
     parser.Separator();
     parser.AddFlag<FlagType::Bool>("step", "Run the VM once every input.");
@@ -154,6 +172,7 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
     parser.BindFlag("h", "help");
     parser.BindFlag("v", "version");
     parser.BindFlag("n", "no-new");
+    parser.BindFlag("f", "flat");
     parser.BindFlag("nsm", "no-strict-messages");
     parser.BindFlag("m", "messaging");
     parser.BindFlag("e", "exe");

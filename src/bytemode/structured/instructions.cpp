@@ -3,12 +3,13 @@
 #include <array>
 #include <cmath>
 
+#include "bytemode/structured/vm.hpp"
 #include "extensions/syntaxextensions.hpp"
 #include "extensions/converters.hpp"
-#include "bytemode/instructions.hpp"
-#include "bytemode/assembly.hpp"
-#include "bytemode/board.hpp"
-#include "bytemode/cpu.hpp"
+#include "bytemode/structured/instructions.hpp"
+#include "bytemode/structured/assembly.hpp"
+#include "bytemode/structured/board.hpp"
+#include "bytemode/structured/cpu.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
 
@@ -476,7 +477,7 @@ OPR CPU::MemCopy(CPU& cpu) noexcept
     // mcp <4bits> <4bits>
     // bits are memory mode flags
     try_catch(
-        uchar_t compressedModes { static_cast<uchar_t>(cpu.board.assembly.Rom().Read(cpu.state.pc)) };
+        uchar_t compressedModes { cpu.board.assembly.Rom().Read(cpu.state.pc) };
         MemoryModeFlags from { MemoryModeFlags(compressedModes >> 4) };
         MemoryModeFlags to { MemoryModeFlags(compressedModes & 0x0F) };
 
@@ -596,7 +597,7 @@ OPR CPU::Increment(CPU& cpu) noexcept
                         "can't increment (u)int from stack, SP < 4."
                     );
 
-                uchar_t amount { static_cast<uchar_t>(
+                uchar_t amount { (
                     cpu.board.assembly.Rom().Read(cpu.state.pc)
                 )};
                 uchar_t stack { static_cast<uchar_t>(
@@ -679,7 +680,7 @@ OPR CPU::IncrementReg(CPU& cpu) noexcept
                     cpu.state
                 )};
 
-                uchar_t amount { static_cast<uchar_t>(
+                uchar_t amount { (
                     cpu.board.assembly.Rom().Read(cpu.state.pc+1)
                 )};
 
@@ -767,7 +768,7 @@ OPR CPU::IncrementSafe(CPU& cpu) noexcept
                         "can't increment (u)int from stack, SP < 4."
                     );
 
-                uchar_t amount { static_cast<uchar_t>(
+                uchar_t amount { (
                     cpu.board.assembly.Rom().Read(cpu.state.pc)
                 )};
                 uchar_t stack { static_cast<uchar_t>(
@@ -863,7 +864,7 @@ OPR CPU::Decrement(CPU& cpu) noexcept
                         "can't decrement (u)byte from stack, SP < 4."
                     );
 
-                uchar_t amount { static_cast<uchar_t>(
+                uchar_t amount { (
                     cpu.board.assembly.Rom().Read(cpu.state.pc)
                 )};
                 uchar_t stack { static_cast<uchar_t>(
@@ -945,7 +946,7 @@ OPR CPU::DecrementReg(CPU& cpu) noexcept
                     cpu.state
                 )};
 
-                uchar_t amount { static_cast<uchar_t>(
+                uchar_t amount { (
                     cpu.board.assembly.Rom().Read(cpu.state.pc+1)
                 )};
 
@@ -1032,7 +1033,7 @@ OPR CPU::DecrementSafe(CPU& cpu) noexcept
                         "can't decrement (u)int from stack, SP < 4."
                     );
 
-                uchar_t amount { static_cast<uchar_t>(
+                uchar_t amount { (
                     cpu.board.assembly.Rom().Read(cpu.state.pc)
                 )};
                 uchar_t stack { static_cast<uchar_t>(
@@ -1236,11 +1237,11 @@ OPR CPU::SwapTop(CPU& cpu) noexcept
                         " can't swap 32-bits on stack, SP < 2"
                     );
 
-                char bottom { 
+                uchar_t bottom { 
                     cpu.board.ram.Read(cpu.state.sp-2)
                 };
 
-                char top { 
+                uchar_t top { 
                     cpu.board.ram.Read(cpu.state.sp-1)
                 };
 
@@ -1333,7 +1334,7 @@ OPR CPU::DuplicateTop(CPU& cpu) noexcept
                         " can't duplicate 8-bits on stack. SP < 1"
                     );
 
-                const char data { cpu.board.ram.Read(cpu.state.sp-1) };
+                const uchar_t data { cpu.board.ram.Read(cpu.state.sp-1) };
                 Error code { cpu.Push(data) };
 
                 return code;
@@ -1545,7 +1546,7 @@ OPR CPU::Compare(CPU& cpu) noexcept
         cpu.state.pc++;
 
         Numo numMode { 
-            static_cast<char>(compressedModes >> 5) 
+            static_cast<uchar_t>(compressedModes >> uchar_t{5}) 
             // 11122222
         };
         const uchar_t compareMode {
@@ -1565,6 +1566,7 @@ OPR CPU::Compare(CPU& cpu) noexcept
                         cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                     )};
 
+                    cpu.state.sp -= 8;
                     cpu.state.bl = CompareVarious(int1, int2, compareMode);
                 }
                 else if (numMode == Numo::Float)
@@ -1576,6 +1578,7 @@ OPR CPU::Compare(CPU& cpu) noexcept
                         cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                     )};
 
+                    cpu.state.sp -= 8;
                     cpu.state.bl = CompareVarious(float1, float2, compareMode);
                 }
                 else if (numMode == Numo::Int)
@@ -1587,6 +1590,7 @@ OPR CPU::Compare(CPU& cpu) noexcept
                         cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
                     )};
 
+                    cpu.state.sp -= 8;
                     cpu.state.bl = CompareVarious(int1, int2, compareMode);
                 }
                 else if (numMode == Numo::UByte)
@@ -1598,13 +1602,15 @@ OPR CPU::Compare(CPU& cpu) noexcept
                         cpu.board.ram.Read(cpu.state.sp-1)
                     )};
 
+                    cpu.state.sp -= 2;
                     cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
                 }
                 else
                 {
-                    char byte1 { cpu.board.ram.Read(cpu.state.sp-2) };
-                    char byte2 { cpu.board.ram.Read(cpu.state.sp-1) };
+                    char byte1 { static_cast<char>(cpu.board.ram.Read(cpu.state.sp-2)) };
+                    char byte2 { static_cast<char>(cpu.board.ram.Read(cpu.state.sp-1)) };
 
+                    cpu.state.sp -= 2;
                     cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
                 }
                 return System::ErrorCode::Ok;
@@ -1736,7 +1742,7 @@ OPR CPU::SwapRange(CPU& cpu) noexcept
         System::ErrorCode err { Error::Ok };
         for (sysbit_t midpoint = cpu.state.sp-size; size > 0; size--)
         {
-            char tmp { cpu.board.ram.Read(cpu.state.sp-size) };
+            uchar_t tmp { cpu.board.ram.Read(cpu.state.sp-size) };
             err = err == Error::Ok ? cpu.board.ram.Write(
                 cpu.state.sp-size,
                 cpu.board.ram.Read(midpoint-size)   
@@ -2258,7 +2264,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
            
             // address is now the function id
             System::ErrorCode err {
-                cpu.board.assembly.SysCallHandler()(address, cpu.paramBuf.get())
+                cpu.board.assembly.SysCallHandler()(address, &VM::GetVM().GetContext(), cpu.paramBuf.get())
             };
 
             if (err != Error::Ok)
@@ -2935,6 +2941,170 @@ OPR CPU::SubSafe8(CPU& cpu) noexcept
         
         Error err { cpu.Push(lhs-rhs) };
         return err;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::IncrementLocal(CPU& cpu) noexcept
+{
+    try_catch(
+        const sysbit_t index { IntegerFromBytes<sysbit_t>(cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data) };
+        if (index < 0)
+            CRASH(Error::IndexOutOfBounds, "Index can't be negative in ", OpCodesString(cpu.board.assembly.Rom().Read(cpu.state.pc-1)));
+        switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
+        {
+            case OpCodes::incli:
+            {
+                // incli <index> <constant> 
+                char data[4];
+                const sysbit_t constant { IntegerFromBytes<sysbit_t>(cpu.board.assembly.Rom().ReadSome(cpu.state.pc+4, 4).data) };
+                const sysbit_t local { IntegerFromBytes<sysbit_t>(cpu.board.ram.ReadSome(cpu.state.bp+index, 4).data) };
+                BytesFromInteger(constant+local, data);
+                cpu.state.pc += 8;
+                return cpu.board.ram.WriteSome(cpu.state.bp+index, {data, 4});
+            }
+            case OpCodes::inclf:
+            {
+                // inclf <index> <constant> 
+                char data[4];
+                const float constant { FloatFromBytes(cpu.board.assembly.Rom().ReadSome(cpu.state.pc+4, 4).data) };
+                const float local { FloatFromBytes(cpu.board.ram.ReadSome(cpu.state.bp+index, 4).data) };
+                BytesFromFloat(constant+local, data);
+                cpu.state.pc += 8;
+                return cpu.board.ram.WriteSome(cpu.state.bp+index, {data, 4});
+            }
+            case OpCodes::inclb:
+            {
+                // inclb <index> <constant> 
+                const uchar_t constant { cpu.board.assembly.Rom().Read(cpu.state.pc+4) };
+                const uchar_t local { cpu.board.ram.Read(cpu.state.bp+index) };
+                cpu.state.pc += 5;
+                return cpu.board.ram.Write(cpu.state.bp+index, constant+local);
+            }
+            default:
+                return System::ErrorCode::InvalidInstruction;
+        },
+        
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::ReadLocal(CPU& cpu) noexcept
+{
+    try_catch(
+        // rdlt <index>
+        // rdle <index>
+        sysbit_t size {
+            static_cast<sysbit_t>
+            (cpu.board.assembly.Rom().Read(cpu.state.pc-1) == (char)OpCodes::rdlt ? 4 : 1) 
+        };
+        sysbit_t index {
+            IntegerFromBytes<sysbit_t>(cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data)
+        };
+
+        const Slice values { cpu.board.ram.ReadSome(cpu.state.bp+index, size) };
+
+        Error errc { cpu.PushSome(values) };
+        if (errc != System::ErrorCode::Ok)
+            return errc;
+        cpu.state.pc += 4;
+        return errc;,
+
+        return exc.GetCode();,
+        return System::ErrorCode::UnhandledException;
+    )
+}
+
+OPR CPU::CompareJump(CPU& cpu) noexcept
+{   
+    using Numo = NumericModeFlags;
+
+    try_catch(
+        const uchar_t compressedModes { static_cast<const uchar_t>(
+            cpu.board.assembly.Rom().Read(cpu.state.pc)
+        )};
+        cpu.state.pc++;
+
+        Numo numMode { 
+            static_cast<uchar_t>(compressedModes >> uchar_t{5}) 
+        };
+        const uchar_t compareMode {
+            static_cast<const uchar_t>(compressedModes & 0b00011111)
+        };
+
+        if (numMode == Numo::UInt)
+        {
+            sysbit_t int1 { IntegerFromBytes<sysbit_t>(
+                cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+            )};
+            sysbit_t int2 { IntegerFromBytes<sysbit_t>(
+                cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+            )};
+
+            cpu.state.sp -= 8;
+            cpu.state.bl = CompareVarious(int1, int2, compareMode);
+        }
+        else if (numMode == Numo::Float)
+        {
+            float float1 { FloatFromBytes(
+                cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+            )};
+            float float2 { FloatFromBytes(
+                cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+            )};
+
+            cpu.state.sp -= 8;
+            cpu.state.bl = CompareVarious(float1, float2, compareMode);
+        }
+        else if (numMode == Numo::Int)
+        {
+            int int1 { IntegerFromBytes<int32_t>(
+                cpu.board.ram.ReadSome(cpu.state.sp-8, 4).data
+            )};
+            int int2 { IntegerFromBytes<int32_t>(
+                cpu.board.ram.ReadSome(cpu.state.sp-4, 4).data
+            )};
+
+            cpu.state.sp -= 8;
+            cpu.state.bl = CompareVarious(int1, int2, compareMode);
+        }
+        else if (numMode == Numo::UByte)
+        {
+            uchar_t byte1 { static_cast<uchar_t>(
+                cpu.board.ram.Read(cpu.state.sp-2)
+            )};
+            uchar_t byte2 { static_cast<uchar_t>(
+                cpu.board.ram.Read(cpu.state.sp-1)
+            )};
+
+            cpu.state.sp -= 2;
+            cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
+        }
+        else
+        {
+            char byte1 { static_cast<char>(cpu.board.ram.Read(cpu.state.sp-2)) };
+            char byte2 { static_cast<char>(cpu.board.ram.Read(cpu.state.sp-1)) };
+
+            cpu.state.sp -= 2;
+            cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
+        }
+
+        sysbit_t address;
+
+        if (cpu.state.bl == 0)
+            address = cpu.state.pc + 4;
+        else
+            address = IntegerFromBytes<sysbit_t>(
+                cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data 
+            );
+
+        // Safety test, address must be in bounds of rom
+        RomSafetyCheck(address);
+        cpu.state.pc = address;
+        return System::ErrorCode::Ok;,
 
         return exc.GetCode();,
         return System::ErrorCode::UnhandledException;

@@ -4,9 +4,9 @@
 #include <string>
 #include <unordered_map>
 
-#include "bytemode/process.hpp"
-#include "bytemode/cpu.hpp"
-#include "bytemode/ram.hpp"
+#include "bytemode/structured/process.hpp"
+#include "bytemode/structured/cpu.hpp"
+#include "bytemode/structured/ram.hpp"
 #include "CSRConfig.hpp"
 #include "message.hpp"
 #include "system.hpp"
@@ -26,7 +26,7 @@ class Board : IMessageObject
         Board(Board&&) = delete;
         Board(class Assembly& assembly, sysbit_t id);
 
-        inline const class Assembly& Assembly() const 
+        VM_INLINE const class Assembly& Assembly() const 
         { return this->assembly; }
 
         Error DispatchMessages() noexcept; 
@@ -40,7 +40,7 @@ class Board : IMessageObject
 
         const std::string& Stringify() const noexcept;
 
-        inline const Process& GetExecutingProcess() const noexcept
+        VM_INLINE const Process& GetExecutingProcess() const noexcept
         { return this->processes.at(this->currentProcess); }
 
         const sysbit_t id;

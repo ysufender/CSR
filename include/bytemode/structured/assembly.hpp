@@ -8,8 +8,8 @@
 #include "message.hpp"
 #include "system.hpp"
 #include "bytemode/syscall.hpp"
-#include "bytemode/board.hpp"
-#include "bytemode/rom.hpp"
+#include "bytemode/structured/board.hpp"
+#include "bytemode/structured/rom.hpp"
 
 using BoardCollection = std::unordered_map<sysbit_t, Board>;
 

@@ -1,7 +1,9 @@
 #include <chrono>
+#include <cstdint>
 #include <system.hpp>
 #include <thread>
 
+#include "bytemode/nativecalls.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/syscall.hpp"
 #include "CSRConfig.hpp"
@@ -9,33 +11,34 @@
 
 namespace
 {
-    char Print(char* params) noexcept
+    char Print( VMContext* context, char* params) noexcept
     {
-        std::cout.write(params+4, IntegerFromBytes<sysbit_t>(params));
-        params[0] = 0;
-        return static_cast<char>(System::ErrorCode::Ok);
+        char* data { (char*)context->GetRealAddress(context, IntegerFromBytes<uint32_t>(params)) };
+        std::cout.write(data+4, IntegerFromBytes<uint32_t>(data));
+        ret(0)
     }
 
-    char PrintLine(char* params) noexcept
+    char PrintLine( VMContext* context, char* params) noexcept
     {
-        std::cout.write(params+4, IntegerFromBytes<sysbit_t>(params)) << '\n';
-        params[0] = 0;
-        return static_cast<char>(Error::Ok);
+        char* data { (char*)context->GetRealAddress(context, IntegerFromBytes<uint32_t>(params)) };
+        std::cout.write(data+4, IntegerFromBytes<uint32_t>(data));
+        std::cout.put('\n');
+        ret(0)
     }
 
-    char Sleep(char* params) noexcept
+    char Sleep( VMContext* context, char* params) noexcept
     {
         FastCout::Get().Flush();
         std::this_thread::sleep_for(std::chrono::seconds(static_cast<sysbit_t>(FloatFromBytes(params))));
         params[0] = 0;
-        return static_cast<char>(Error::Ok);
+        return ReturnCode::Ok;
     }
 
-    char SleepSilent(char* params) noexcept
+    char SleepSilent( VMContext* context, char* params) noexcept
     {
         std::this_thread::sleep_for(std::chrono::seconds(static_cast<sysbit_t>(FloatFromBytes(params))));
         params[0] = 0;
-        return static_cast<char>(Error::Ok);
+        return ReturnCode::Ok;
     }
 }
 

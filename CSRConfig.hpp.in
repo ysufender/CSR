@@ -10,5 +10,8 @@
 
 #cmakedefine ENABLE_JIT 
 
+#define VM_INLINE inline __attribute__((always_inline))
+#define VM_API VMContext* context
+
 using sysbit_t = uint32_t;
 using uchar_t = uint8_t;

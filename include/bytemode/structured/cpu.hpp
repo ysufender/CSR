@@ -3,7 +3,7 @@
 #include <functional>
 
 #include "extensions/syntaxextensions.hpp"
-#include "bytemode/instructions.hpp"
+#include "bytemode/structured/instructions.hpp"
 #include "slice.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
@@ -94,6 +94,9 @@ class CPU
         OPFunc(Sub32) OPFunc(SubFloat) OPFunc(Sub8)
         OPFunc(SubReg)
         OPFunc(SubSafe32) OPFunc(SubSafeFloat) OPFunc(SubSafe8)
+        OPFunc(IncrementLocal)
+        OPFunc(ReadLocal)
+        OPFunc(CompareJump)
 
 #undef fn
 #undef arr

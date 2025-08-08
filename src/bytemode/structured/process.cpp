@@ -2,15 +2,15 @@
 #include <sstream>
 #include <string>
 
-#include "bytemode/cpu.hpp"
-#include "bytemode/instructions.hpp"
+#include "bytemode/structured/cpu.hpp"
+#include "bytemode/structured/instructions.hpp"
 #include "extensions/converters.hpp"
-#include "bytemode/process.hpp"
-#include "bytemode/board.hpp"
+#include "bytemode/structured/process.hpp"
+#include "bytemode/structured/board.hpp"
 #include "CSRConfig.hpp"
-#include "message.hpp"
+#include "bytemode/structured/message.hpp"
 #include "system.hpp"
-#include "vm.hpp"
+#include "bytemode/structured/vm.hpp"
 
 //
 // Process Implementation

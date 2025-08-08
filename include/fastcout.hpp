@@ -25,10 +25,10 @@ public:
         Small = 1 << 18
     };
 
-    static inline FastCout& Get() noexcept
+    static VM_INLINE FastCout& Get() noexcept
     { return *FastCout::singleton; }
 
-    static inline void Init(BufferSize bufferSize = BufferSize::Default) noexcept
+    static VM_INLINE void Init(BufferSize bufferSize = BufferSize::Default) noexcept
     {
         std::call_once(FastCout::initFlag, [bufferSize]() {
             FastCout::singleton = new (std::nothrow) FastCout { bufferSize };
@@ -41,7 +41,7 @@ public:
         });
     }
 
-    static inline Error Flush() noexcept
+    static VM_INLINE Error Flush() noexcept
     {
         if (FastCout::singleton == nullptr)
             return System::ErrorCode::IOError;
@@ -53,7 +53,7 @@ public:
     }
 
 protected:
-    inline int_type overflow(int_type character) override
+    VM_INLINE int_type overflow(int_type character) override
     {
         std::lock_guard<std::mutex> lockGuard { this->mutex };
         if (character != traits_type::eof())
@@ -66,7 +66,7 @@ protected:
         return character;
     }
 
-    inline std::streamsize xsputn(const char* data, std::streamsize length) override
+    VM_INLINE std::streamsize xsputn(const char* data, std::streamsize length) override
     {
         std::lock_guard<std::mutex> lockGuard { this->mutex };
         std::streamsize written { 0 };
@@ -86,7 +86,7 @@ protected:
         return written;
     }
 
-    inline int sync() override
+    VM_INLINE int sync() override
     {
         std::lock_guard<std::mutex> lockGuard { this->mutex };
         return FlushBuffer() ? 0 : -1;
@@ -114,7 +114,7 @@ private:
         this->setp(this->buffer, this->buffer + this->bufSize);
     }
 
-    inline bool FlushBuffer() noexcept
+    VM_INLINE bool FlushBuffer() noexcept
     {
         size_t count { static_cast<size_t>(this->pptr() - this->pbase()) };
         if (count == 0)

@@ -55,7 +55,8 @@ struct System
     E(DoubleFree) \
     E(Shutdown) \
     E(ProcessInterrupt) \
-    E(IOError)
+    E(IOError) \
+    E(NativeCallError)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

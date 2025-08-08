@@ -8,6 +8,11 @@ CSR is a part of CSLB project. The CSLB project (which stands for Common Scripti
 consists of three parts: Assembler, Linker and Runtime. The runtime part is CSR itself, as can be understood from the name.
 The assembler and linker make up JASM and it has its [own repo](https://github.com/ysufender/JASM).
 
+> NOTE:
+>   FlatVM is the currently in progress VM type and is the only supported one. If you
+>   want to use the other VM under bytemode/structured/ I can't guarantee that it'll work
+>   with the existing JASM.
+
 ## Quickstart
 
 ### Installation

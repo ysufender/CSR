@@ -34,7 +34,7 @@ class RAM
                 );
         }
 
-        inline RAM& operator=(RAM&& other)
+        VM_INLINE RAM& operator=(RAM&& other)
         {
             this->stackSize = other.stackSize;
             this->heapSize = other.heapSize;
@@ -44,16 +44,16 @@ class RAM
             return *this;
         }
 
-        inline const char* const operator&() const { return this->data.get(); }
+        VM_INLINE const char* const operator&() const { return this->data.get(); }
 
-        inline char Read(const sysbit_t address) const
+        VM_INLINE uchar_t Read(const sysbit_t address) const
         {
             if (address >= (this->stackSize+this->heapSize) || address < 0)
                 crashRead(address); 
             return this->data[address];
         }
 
-        inline Error Write(const sysbit_t address, char value) noexcept
+        VM_INLINE Error Write(const sysbit_t address, char value) noexcept
         {
             if (address >= (this->stackSize+this->heapSize) || address < 0)
                 return System::ErrorCode::RAMAccessError;
@@ -61,7 +61,7 @@ class RAM
             return System::ErrorCode::Ok;
         }
 
-        inline const Slice ReadSome(const sysbit_t address, const sysbit_t size) const
+        VM_INLINE const Slice ReadSome(const sysbit_t address, const sysbit_t size) const
         {
             if (address >= (this->stackSize+this->heapSize) || address < 0 || (address+size) > this->stackSize+this->heapSize)
                 crashRead(address); 
@@ -74,13 +74,13 @@ class RAM
         sysbit_t Allocate(sysbit_t size);
         Error Deallocate(const sysbit_t address, const sysbit_t size) noexcept;
 
-        inline constexpr sysbit_t Size() const noexcept
+        VM_INLINE constexpr sysbit_t Size() const noexcept
         { return heapSize+stackSize; }
 
-        inline constexpr sysbit_t StackSize() const noexcept
+        VM_INLINE constexpr sysbit_t StackSize() const noexcept
         { return stackSize; }
 
-        inline constexpr sysbit_t HeapSize() const noexcept
+        VM_INLINE constexpr sysbit_t HeapSize() const noexcept
         { return heapSize; }
 
     private:

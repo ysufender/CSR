@@ -6,7 +6,6 @@
 #include "extensions/syntaxextensions.hpp"
 #include "system.hpp"
 
-
 #define MTER(E) \
     E(PtoB) \
     E(BtoP) \
@@ -23,12 +22,24 @@ class Message
 {
     public:
         Message() = delete;
-        Message(Message& other);
-        Message(Message&& other);
-        Message(MessageType type, std::unique_ptr<char[]> data);
+        VM_INLINE Message(Message& other)
+        {
+            this->_type = other._type;
+            this->_data = rval(other._data);
+        }
+        VM_INLINE Message(Message&& other)
+        {
+            this->_type = other._type;
+            this->_data = rval(other._data);
+        }
+        VM_INLINE Message(MessageType type, std::unique_ptr<char[]> data)
+        {
+            this->_type = type;
+            this->_data = rval(data);
+        }
 
-        inline const MessageType type() const { return _type; }
-        inline const std::unique_ptr<char[]>& data() const { return _data; }
+        VM_INLINE const MessageType type() const { return _type; }
+        VM_INLINE const std::unique_ptr<char[]>& data() const { return _data; }
 
     private:
         MessageType _type = MessageType::PtoP;
@@ -39,10 +50,10 @@ class Message
 class MessagePool
 {
     public:
-        inline const Message& front() const 
+        VM_INLINE const Message& front() const 
         { return this->_underlyingVec.at(this->_underlyingVec.size()-1); }
 
-        inline void pop() noexcept
+        VM_INLINE void pop() noexcept
         { this->_underlyingVec.pop_back(); }
 
         bool empty() const noexcept

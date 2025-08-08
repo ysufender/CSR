@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bytemode/cpu.hpp"
+#include "bytemode/structured/cpu.hpp"
 #include "CSRConfig.hpp"
 #include "message.hpp"
 #include "system.hpp"

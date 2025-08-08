@@ -5,6 +5,8 @@
 #include <iostream>
 #include <string_view>
 
+#include "CSRConfig.hpp"
+
 #define rval(expr) std::move(expr)
 
 #define nameof(variable) #variable
@@ -31,7 +33,7 @@ using namespace std::string_view_literals;
 #define GENERATE_ENUM(ENUM) ENUM,
 #define GENERATE_STRING(STRING) #STRING##sv,
 #define MAKE_ENUM(name, fenum, fval, values, mode) \
-    enum class name : char { \
+    enum class name : uchar_t { \
         fenum = fval, \
         FOREACH_ENUM(values, GENERATE_ENUM) \
     }; \

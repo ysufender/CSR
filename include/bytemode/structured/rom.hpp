@@ -21,7 +21,7 @@ class ROM
         void operator=(ROM const&) = delete;
         void operator=(ROM const&&) = delete;
 
-        inline char operator[](const sysbit_t index) const
+        VM_INLINE uchar_t operator[](const sysbit_t index) const
         {
             if (index >= size || index < 0)
                 operatorCrash(index);
@@ -29,7 +29,7 @@ class ROM
             return data[index];
         }
 
-        inline const char* operator&(sysbit_t index) const
+        VM_INLINE const char* operator&(sysbit_t index) const
         {
             if (index >= size || index < 0)
                 CRASH(System::ErrorCode::ROMAccessError, "Index '", std::to_string(index), "' of ROM is invalid.");
@@ -37,15 +37,15 @@ class ROM
             return data.get()+index;
         }
 
-        inline const char* operator&() const { return this->operator&(0); }
+        VM_INLINE const char* operator&() const { return this->operator&(0); }
 
         const Slice Data() const { return { this->data.get(), this->size }; }
         sysbit_t Size() const { return this->size; }
 
-        char Read(sysbit_t index) const { return (*this)[index]; }
-        Error TryRead(sysbit_t index, char& data, std::function<void()> failAct = { }) const noexcept;
+        uchar_t Read(sysbit_t index) const { return static_cast<uchar_t>((*this)[index]); }
+        Error TryRead(sysbit_t index, uchar_t& data, std::function<void()> failAct = { }) const noexcept;
 
-        inline const Slice ReadSome(const sysbit_t index, const sysbit_t size) const
+        VM_INLINE const Slice ReadSome(const sysbit_t index, const sysbit_t size) const
         {
             if (index >= this->size || index < 0 || (index + size) > this->size)
                 CRASH(System::ErrorCode::ROMAccessError, "Index '", std::to_string(index), "' of ROM is invalid.");
