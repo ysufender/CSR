@@ -58,11 +58,11 @@ elif [ $release == true ]; then
 fi
 
 echo "[BUILD_SCRIPT] Generating build files."
-cmake --preset $preset 
+cmake "$@" --preset $preset 
 
 if [ $generate == true ]; then
     echo "[BUILD_SCRIPT] Generate-only mode"
     exit
 fi
 
-cmake --build --preset $preset "$@"
+cmake --build --preset $preset

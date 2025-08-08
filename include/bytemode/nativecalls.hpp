@@ -53,9 +53,8 @@ namespace ReturnCode
 typedef char Code;
 
 typedef struct VMContext {
-    uint32_t size;
     void* context;
-    int (*Validate)(VMContext* context, uint8_t version);
+    int (*Validate)(uint64_t size, uint8_t version);
     void* (*GetRealAddress)(VMContext*, const uint32_t addr);
     void* (*Allocate)(VMContext*, const uint32_t size);
     Code (*Deallocate)(VMContext*, const uint32_t addr, const uint32_t size);

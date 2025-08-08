@@ -3,7 +3,7 @@
 #include <string>
 
 #include "bytemode/structured/cpu.hpp"
-#include "bytemode/structured/instructions.hpp"
+#include "bytemode/instructions.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/structured/process.hpp"
 #include "bytemode/structured/board.hpp"

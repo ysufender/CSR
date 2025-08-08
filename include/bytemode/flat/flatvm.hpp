@@ -7,9 +7,10 @@
 #include "bytemode/flat/flatram.hpp"
 #include "bytemode/flat/flatcpu.hpp"
 #include "bytemode/nativecalls.hpp"
-#include "bytemode/structured/instructions.hpp"
+#include "bytemode/instructions.hpp"
 #include "bytemode/syscall.hpp"
 #include "system.hpp"
+#include "bytemode/jit.hpp"
 
 class FlatVM
 {
@@ -21,6 +22,10 @@ class FlatVM
             bool step;
 #endif
             std::filesystem::path path;
+#ifdef ENABLE_JIT
+            //static_assert(false, "JIT Builds are not supported yet with Flat VM.");
+            bool jit;
+#endif
         };
 
         FlatVM(VMSettings settings);
@@ -44,10 +49,13 @@ class FlatVM
         FlatCPU cpu;
         SysCallHandler handler;
         VMSettings settings;
+#ifdef ENABLE_JIT
+        BlockCounterCollection blocks;
+#endif
 
-        VM_INLINE static int Validate(VM_API, uint8_t version)
+        VM_INLINE static int Validate(uint64_t size, uint8_t version)
         {
-            if (context->size != sizeof(VMContext)) [[unlikely]]
+            if (size != sizeof(VMContext)) [[unlikely]]
                 return 0;
             if (version != VM_API_VERSION) [[unlikely]]
                 return 0;

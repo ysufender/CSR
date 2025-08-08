@@ -11,6 +11,8 @@
 
 namespace
 {
+    __attribute__((used)) static const char* const newline = "\n";
+
     char Print( VMContext* context, char* params) noexcept
     {
         char* data { (char*)context->GetRealAddress(context, IntegerFromBytes<uint32_t>(params)) };
@@ -22,7 +24,7 @@ namespace
     {
         char* data { (char*)context->GetRealAddress(context, IntegerFromBytes<uint32_t>(params)) };
         std::cout.write(data+4, IntegerFromBytes<uint32_t>(data));
-        std::cout.put('\n');
+        std::cout.write(newline, 1);
         ret(0)
     }
 

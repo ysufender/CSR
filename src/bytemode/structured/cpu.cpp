@@ -3,7 +3,7 @@
 #include <memory>
 #include <string>
 
-#include "bytemode/structured/instructions.hpp"
+#include "bytemode/instructions.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/structured/assembly.hpp"
 #include "bytemode/structured/cpu.hpp"

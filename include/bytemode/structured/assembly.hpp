@@ -24,7 +24,9 @@ class Assembly : IMessageObject
 
         struct AssemblySettings
         {
+#ifdef ENABLE_JIT
             bool jit;
+#endif
             std::string name;
             std::filesystem::path path;
             AssemblyType type;

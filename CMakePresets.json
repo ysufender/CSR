@@ -18,7 +18,9 @@
                 "CMAKE_CXX_STANDARD_REQUIRED": true,
 
                 "ENABLE_JIT": "OFF",
-                "OUTPUT_PATH": ""
+                "OUTPUT_PATH": "",
+                "BUILD_FLAT": "ON",
+                "BUILD_STRUCTURED": "OFF"
             }
         },
         {

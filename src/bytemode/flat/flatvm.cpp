@@ -7,14 +7,14 @@
 #include <memory>
 #include <string>
 
+#include "bytemode/jit.hpp"
 #include "bytemode/nativecalls.hpp"
-#include "bytemode/structured/instructions.hpp"
+#include "bytemode/instructions.hpp"
 #include "extensions/converters.hpp"
 #include "extensions/streamextensions.hpp"
 #include "bytemode/flat/flatram.hpp"
 #include "bytemode/flat/flatvm.hpp"
 #include "CSRConfig.hpp"
-#include "fastcout.hpp"
 #include "platform.hpp"
 #include "system.hpp"
 
@@ -113,7 +113,10 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
     ram(),
     rom(),
     cpu(ram),
-    handler()
+    handler(),
+#ifdef ENABLE_JIT
+    blocks()
+#endif
 {
     if (!std::filesystem::exists(settings.path))
         CRASH(System::ErrorCode::SourceFileNotFound,
@@ -142,7 +145,6 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
     };
 
     context = VMContext {
-        .size = sizeof(VMContext),
         .context = this,
         .Validate = &FlatVM::Validate,
         .GetRealAddress = &FlatVM::GetRealAddress,

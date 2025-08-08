@@ -6,7 +6,7 @@
 #include "bytemode/structured/vm.hpp"
 #include "extensions/syntaxextensions.hpp"
 #include "extensions/converters.hpp"
-#include "bytemode/structured/instructions.hpp"
+#include "bytemode/instructions.hpp"
 #include "bytemode/structured/assembly.hpp"
 #include "bytemode/structured/board.hpp"
 #include "bytemode/structured/cpu.hpp"

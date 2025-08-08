@@ -4,11 +4,19 @@
 #include <filesystem>
 #include <string_view>
 
+enum class Platform
+{
+    Win,
+    Unix,
+    Apple
+};
+
 #if defined(_WIN32) || defined(__CYGWIN__)
     #include <windows.h>
 
     using dlID_t = HINSTANCE;
     using sym_t = FARPROC
+    constexpr Platform PlatformID = Platform::Win;
 #elif defined(unix) || defined(__unix) || defined(__unix__)
     #include <dlfcn.h>
     #include <unistd.h>
@@ -16,6 +24,7 @@
 
     using dlID_t = void*;
     using sym_t = void*;
+    constexpr Platform PlatformID = Platform::Unix;
 #elif defined(__APPLE__) || defined(__MACH__)
     #include <dlfcn.h>
     #include <mach-o/dyld.h>
@@ -23,6 +32,7 @@
 
     using dlID_t = void*;
     using sym_t = void*;
+    constexpr Platform PlatformID = Platform::Apple;
 #endif
 
 dlID_t DLLoad(std::string_view path);

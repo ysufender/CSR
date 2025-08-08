@@ -9,6 +9,10 @@
 #include "message.hpp"
 #include "system.hpp"
 
+#if defined(ENABLE_JIT)
+    static_assert(false, "JIT builds are not supported yet for Structured VM.");
+#endif
+
 using AssemblyCollection = std::unordered_map<std::string, Assembly>;
 // We won't need to deallocate so no smart pointer
 using AssemblyIDCollection = std::unordered_map<sysbit_t, Assembly*>;

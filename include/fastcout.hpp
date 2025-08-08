@@ -100,7 +100,7 @@ private:
     static inline FastCout* singleton = nullptr;
     static inline std::once_flag initFlag { };
 
-    FastCout(size_t bufferSize) : bufSize { bufferSize }
+    VM_INLINE FastCout(size_t bufferSize) : bufSize { bufferSize }
     {
 #ifdef _WIN32
         this->buffer = reinterpret_cast<char*>(_aligned_malloc(this->bufSize, 4096));

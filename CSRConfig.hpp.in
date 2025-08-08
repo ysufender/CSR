@@ -9,6 +9,8 @@
 #define CSR_DESCRIPTION "@CSR_DESCRIPTION@"
 
 #cmakedefine ENABLE_JIT 
+#cmakedefine BUILD_FLAT
+#cmakedefine BUILD_STRUCTURED
 
 #define VM_INLINE inline __attribute__((always_inline))
 #define VM_API VMContext* context

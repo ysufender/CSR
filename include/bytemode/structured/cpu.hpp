@@ -3,7 +3,7 @@
 #include <functional>
 
 #include "extensions/syntaxextensions.hpp"
-#include "bytemode/structured/instructions.hpp"
+#include "bytemode/instructions.hpp"
 #include "slice.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
