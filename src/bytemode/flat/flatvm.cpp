@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
@@ -7,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "bytemode/assemblyinfo.hpp"
 #include "bytemode/jit.hpp"
 #include "bytemode/nativecalls.hpp"
 #include "bytemode/instructions.hpp"
@@ -115,33 +117,71 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
     cpu(ram),
     handler(),
 #ifdef ENABLE_JIT
-    blocks()
+    blocks(),
+    jitContext(),
 #endif
+    assembly()
 {
     if (!std::filesystem::exists(settings.path))
         CRASH(System::ErrorCode::SourceFileNotFound,
             "Couldn't find executable ", settings.path.string());
-    if (settings.path.extension() != ".jef") 
-        CRASH(System::ErrorCode::UnsupportedFileType,
-            "FlatVM does not support given filetype ", settings.path.c_str());
-
     std::ifstream bytecode { System::OpenInFile(settings.path) };
-    bytecode.seekg(0, std::ios::end);
-    IStreamPos(bytecode, length, {
+    bytecode.seekg(-sizeof(uint64_t), std::ios::end);
+    uint64_t size { };
+    Extensions::Serialization::DeserializeInteger(size, bytecode);
+    bytecode.seekg(-(sizeof(uint64_t)+size), std::ios::end);
+    IStreamPos(bytecode, bytecodeEnd, {
         bytecode.close();
         CRASH(System::ErrorCode::FileIOError, "Couldn't load executable ", settings.path.c_str());
     });
-    bytecode.seekg(0, std::ios::beg);
+    assembly.Deserialize(bytecode);
 
-    std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(length) };
-    bytecode.read(data.get(), length);
+    //if (settings.path.extension() != ".jef") 
+    if (!(assembly.Flags() & AssemblyFlags::Executable))
+        CRASH(System::ErrorCode::UnsupportedFileType,
+            "FlatVM does not support given filetype ", settings.path.c_str(), ". It is not marked as an executable.");
+
+#ifdef ENABLE_JIT
+    if (!(assembly.Flags() & AssemblyFlags::SymbolInfo) && settings.jit) [[unlikely]]
+        LOGW("Current execution is marked as JIT target however the file ", settings.path.c_str(), " does not contain symbol information.");
+#endif
+
+    bytecode.seekg(0, std::ios::beg);
+    std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(bytecodeEnd) };
+    bytecode.read(data.get(), bytecodeEnd);
     bytecode.close();
 
-    rom = FlatROM { rval(data), static_cast<sysbit_t>(length) };
+    rom = FlatROM { rval(data), static_cast<sysbit_t>(bytecodeEnd) };
     cpu.state.pc = IntegerFromBytes<sysbit_t>(rom.ReadSome(0, 4).data);
     ram = FlatRAM {
         IntegerFromBytes<sysbit_t>(rom.ReadSome(4, 4).data),
         IntegerFromBytes<sysbit_t>(rom.ReadSome(8, 4).data)
+    };
+
+    for (const auto& [symbol, addr] : assembly.Symbols())
+        if (rom[addr] <= OpCodesMax)
+            blocks.Add(addr);
+
+    jitContext = {
+        .reg32 = {
+            &cpu.state.eax,
+            &cpu.state.ebx,
+            &cpu.state.ecx,
+            &cpu.state.edx,
+            &cpu.state.esi,
+            &cpu.state.edi,
+            &cpu.state.pc,
+            &cpu.state.sp,
+            &cpu.state.bp
+        },
+        .reg8 = {
+            &cpu.state.al,
+            &cpu.state.bl,
+            &cpu.state.cl,
+            &cpu.state.dl,
+            &cpu.state.flg
+        },
+        .ram = &ram
     };
 
     context = VMContext {
@@ -1587,11 +1627,18 @@ Error FlatVM::Run() noexcept
                             cpu.state
                         )};
 
-                        // Safety test, address must be in bounds of rom
-                        RomSafetyCheck(address);
 
-                        cpu.state.pc = address;
-                        errcx = Error::Ok;
+                        JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
+                        
+                        if (err == JITError::Ok)
+                            errcx = Error::Ok;
+                        else
+                        {
+                            // Safety test, address must be in bounds of rom
+                            RomSafetyCheck(address);
+                            cpu.state.pc = address;
+                            errcx = Error::Ok;
+                        }
                         break;
                     }
 
@@ -1600,12 +1647,19 @@ Error FlatVM::Run() noexcept
                         sysbit_t address { IntegerFromBytes<sysbit_t>(
                             rom.ReadSome(cpu.state.pc, 4).data 
                         )};
-                        
-                        // Safety test, address must be in bounds of rom
-                        RomSafetyCheck(address);
 
-                        cpu.state.pc = address;
-                        errcx = Error::Ok;
+
+                        JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
+                        
+                        if (err == JITError::Ok)
+                            errcx = Error::Ok;
+                        else
+                        {
+                            // Safety test, address must be in bounds of rom
+                            RomSafetyCheck(address);
+                            cpu.state.pc = address;
+                            errcx = Error::Ok;
+                        }
                         break;
                     }
 
@@ -2072,11 +2126,20 @@ Error FlatVM::Run() noexcept
                 else
                     return System::ErrorCode::InvalidInstruction;
 
-                // Safety test, address must be in bounds of rom
-                RomSafetyCheck(address);
-                cpu.state.pc = address;
-                errcx = System::ErrorCode::Ok;            
-        )     
+
+
+                JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
+                
+                if (err == JITError::Ok)
+                    errcx = Error::Ok;
+                else
+                {
+                    // Safety test, address must be in bounds of rom
+                    RomSafetyCheck(address);
+                    cpu.state.pc = address;
+                    errcx = Error::Ok;
+                }
+            ) 
 
 
             op_CallFunc: block(
@@ -2166,6 +2229,14 @@ Error FlatVM::Run() noexcept
                 //  - Store bp
                 //  - Store pc
                 //  - Change bp
+
+                JITError jiterr { BranchIncrease(blocks, address, &jitContext, rom) };
+
+                if (jiterr == JITError::Ok)
+                {
+                    errcx = System::ErrorCode::Ok;
+                    continue;
+                }
 
                 if (cpu.state.sp+8+cpu.state.bl > ram.StackSize())
                     CRASH(Error::StackOverflow, "Can't push parameters.");
@@ -2863,9 +2934,20 @@ Error FlatVM::Run() noexcept
                     );
 
                 // Safety test, address must be in bounds of rom
-                RomSafetyCheck(address);
-                cpu.state.pc = address;
-                errcx = System::ErrorCode::Ok;            
+                JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
+                if (err == JITError::Ok)
+                {
+                    errcx = Error::Ok;
+                    continue;
+                }
+                else if (err == JITError::NonexistentJIT)
+                {
+                    RomSafetyCheck(address);
+                    cpu.state.pc = address;
+                    errcx = Error::Ok;
+                }
+                else
+                    errcx = Error::JITError;
             )
         } catch (const CSRException& e) {
             std::cout << e;

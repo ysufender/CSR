@@ -6,6 +6,8 @@
 #include <type_traits>
 #include <vector>
 
+#include "CSRConfig.hpp"
+
 namespace Extensions::String 
 {
     std::vector<std::string> Split(const std::string& str, char delimiter, bool removeTrailing = true);
@@ -22,5 +24,10 @@ namespace Extensions::String
     std::string Concat(const std::vector<std::string_view>& strings);
 
     std::string Join(const std::vector<std::string>& strings, char delimiter);
-    size_t Hash(std::string_view str);
+
+    VM_INLINE size_t Hash(std::string_view str)
+    {
+        static constexpr auto hasher { std::hash<std::string_view>{} };;
+        return hasher(str);
+    }
 }

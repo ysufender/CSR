@@ -56,7 +56,8 @@ struct System
     E(Shutdown) \
     E(ProcessInterrupt) \
     E(IOError) \
-    E(NativeCallError)
+    E(NativeCallError) \
+    E(JITError)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

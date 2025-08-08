@@ -2,6 +2,7 @@ add_library(bytemode
     STATIC
         syscall.cpp
         stdlib.cpp
+        assemblyinfo.cpp
 )
 
 #Add subdirectories here

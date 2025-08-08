@@ -74,3 +74,4 @@ MAKE_ENUM(CompareModeFlags, les, 21, CMPER, OUT_CLASS)
 MAKE_ENUM(OpCodes, nop, 0, OPER, OUT_CLASS)
 #undef OPER
 
+constexpr uchar_t OpCodesMax = static_cast<uchar_t>(OpCodes::cnj);

@@ -39,7 +39,7 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "OUTPUT_PATH": "Debug",
-                "CMAKE_CXX_FLAGS": "-O1 -g -fno-omit-frame-pointer"
+                "CMAKE_CXX_FLAGS": "-O0 -g -fno-omit-frame-pointer"
             }
         },
         {

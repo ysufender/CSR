@@ -3,6 +3,7 @@
 #include <functional>
 
 #include "CSRConfig.hpp"
+#include "bytemode/assemblyinfo.hpp"
 #include "bytemode/flat/flatrom.hpp"
 #include "bytemode/flat/flatram.hpp"
 #include "bytemode/flat/flatcpu.hpp"
@@ -43,6 +44,7 @@ class FlatVM
         Error BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
 
     private:
+        AssemblyInfo assembly;
         VMContext context;
         FlatROM rom;
         FlatRAM ram;
@@ -51,6 +53,7 @@ class FlatVM
         VMSettings settings;
 #ifdef ENABLE_JIT
         BlockCounterCollection blocks;
+        JITContext jitContext;
 #endif
 
         VM_INLINE static int Validate(uint64_t size, uint8_t version)

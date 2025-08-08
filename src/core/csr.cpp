@@ -9,6 +9,7 @@
 #endif
 #ifdef BUILD_STRUCTURED
 #include "bytemode/structured/vm.hpp"
+static_assert(false, "Structured VM is incomplete and not compatible with the current version of JASM. Use FlatVM instead.");
 #endif
 
 int csrmain(int argc, char** args)
