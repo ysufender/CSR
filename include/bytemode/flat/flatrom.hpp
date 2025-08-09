@@ -3,11 +3,12 @@
 #include <memory>
 
 #include "extensions/syntaxextensions.hpp"
+#include "bytemode/baserom.hpp"
 #include "CSRConfig.hpp"
 #include "system.hpp"
 #include "slice.hpp"
 
-class FlatROM
+class FlatROM : public BaseROM
 {
     public:
         VM_INLINE FlatROM() :
@@ -22,13 +23,14 @@ class FlatROM
 
         FlatROM(FlatROM&) = delete;
         void operator=(FlatROM const&) = delete;
+
         VM_INLINE void operator=(FlatROM&& other)
         {
             this->data = rval(other.data);
             this->size = other.size;
         }
 
-        VM_INLINE uchar_t operator[](const sysbit_t index) const
+        VM_INLINE uchar_t operator[](const sysbit_t index) const override
         {
             if (index >= size) [[unlikely]]
                 CRASH(
@@ -39,7 +41,7 @@ class FlatROM
             return data[index];
         }
 
-        VM_INLINE const char* operator&(sysbit_t index) const
+        VM_INLINE const char* operator&(sysbit_t index) const override
         {
             if (index >= size) [[unlikely]]
                 CRASH(System::ErrorCode::ROMAccessError, "Index '", std::to_string(index), "' of FlatROM is invalid.");
@@ -47,13 +49,13 @@ class FlatROM
             return data.get()+index;
         }
 
-        VM_INLINE const char* operator&() const { return this->operator&(0); }
+        VM_INLINE const char* operator&() const override { return this->operator&(0); }
 
-        VM_INLINE const Slice Data() const { return { this->data.get(), this->size }; }
-        VM_INLINE sysbit_t Size() const { return this->size; }
+        VM_INLINE const Slice Data() const override { return { this->data.get(), this->size }; }
+        VM_INLINE sysbit_t Size() const override { return this->size; }
 
-        VM_INLINE uchar_t Read(sysbit_t index) const { return (*this)[index]; }
-        VM_INLINE const System::ErrorCode TryRead(sysbit_t index, uchar_t& data) const noexcept
+        VM_INLINE uchar_t Read(sysbit_t index) const override { return (*this)[index]; }
+        VM_INLINE const System::ErrorCode TryRead(sysbit_t index, uchar_t& data) const noexcept override
         {
             // ErrorCode::Bad = 1
             System::ErrorCode isOk { index >= this->size };
@@ -62,7 +64,7 @@ class FlatROM
             return isOk;
         }
 
-        VM_INLINE const Slice ReadSome(const sysbit_t index, const sysbit_t size) const
+        VM_INLINE const Slice ReadSome(const sysbit_t index, const sysbit_t size) const override
         {
             if (index >= this->size || (index + size) > this->size) [[unlikely]]
                 CRASH(System::ErrorCode::ROMAccessError, "Index '", std::to_string(index), "' of FlatROM is invalid.");

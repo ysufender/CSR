@@ -5,6 +5,10 @@ add_library(bytemode
         assemblyinfo.cpp
 )
 
+if (ENABLE_JIT)
+    target_sources(bytemode PRIVATE jit.cpp)
+endif (ENABLE_JIT)
+
 #Add subdirectories here
 if (BUILD_FLAT)
     message(STATUS "Building FlatVM...")

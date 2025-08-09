@@ -52,7 +52,7 @@ class FlatVM
         SysCallHandler handler;
         VMSettings settings;
 #ifdef ENABLE_JIT
-        BlockCounterCollection<FlatROM> blocks;
+        BlockCounterCollection blocks;
         JITContext jitContext;
 #endif
 

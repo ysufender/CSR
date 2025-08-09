@@ -229,8 +229,9 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
 const System::ErrorCode FlatVM::Run() noexcept
 {
     System::ErrorCode code = System::ErrorCode::Ok;
-    static void* const jumpTable[] = {
-        &&op_NoOperation, &&op_StoreThirtyTwo, &&op_StoreEight, &&op_StoreFromSymbol, &&op_StoreFromSymbol,
+    static constexpr void* jumpTable[] = {
+        &&op_NoOperation,
+        &&op_StoreThirtyTwo, &&op_StoreEight, &&op_StoreFromSymbol, &&op_StoreFromSymbol,
         &&op_LoadFromStack, &&op_LoadFromStack, &&op_ReadFromHeap, &&op_ReadFromHeap, &&op_ReadFromRegister,
         &&op_Move, &&op_Move, &&op_Move,
         &&op_Add32, &&op_AddFloat, &&op_Add8, &&op_AddReg, &&op_AddReg, &&op_AddReg,
@@ -2857,7 +2858,7 @@ const System::ErrorCode FlatVM::Run() noexcept
                     // rdle <index>
                     sysbit_t size {
                         static_cast<sysbit_t>
-                        (rom.Read(cpu.state.pc-1) == (char)OpCodes::rdlt ? 4 : 1) 
+                        (rom.Read(cpu.state.pc-1) == (uchar_t)OpCodes::rdlt ? 4 : 1) 
                     };
                     sysbit_t index {
                         IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data)
@@ -2957,14 +2958,14 @@ const System::ErrorCode FlatVM::Run() noexcept
                     errcx = System::ErrorCode::Ok;
                     continue;
                 }
-                else if (err == JITError::NonexistentJIT)
+                else if (err != JITError::VMLevelError)
                 {
 #endif
                     RomSafetyCheck(address);
                     cpu.state.pc = address;
                     errcx = System::ErrorCode::Ok;
 #ifdef ENABLE_JIT
-               }
+                }
                 else
                     errcx = System::ErrorCode::JITError;
 #endif
