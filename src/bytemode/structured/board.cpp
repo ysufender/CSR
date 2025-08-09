@@ -112,7 +112,7 @@ Error Board::RemoveProcess(uchar_t id) noexcept
 Error Board::Run() noexcept
 {
     // Dispatch messages
-    System::ErrorCode code { Error::Ok }; 
+    System::ErrorCode code { System::ErrorCode::Ok }; 
     if (!this->messagePool.empty() && VM::GetVM().GetSettings().communication)
         code = this->DispatchMessages();
 

@@ -17,7 +17,7 @@ namespace
     {
         char* data { (char*)context->GetRealAddress(context, IntegerFromBytes<uint32_t>(params)) };
         std::cout.write(data+4, IntegerFromBytes<uint32_t>(data));
-        ret(0)
+        return_with(0)
     }
 
     char PrintLine( VMContext* context, char* params) noexcept
@@ -25,7 +25,7 @@ namespace
         char* data { (char*)context->GetRealAddress(context, IntegerFromBytes<uint32_t>(params)) };
         std::cout.write(data+4, IntegerFromBytes<uint32_t>(data));
         std::cout.write(newline, 1);
-        ret(0)
+        return_with(0)
     }
 
     char Sleep( VMContext* context, char* params) noexcept

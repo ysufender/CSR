@@ -28,14 +28,14 @@ class SysCallHandler
         {
             if (!boundFuncs.contains(id)) [[unlikely]]
                 CRASH(
-                    Error::InvalidKey,
+                    System::ErrorCode::InvalidKey,
                     "Error while syscall, no handler with key ", std::to_string(id), "."
                 ); 
             return boundFuncs.at(id);
         }
 
-        VM_INLINE Error operator()(sysbit_t id, VMContext* context, char* params) const noexcept
-        { return static_cast<Error>((*this)[id](context, params)); }
+        VM_INLINE const System::ErrorCode operator()(sysbit_t id, VMContext* context, char* params) const noexcept
+        { return static_cast<const System::ErrorCode>((*this)[id](context, params)); }
 
         dlID_t LoadDl(std::string_view dlPath);
         sysfnh_t MakeFunctionHandler(dlID_t dl, std::string_view functionName) const;
@@ -44,13 +44,3 @@ class SysCallHandler
         SysFunctionMap boundFuncs; 
         DLList dlList;
 };
-
-//VM_INLINE char SysCallBinder(void* scallH, sysbit_t id, SysFunctionHandler handler) noexcept
-//{
-//    return reinterpret_cast<SysCallHandler*>(scallH)->BindFunction(id, handler);
-//}
-
-//VM_INLINE char SysCallUnbinder(void* scallH, sysbit_t id) noexcept
-//{
-//    return reinterpret_cast<SysCallHandler*>(scallH)->UnbindFunction(id);
-//}

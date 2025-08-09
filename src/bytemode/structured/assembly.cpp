@@ -139,7 +139,7 @@ Error Assembly::RemoveBoard(sysbit_t id) noexcept
 
 Error Assembly::Run() noexcept
 {
-    System::ErrorCode code { Error::Ok };
+    System::ErrorCode code { System::ErrorCode::Ok };
 
     if (!this->messagePool.empty() && VM::GetVM().GetSettings().communication)
         code = this->DispatchMessages();

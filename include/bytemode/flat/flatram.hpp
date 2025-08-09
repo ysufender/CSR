@@ -27,7 +27,7 @@ class FlatRAM
             // be multiple of 8
             if (heapSize % 8 != 0)
                 CRASH(
-                    Error::Bad,
+                    System::ErrorCode::Bad,
                     "heap size must be a multiple of 8."
                 );
         }
@@ -48,12 +48,12 @@ class FlatRAM
             if (address >= (stackSize+heapSize)) [[unlikely]]
                 CRASH(
                     System::ErrorCode::RAMAccessError, 
-                    "Error in RAM. Attempt to read out of bounds memory ", std::to_string(address)
+                    "const System::ErrorCode in RAM. Attempt to read out of bounds memory ", std::to_string(address)
                 ); 
             return this->data[address];
         }
 
-        VM_INLINE Error Write(const sysbit_t address, char value) noexcept
+        VM_INLINE const System::ErrorCode Write(const sysbit_t address, char value) noexcept
         {
             if (address >= (stackSize+heapSize)) [[unlikely]]
                 return System::ErrorCode::RAMAccessError;
@@ -66,19 +66,19 @@ class FlatRAM
             if (address >= (stackSize+heapSize) || (address+size) > (stackSize+heapSize)) [[unlikely]]
                 CRASH(
                     System::ErrorCode::RAMAccessError, 
-                    "Error in RAM. Attempt to read out of bounds memory ", std::to_string(address)
+                    "const System::ErrorCode in RAM. Attempt to read out of bounds memory ", std::to_string(address)
                 );
             return { this->data.get()+address, size };
         }
 
-        VM_INLINE Error WriteSome(const sysbit_t address, const Slice values) noexcept
+        VM_INLINE const System::ErrorCode WriteSome(const sysbit_t address, const Slice values) noexcept
         {
             const sysbit_t limit { this->stackSize+this->heapSize };
             if (address >= limit || (address+values.size) > limit) [[unlikely]]
             {
                 LOGE(
                     System::LogLevel::Medium, 
-                    "Error in RAM. Attempt to write to out of bounds memory ",
+                    "const System::ErrorCode in RAM. Attempt to write to out of bounds memory ",
                     std::to_string(address)
                 );
                 return System::ErrorCode::RAMAccessError;
@@ -89,7 +89,7 @@ class FlatRAM
         }
 
         sysbit_t Allocate(sysbit_t size);
-        Error Deallocate(const sysbit_t address, const sysbit_t size) noexcept;
+        const System::ErrorCode Deallocate(const sysbit_t address, const sysbit_t size) noexcept;
 
         VM_INLINE constexpr sysbit_t Size() const noexcept
         { return heapSize+stackSize; }

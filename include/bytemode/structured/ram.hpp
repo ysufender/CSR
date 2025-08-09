@@ -29,7 +29,7 @@ class RAM
             // be multiple of 8
             if (heapSize % 8 != 0)
                 CRASH(
-                    Error::Bad,
+                    System::ErrorCode::Bad,
                     "heap size must be a multiple of 8."
                 );
         }

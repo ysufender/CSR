@@ -43,7 +43,7 @@ class FlatCPU
         VM_INLINE void LoadState(const State& loadFrom) noexcept
         { this->state = loadFrom; }
 
-        VM_INLINE Error Push(const char value) noexcept
+        VM_INLINE const System::ErrorCode Push(const char value) noexcept
         {
             if (this->state.sp+1 > this->ram.StackSize())
             {
@@ -61,20 +61,20 @@ class FlatCPU
             //else
             //    LOGE(
             //        System::LogLevel::Medium,
-            //        "In FlatCPU, error while pushing value onto stack. Error code: ",
+            //        "In FlatCPU, error while pushing value onto stack. const System::ErrorCode code: ",
             //        System::ErrorCodeString(errc)
             //    );
 
             //return errc;
         }
 
-        VM_INLINE Error Pop() noexcept
+        VM_INLINE const System::ErrorCode Pop() noexcept
         {
             if (this->state.sp < 1)
             {
                 LOGE(
                         System::LogLevel::Medium,
-                        "In FlatCPU, error while popping value from stack. Can't pop while SP < 1. Error Code: ",
+                        "In FlatCPU, error while popping value from stack. Can't pop while SP < 1. const System::ErrorCode Code: ",
                         System::ErrorCodeString(System::ErrorCode::IndexOutOfBounds)
                     );
 
@@ -82,10 +82,10 @@ class FlatCPU
             }
 
             this->state.sp--;
-            return Error::Ok;
+            return System::ErrorCode::Ok;
         }
 
-        VM_INLINE Error PushSome(const Slice values) noexcept
+        VM_INLINE const System::ErrorCode PushSome(const Slice values) noexcept
         {
             if (this->state.sp+values.size > this->ram.StackSize())
             {
@@ -96,27 +96,27 @@ class FlatCPU
                 return System::ErrorCode::StackOverflow;
             }
 
-            Error errc { this->ram.WriteSome(this->state.sp, values) };
+            const System::ErrorCode errc { this->ram.WriteSome(this->state.sp, values) };
 
             //if (errc == System::ErrorCode::Ok)
                 this->state.sp+=values.size;
             //else
             //    LOGE(
             //        System::LogLevel::Medium,
-            //        "In FlatCPU, error while pushing value onto stack. Error code: ",
+            //        "In FlatCPU, error while pushing value onto stack. const System::ErrorCode code: ",
             //        System::ErrorCodeString(errc)
             //    );
 
             return errc;
         }
 
-        VM_INLINE Error PopSome(const sysbit_t size) noexcept
+        VM_INLINE const System::ErrorCode PopSome(const sysbit_t size) noexcept
         {
             if (this->state.sp-size < 0)
             {
                 LOGE(
                     System::LogLevel::Medium,
-                    "In FlatCPU, error while popping value from stack. Can't pop while SP-size < 0. Error Code: ",
+                    "In FlatCPU, error while popping value from stack. Can't pop while SP-size < 0. const System::ErrorCode Code: ",
                     System::ErrorCodeString(System::ErrorCode::IndexOutOfBounds)
                 );
 
@@ -124,7 +124,7 @@ class FlatCPU
             }
 
             this->state.sp -= size;
-            return Error::Ok;
+            return System::ErrorCode::Ok;
         }
 
 

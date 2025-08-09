@@ -22,7 +22,7 @@
 #define Is8BitReg(reg) (Enumc(reg) >= Enumc(RegisterModeFlags::al)) && (Enumc(reg) <= Enumc(RegisterModeFlags::flg))
 #define RomSafetyCheck(addr) \
         if (address < 12 || address > cpu.board.assembly.Rom().Size()) \
-            return Error::ROMAccessError;
+            return System::ErrorCode::ROMAccessError;
 
 
 static sysbit_t& GetRegister32Bit(RegisterModeFlags reg, CPU::State& state)
@@ -122,12 +122,12 @@ OPR CPU::StoreFromSymbol(CPU& cpu) noexcept
         const Slice valueData { cpu.board.assembly.Rom().ReadSome(symbol, size) };
 
         Error err { cpu.PushSome(valueData) };
-        if (err == Error::Ok)
+        if (err == System::ErrorCode::Ok)
             cpu.state.pc+=4;     
         return err;,
 
         return exc.GetCode();,
-        return Error::UnhandledException;
+        return System::ErrorCode::UnhandledException;
     )
 }
 
@@ -213,7 +213,7 @@ OPR CPU::ReadFromRegister(CPU& cpu) noexcept
         return err;,
 
         return exc.GetCode();,
-        return Error::UnhandledException;
+        return System::ErrorCode::UnhandledException;
     )
 }
 
@@ -414,7 +414,7 @@ OPR CPU::AddReg(CPU& cpu) noexcept
         return System::ErrorCode::Ok;,
 
         return exc.GetCode();,
-        return Error::UnhandledException;
+        return System::ErrorCode::UnhandledException;
     )
 }
 
@@ -616,7 +616,7 @@ OPR CPU::Increment(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;        
+                return System::ErrorCode::InvalidInstruction;        
         }
 
         return System::ErrorCode::Ok;,
@@ -691,7 +691,7 @@ OPR CPU::IncrementReg(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;        
+                return System::ErrorCode::InvalidInstruction;        
         },
 
         return exc.GetCode();,
@@ -786,7 +786,7 @@ OPR CPU::IncrementSafe(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;        
+                return System::ErrorCode::InvalidInstruction;        
         }
 
         return System::ErrorCode::Ok;,
@@ -883,7 +883,7 @@ OPR CPU::Decrement(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;        
+                return System::ErrorCode::InvalidInstruction;        
         }
 
         return System::ErrorCode::Ok;,
@@ -957,7 +957,7 @@ OPR CPU::DecrementReg(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;        
+                return System::ErrorCode::InvalidInstruction;        
         },
 
         return exc.GetCode();,
@@ -1051,7 +1051,7 @@ OPR CPU::DecrementSafe(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;        
+                return System::ErrorCode::InvalidInstruction;        
         }
 
         return System::ErrorCode::Ok;,
@@ -1314,7 +1314,7 @@ OPR CPU::DuplicateTop(CPU& cpu) noexcept
             {
                 if (cpu.state.sp < 4)
                     CRASH(
-                        Error::RAMAccessError,
+                        System::ErrorCode::RAMAccessError,
                         "In ", cpu.board.Stringify(),
                         " can't duplicate 32-bits on stack. SP < 4"
                     );
@@ -1329,7 +1329,7 @@ OPR CPU::DuplicateTop(CPU& cpu) noexcept
             {
                 if (cpu.state.sp < 1)
                     CRASH(
-                        Error::RAMAccessError,
+                        System::ErrorCode::RAMAccessError,
                         "In ", cpu.board.Stringify(),
                         " can't duplicate 8-bits on stack. SP < 1"
                     );
@@ -1346,7 +1346,7 @@ OPR CPU::DuplicateTop(CPU& cpu) noexcept
         },
 
         return exc.GetCode();,
-        return Error::UnhandledException;
+        return System::ErrorCode::UnhandledException;
     );
 }
 
@@ -1400,7 +1400,7 @@ OPR CPU::RawDataStack(CPU& cpu) noexcept
         }, 
 
         return exc.GetCode();, 
-        return Error::UnhandledException;
+        return System::ErrorCode::UnhandledException;
     )
 }
 
@@ -1706,7 +1706,7 @@ OPR CPU::Jump(CPU& cpu) noexcept
                 RomSafetyCheck(address);
 
                 cpu.state.pc = address;
-                return Error::Ok;
+                return System::ErrorCode::Ok;
             }
 
             case OpCodes::jmp:
@@ -1719,11 +1719,11 @@ OPR CPU::Jump(CPU& cpu) noexcept
                 RomSafetyCheck(address);
 
                 cpu.state.pc = address;
-                return Error::Ok;
+                return System::ErrorCode::Ok;
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         },
 
         return exc.GetCode();,
@@ -1739,19 +1739,19 @@ OPR CPU::SwapRange(CPU& cpu) noexcept
             cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
         )};
 
-        System::ErrorCode err { Error::Ok };
+        System::ErrorCode err { System::ErrorCode::Ok };
         for (sysbit_t midpoint = cpu.state.sp-size; size > 0; size--)
         {
             uchar_t tmp { cpu.board.ram.Read(cpu.state.sp-size) };
-            err = err == Error::Ok ? cpu.board.ram.Write(
+            err = err == System::ErrorCode::Ok ? cpu.board.ram.Write(
                 cpu.state.sp-size,
                 cpu.board.ram.Read(midpoint-size)   
             ) : err;
-            err = err == Error::Ok ?
+            err = err == System::ErrorCode::Ok ?
                 cpu.board.ram.Write(midpoint-size, tmp) 
                 : err;
 
-            if (err != Error::Ok)
+            if (err != System::ErrorCode::Ok)
                 return err;
         }
         
@@ -1771,7 +1771,7 @@ OPR CPU::DuplicateRange(CPU& cpu) noexcept
             cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data
         )};
 
-        System::ErrorCode err { Error::Ok };
+        System::ErrorCode err { System::ErrorCode::Ok };
         cpu.PushSome(
             cpu.board.ram.ReadSome(cpu.state.sp-size, size)
         );
@@ -1815,16 +1815,16 @@ OPR CPU::Repeat(CPU& cpu) noexcept
         {
             if (cpu.state.sp + count*ByteSize(numMode) > cpu.board.ram.StackSize())
                 CRASH(
-                    Error::StackOverflow, 
+                    System::ErrorCode::StackOverflow, 
                     "In ", cpu.board.Stringify(), " instruction rep. Can't push onto stack, it's full"
                 );
             address = cpu.state.sp;
             cpu.state.sp += count*ByteSize(numMode);
         }
         
-        System::ErrorCode err { Error::Ok };
-        for (sysbit_t i = 0; (i < count) && (err == Error::Ok); i++, address += ByteSize(numMode))
-            err = err == Error::Ok ? 
+        System::ErrorCode err { System::ErrorCode::Ok };
+        for (sysbit_t i = 0; (i < count) && (err == System::ErrorCode::Ok); i++, address += ByteSize(numMode))
+            err = err == System::ErrorCode::Ok ? 
                 cpu.board.ram.WriteSome(address, valueData) :
                 err;
 
@@ -1840,7 +1840,7 @@ OPR CPU::Allocate(CPU& cpu) noexcept
     try_catch(
         const sysbit_t address { cpu.board.ram.Allocate(cpu.state.ecx) };
         cpu.state.ebx = address;
-        return Error::Ok;,
+        return System::ErrorCode::Ok;,
         
         return exc.GetCode();,
         return System::ErrorCode::UnhandledException;
@@ -1892,10 +1892,10 @@ OPR CPU::PowRegister(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }
 
-        return Error::Ok;, 
+        return System::ErrorCode::Ok;, 
 
         return exc.GetCode();, 
         return System::ErrorCode::UnhandledException;
@@ -1964,7 +1964,7 @@ OPR CPU::PowStack(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }, 
 
         return exc.GetCode();, 
@@ -2025,7 +2025,7 @@ OPR CPU::PowConst(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }, 
 
         return exc.GetCode();, 
@@ -2072,10 +2072,10 @@ OPR CPU::SqrtRegister(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }
 
-        return Error::Ok;, 
+        return System::ErrorCode::Ok;, 
 
         return exc.GetCode();, 
         return System::ErrorCode::UnhandledException;
@@ -2138,7 +2138,7 @@ OPR CPU::SqrtStack(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }, 
 
         return exc.GetCode();, 
@@ -2267,7 +2267,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                 cpu.board.assembly.SysCallHandler()(address, &VM::GetVM().GetContext(), cpu.paramBuf.get())
             };
 
-            if (err != Error::Ok)
+            if (err != System::ErrorCode::Ok)
             {
                 LOGE(
                     System::LogLevel::Medium,
@@ -2282,14 +2282,14 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
 
             // function is void and returned without and error
             if (cpu.state.bl == 0)
-                return Error::Ok;
+                return System::ErrorCode::Ok;
 
             if (cpu.state.bl != 0)
             {
                 Slice retVal (&cpu.paramBuf[1], cpu.state.bl);
                 err = cpu.PushSome(retVal);
 
-                if (err != Error::Ok)
+                if (err != System::ErrorCode::Ok)
                 {
                     LOGE(
                         System::LogLevel::Medium,
@@ -2300,7 +2300,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                     return err;
                 }
             }
-            return Error::Ok;
+            return System::ErrorCode::Ok;
         }
 
         // normal call
@@ -2384,10 +2384,10 @@ OPR CPU::MulRegister(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }
 
-        return Error::Ok;, 
+        return System::ErrorCode::Ok;, 
 
         return exc.GetCode();, 
         return System::ErrorCode::UnhandledException;
@@ -2460,7 +2460,7 @@ OPR CPU::MulStack(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }, 
 
         return exc.GetCode();, 
@@ -2522,7 +2522,7 @@ OPR CPU::MulSafe(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }, 
 
         return exc.GetCode();, 
@@ -2571,10 +2571,10 @@ OPR CPU::DivRegister(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }
 
-        return Error::Ok;, 
+        return System::ErrorCode::Ok;, 
 
         return exc.GetCode();, 
         return System::ErrorCode::UnhandledException;
@@ -2647,7 +2647,7 @@ OPR CPU::DivStack(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }, 
 
         return exc.GetCode();, 
@@ -2709,7 +2709,7 @@ OPR CPU::DivSafe(CPU& cpu) noexcept
             }
 
             default:
-                return Error::InvalidInstruction;
+                return System::ErrorCode::InvalidInstruction;
         }, 
 
         return exc.GetCode();, 
@@ -2889,7 +2889,7 @@ OPR CPU::SubReg(CPU& cpu) noexcept
         return System::ErrorCode::Ok;,
 
         return exc.GetCode();,
-        return Error::UnhandledException;
+        return System::ErrorCode::UnhandledException;
     )
 }
 
@@ -2952,7 +2952,7 @@ OPR CPU::IncrementLocal(CPU& cpu) noexcept
     try_catch(
         const sysbit_t index { IntegerFromBytes<sysbit_t>(cpu.board.assembly.Rom().ReadSome(cpu.state.pc, 4).data) };
         if (index < 0)
-            CRASH(Error::IndexOutOfBounds, "Index can't be negative in ", OpCodesString(cpu.board.assembly.Rom().Read(cpu.state.pc-1)));
+            CRASH(System::ErrorCode::IndexOutOfBounds, "Index can't be negative in ", OpCodesString(cpu.board.assembly.Rom().Read(cpu.state.pc-1)));
         switch (OpCodes(cpu.board.assembly.Rom().Read(cpu.state.pc-1)))
         {
             case OpCodes::incli:

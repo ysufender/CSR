@@ -18,20 +18,6 @@ Error InitStandardLibrary(SysCallHandler&);
 // VM Implementation
 //
 
-//const Assembly& VM::GetAssembly(const std::string& name) const
-//{
-//    if (!this->assemblies.contains(name))
-//        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given name '", name, "' couldn't be found.");
-//    return this->assemblies.at(name);
-//}
-//
-//const Assembly& VM::GetAssembly(const std::string&& name) const
-//{
-//    if (!this->assemblies.contains(name))
-//        CRASH(System::ErrorCode::InvalidSpecifier, "Assembly with given name '", name, "' couldn't be found.");
-//    return this->assemblies.at(name);
-//}
-
 Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
 {
     if (this->assemblies.contains(settings.name))
@@ -50,7 +36,6 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
 
     if (code != System::ErrorCode::Ok)
     {
-//        this->RemoveAssembly(settings.id);
         this->assemblies.erase(settings.name);
         return code;
     }
@@ -58,64 +43,23 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     // Bind standard functions
     SysCallHandler& handler { assembly.SysCallHandler() };
     code = InitStandardLibrary(handler);
-    if (code != Error::Ok)
+    if (code != System::ErrorCode::Ok)
     {
         LOGE(System::LogLevel::Medium, "Failed to load standard library for assembly ", settings.path.generic_string());
-//        this->RemoveAssembly(settings.id);
         this->assemblies.erase(settings.name);
         return code;
     }
 
-//    // Load and set up standard library dlls and functions
-//
-//    std::filesystem::path stdlibPath { GetExePath().parent_path().append("libstdjasm.lib") };
-//#if defined(_WIN32) || defined(__CYGWIN__)
-//    stdlibPath.replace_extension("dll");
-//#elif defined(unix) || defined(__unix) || defined(__unix__)
-//    stdlibPath.replace_extension("so");
-//#elif defined(__APPLE__) || defined(__MACH__)
-//    stdlibPath.replace_extension("dylib");
-//#endif
-//
-//    dlID_t stdlib;
-//    try_catch(
-//        stdlib =  this->asmIds.at(settings.id)->SysCallHandler().LoadDl(stdlibPath.generic_string());,
-//        code = exc.GetCode();,
-//        code = Error::UnhandledException; 
-//    )
-//
-//    if (code != Error::Ok)
-//    {
-//        LOGE(System::LogLevel::Medium, "Failed to load standard library for assembly ", settings.path.generic_string());
-//        this->RemoveAssembly(settings.id);
-//        return code;
-//    }
-//
-//    stdlibInit_t stdlibInit { DLSym<stdlibInit_t>(stdlib, "STDLibInit") };
-//    if (!stdlibInit)
-//    {
-//        LOGE(System::LogLevel::Medium, "Failed to initialize standard library. No symbol STDLibInit found.");
-//        return Error::DLInitError;
-//    }
-//    if (stdlibInit(&this->asmIds.at(settings.id)->SysCallHandler()) != static_cast<char>(Error::Ok))
-//    {
-//        LOGE(System::LogLevel::Medium, "Failed to load standard library for assembly ", settings.path.generic_string());
-//        this->RemoveAssembly(settings.id);
-//        return Error::DLInitError;
-//    }
-//
-
-    
     // Load shared library associated with the assembly
     if (!this->settings.unsafe)
         return code;
 
     std::filesystem::path dlPath { std::filesystem::absolute(settings.path.parent_path().append("lib"+settings.path.filename().string())) };
-#if defined(_WIN32) || defined(__CYGWIN__)
+#ifdef CSR_WIN
     dlPath.replace_extension("dll");
-#elif defined(unix) || defined(__unix) || defined(__unix__)
+#elif defined(CSR_UNIX)
     dlPath.replace_extension("so");
-#elif defined(__APPLE__) || defined(__MACH__)
+#elif defined(CSR_APPLE)
     dlPath.replace_extension("dylib");
 #endif
     
@@ -129,10 +73,10 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     try_catch(
         extDl = handler.LoadDl(dlPath.string());,
         code = exc.GetCode();,
-        code = Error::UnhandledException; 
+        code = System::ErrorCode::UnhandledException; 
     )
 
-    if (code != Error::Ok)
+    if (code != System::ErrorCode::Ok)
     {
         LOGE(System::LogLevel::Medium, "Failed to load extender DL for assembly ", settings.path.string());
         //this->RemoveAssembly(settings.id);
@@ -146,16 +90,16 @@ Error VM::AddAssembly(Assembly::AssemblySettings&& settings) noexcept
     if (!extenderInit)
     {
         LOGE(System::LogLevel::Medium, "Failed to initialize extender. No symbol InitExtender found.");
-        return Error::DLInitError;
+        return System::ErrorCode::DLInitError;
     }
 
-    if (extenderInit(&context) != static_cast<char>(Error::Ok))
+    if (extenderInit(&context) != static_cast<char>(System::ErrorCode::Ok))
     {
         LOGE(System::LogLevel::Medium, "Failed to initialize extender for assembly ", settings.path.generic_string());
         //this->RemoveAssembly(settings.id);
         this->assemblies.erase(settings.name);
         this->assemblies.erase(settings.name);
-        return Error::DLInitError;
+        return System::ErrorCode::DLInitError;
     }
 
     return code;
@@ -182,12 +126,12 @@ Error VM::Setup(VM::VMSettings settings) noexcept
             System::LogLevel::Low,
             "VM can only be set once."
         );
-        return Error::VMError;
+        return System::ErrorCode::VMError;
     }
 
     set = true;
     this->settings = settings;
-    return Error::Ok;
+    return System::ErrorCode::Ok;
 }
 
 Error VM::Run() noexcept

@@ -39,9 +39,9 @@ class FlatVM
         VM_INLINE const VMSettings& GetSettings() const noexcept
         { return this->settings; }
 
-        Error Run() noexcept;
+        const System::ErrorCode Run() noexcept;
 
-        Error BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
+        const System::ErrorCode BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
 
     private:
         AssemblyInfo assembly;
@@ -52,7 +52,7 @@ class FlatVM
         SysCallHandler handler;
         VMSettings settings;
 #ifdef ENABLE_JIT
-        BlockCounterCollection blocks;
+        BlockCounterCollection<FlatROM> blocks;
         JITContext jitContext;
 #endif
 

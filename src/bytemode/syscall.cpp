@@ -46,7 +46,7 @@ dlID_t SysCallHandler::LoadDl(std::string_view dllPath)
 
     if (!dll)
     {
-#if defined(_WIN32) || defined(__CYGWIN__)
+#ifdef CSR_WIN
         DWORD errID { GetLastError() };
         LPSTR messageBuffer { nullptr };
         size_t size = FormatMessageA(
@@ -62,18 +62,18 @@ dlID_t SysCallHandler::LoadDl(std::string_view dllPath)
         );
         std::string errMsg { messageBuffer, size };
         LocalFree(messageBuffer);
-#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
+#elif defined(CSR_UNIX) || defined(CSR_APPLE)
         std::string errMsg { dlerror() };
 #endif
 
         CRASH(
-            Error::DLLoadError,
+            System::ErrorCode::DLLoadError,
             "Couldn't load DL ", dllPath,
             "\n\tInfo: ", errMsg
         );
     }
 
-#if defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
+#if defined(CSR_UNIX) || defined(CSR_APPLE)
     dlerror();
 #endif
 
@@ -88,7 +88,7 @@ sysfnh_t SysCallHandler::MakeFunctionHandler(dlID_t dll, std::string_view functi
     if (handler)
         return handler;
 
-#if defined(_WIN32) || defined(__CYGWIN__)
+#ifdef CSR_WIN
     DWORD errID { GetLastError() };
     LPSTR messageBuffer { nullptr };
     size_t size = FormatMessageA(
@@ -104,12 +104,12 @@ sysfnh_t SysCallHandler::MakeFunctionHandler(dlID_t dll, std::string_view functi
     );
     std::string errMsg { messageBuffer, size };
     LocalFree(messageBuffer);
-#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
+#elif defined(CSR_UNIX) || defined(CSR_APPLE)
     std::string  errMsg { dlerror() };
 #endif
 
     CRASH(
-        Error::DLSymbolError,
+        System::ErrorCode::DLSymbolError,
         "Couldn't get symbol ", functionName,
         "\n\tInfo: ", errMsg
     );

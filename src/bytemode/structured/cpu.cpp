@@ -198,7 +198,7 @@ Error CPU::Pop() noexcept
     }
 
     this->state.sp--;
-    return Error::Ok;
+    return System::ErrorCode::Ok;
 }
 
 Error CPU::PushSome(const Slice values) noexcept
@@ -243,5 +243,5 @@ Error CPU::PopSome(const sysbit_t size) noexcept
     }
 
     this->state.sp -= size;
-    return Error::Ok;
+    return System::ErrorCode::Ok;
 }

@@ -49,7 +49,7 @@ Error SendShutdown(Process& process)
 
 Error Process::Cycle() noexcept
 {
-    System::ErrorCode code { Error::Ok };
+    System::ErrorCode code { System::ErrorCode::Ok };
     if (!this->messagePool.empty() && VM::GetVM().GetSettings().communication)
         code = this->DispatchMessages();
 
@@ -82,7 +82,7 @@ Error Process::Cycle() noexcept
 
     code = this->board.cpu.Cycle();
 
-    if (code == Error::Ok)
+    if (code == System::ErrorCode::Ok)
         return code;
 
     LOGE(

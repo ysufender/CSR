@@ -20,7 +20,7 @@
 #include "platform.hpp"
 #include "system.hpp"
 
-#define OPR Error
+#define OPR const System::ErrorCode
 #define NOT_IMP(name) \
         LOGE(System::LogLevel::Low, "Implement ", #name); \
         return System::ErrorCode::Ok;
@@ -29,7 +29,7 @@
 #define Is8BitReg(reg) (Enumc(reg) >= Enumc(RegisterModeFlags::al)) && (Enumc(reg) <= Enumc(RegisterModeFlags::flg))
 #define RomSafetyCheck(addr) \
         if (address < 12 || address > rom.Size()) \
-            return Error::ROMAccessError;
+            return System::ErrorCode::ROMAccessError;
 
 #define block(expr) \
         { \
@@ -108,7 +108,7 @@ static bool CompareVarious(T lhs, T rhs, uchar_t mode)
     return false;
 }
 
-Error InitStandardLibrary(SysCallHandler& handler);
+const System::ErrorCode InitStandardLibrary(SysCallHandler& handler);
 
 FlatVM::FlatVM(FlatVM::VMSettings settings) :
     settings(settings),
@@ -158,6 +158,7 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
         IntegerFromBytes<sysbit_t>(rom.ReadSome(8, 4).data)
     };
 
+#ifdef ENABLE_JIT
     for (const auto& [symbol, addr] : assembly.Symbols())
         if (rom[addr] <= OpCodesMax)
             blocks.Add(addr);
@@ -183,6 +184,7 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
         },
         .ram = &ram
     };
+#endif
 
     context = VMContext {
         .context = this,
@@ -194,18 +196,18 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
         .UnbindFunction = &FlatVM::UnbindFunction
     };
 
-    if (InitStandardLibrary(handler) != Error::Ok)
-        CRASH(Error::VMError, "Failed to initialize standard library functions.");
+    if (InitStandardLibrary(handler) != System::ErrorCode::Ok)
+        CRASH(System::ErrorCode::VMError, "Failed to initialize standard library functions.");
 
     if (!settings.unsafe)
         return;
 
     std::filesystem::path dlPath { std::filesystem::absolute(settings.path.parent_path().append("lib"+settings.path.filename().string())) };
-#if defined(_WIN32) || defined(__CYGWIN__)
+#ifdef CSR_WIN
     dlPath.replace_extension("dll");
-#elif defined(unix) || defined(__unix) || defined(__unix__)
+#elif defined(CSR_UNIX)
     dlPath.replace_extension("so");
-#elif defined(__APPLE__) || defined(__MACH__)
+#elif defined(CSR_APPLE)__un
     dlPath.replace_extension("dylib");
 #endif
 
@@ -219,12 +221,12 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
     LOGD("Calling InitExtender for", dlPath.string());
     extenderInit_t extInit { DLSym<extenderInit_t>(extDl, "InitExtender") };
     if (!extInit)
-        CRASH(Error::DLInitError, "No InitExtender symbol found for ", dlPath.c_str());
-    if (extInit(&context) != static_cast<char>(Error::Ok))
-        CRASH(Error::DLInitError, "Failed to initialize extender.");
+        CRASH(System::ErrorCode::DLInitError, "No InitExtender symbol found for ", dlPath.c_str());
+    if (extInit(&context) != static_cast<char>(System::ErrorCode::Ok))
+        CRASH(System::ErrorCode::DLInitError, "Failed to initialize extender.");
 }
 
-Error FlatVM::Run() noexcept
+const System::ErrorCode FlatVM::Run() noexcept
 {
     System::ErrorCode code = System::ErrorCode::Ok;
     static void* const jumpTable[] = {
@@ -306,13 +308,13 @@ Error FlatVM::Run() noexcept
             op_NoOperation: block() 
 
             op_StoreThirtyTwo: block(
-                Error err { cpu.PushSome(rom.ReadSome(cpu.state.pc, 4)) };
+                const System::ErrorCode err { cpu.PushSome(rom.ReadSome(cpu.state.pc, 4)) };
                 if (err == System::ErrorCode::Ok)
                     cpu.state.pc+=4;
             )
 
             op_StoreEight: block(
-                Error code { cpu.Push(rom.Read(cpu.state.pc)) };
+                const System::ErrorCode code { cpu.Push(rom.Read(cpu.state.pc)) };
                 if (code == System::ErrorCode::Ok)
                 cpu.state.pc++;
             )          
@@ -327,8 +329,8 @@ Error FlatVM::Run() noexcept
                 const sysbit_t symbol { IntegerFromBytes<sysbit_t>(symbolData.data) };
                 const Slice valueData { rom.ReadSome(symbol, size) };
 
-                Error err { cpu.PushSome(valueData) };
-                if (err == Error::Ok)
+                const System::ErrorCode err { cpu.PushSome(valueData) };
+                if (err == System::ErrorCode::Ok)
                     cpu.state.pc+=4;     
             )     
 
@@ -343,7 +345,7 @@ Error FlatVM::Run() noexcept
                 // it should be allocated and address must be put on &ebx beforehand
                 //const sysbit_t alloc { ram.Allocate(size) };
 
-                Error errc { ram.WriteSome(cpu.state.ebx, values) };
+                const System::ErrorCode errc { ram.WriteSome(cpu.state.ebx, values) };
                 if (errc != System::ErrorCode::Ok)
                     // even though we didn't allocate here, we free in case of an error.
                      return ram.Deallocate(cpu.state.ebx, size);
@@ -358,7 +360,7 @@ Error FlatVM::Run() noexcept
 
                 const Slice values { ram.ReadSome(cpu.state.ebx, size) };
 
-                Error errc { cpu.PushSome(values) };
+                const System::ErrorCode errc { cpu.PushSome(values) };
                 if (errc != System::ErrorCode::Ok)
                     return errc;
             )        
@@ -488,7 +490,7 @@ Error FlatVM::Run() noexcept
                 byte2 = ram.Read(cpu.state.sp-1);
                 cpu.Pop();
                 
-                Error err { cpu.Push(byte1+byte2) };
+                const System::ErrorCode err { cpu.Push(byte1+byte2) };
 
             )                
 
@@ -558,7 +560,7 @@ Error FlatVM::Run() noexcept
 
                 char data[4];
                 BytesFromInteger(int1+int2, data);
-                Error err { cpu.PushSome({ data, 4 })};
+                const System::ErrorCode err { cpu.PushSome({ data, 4 })};
 
 
             )           
@@ -571,7 +573,7 @@ Error FlatVM::Run() noexcept
 
                 char data[4];
                 BytesFromFloat<char>(float1+float2, data);
-                Error err { cpu.PushSome({ data, 4 })};
+                const System::ErrorCode err { cpu.PushSome({ data, 4 })};
 
 
             )        
@@ -582,7 +584,7 @@ Error FlatVM::Run() noexcept
                 byte1 = ram.Read(cpu.state.sp-1);
                 byte2 = ram.Read(cpu.state.sp-2);
                 
-                Error err { cpu.Push(byte1+byte2) };
+                const System::ErrorCode err { cpu.Push(byte1+byte2) };
 
             )            
 
@@ -604,7 +606,7 @@ Error FlatVM::Run() noexcept
                     );
 
                 Slice dataToCopy { ram.ReadSome(fromAddr, size) };
-                Error code { ram.WriteSome(toAddr, dataToCopy) };
+                const System::ErrorCode code { ram.WriteSome(toAddr, dataToCopy) };
 
                 if (code == System::ErrorCode::Ok)
                     cpu.state.pc++;
@@ -635,7 +637,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromInteger(stack+amount, data);
-                        Error code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
+                        const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                         if (code == System::ErrorCode::Ok)
                             cpu.state.pc+=4;
@@ -663,7 +665,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromFloat(amount+stack, data);
-                        Error code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
+                        const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                         if (code == System::ErrorCode::Ok)
                             cpu.state.pc+=4;
@@ -688,7 +690,7 @@ Error FlatVM::Run() noexcept
                             ram.Read(cpu.state.sp-1)
                         )};
 
-                        Error code { ram.Write(
+                        const System::ErrorCode code { ram.Write(
                             cpu.state.sp-1,
                             amount + stack
                         )};
@@ -702,7 +704,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;        
+                        errcx = System::ErrorCode::InvalidInstruction;        
                         break;
                 }
 
@@ -773,7 +775,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;        
+                        errcx = System::ErrorCode::InvalidInstruction;        
                         break;
                 }
 
@@ -802,7 +804,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromInteger(stack+amount, data);
-                        Error code { cpu.PushSome({ data, 4 })};
+                        const System::ErrorCode code { cpu.PushSome({ data, 4 })};
 
                         if (code == System::ErrorCode::Ok)
                             cpu.state.pc+=4;
@@ -830,7 +832,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromFloat(amount+stack, data);
-                        Error code { cpu.PushSome({ data, 4 })};
+                        const System::ErrorCode code { cpu.PushSome({ data, 4 })};
 
                         if (code == System::ErrorCode::Ok)
                             cpu.state.pc+=4;
@@ -855,7 +857,7 @@ Error FlatVM::Run() noexcept
                             ram.Read(cpu.state.sp-1)
                         )};
 
-                        Error code { cpu.Push(
+                        const System::ErrorCode code { cpu.Push(
                             amount + stack
                         )};
 
@@ -867,7 +869,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;        
+                        errcx = System::ErrorCode::InvalidInstruction;        
                         break;
                 }
 
@@ -896,7 +898,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromInteger(stack - amount, data);
-                        Error code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
+                        const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                         if (code == System::ErrorCode::Ok)
                             cpu.state.pc+=4;
@@ -924,7 +926,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromFloat(stack - amount, data);
-                        Error code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
+                        const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                         if (code == System::ErrorCode::Ok)
                             cpu.state.pc+=4;
@@ -949,7 +951,7 @@ Error FlatVM::Run() noexcept
                             ram.Read(cpu.state.sp-1)
                         )};
 
-                        Error code { ram.Write(
+                        const System::ErrorCode code { ram.Write(
                             cpu.state.sp-1,
                             stack - amount
                         )};
@@ -962,7 +964,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;        
+                        errcx = System::ErrorCode::InvalidInstruction;        
                         break;
                 }
 
@@ -1033,7 +1035,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;        
+                        errcx = System::ErrorCode::InvalidInstruction;        
                         break;
                 }
 
@@ -1062,7 +1064,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromInteger(stack - amount, data);
-                        Error code { cpu.PushSome({ data, 4 })};
+                        const System::ErrorCode code { cpu.PushSome({ data, 4 })};
 
                         if (code == System::ErrorCode::Ok)
                             cpu.state.pc+=4;
@@ -1090,7 +1092,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromFloat(stack - amount, data);
-                        Error code { cpu.PushSome({ data, 4 })};
+                        const System::ErrorCode code { cpu.PushSome({ data, 4 })};
 
                         if (code == System::ErrorCode::Ok)
                             cpu.state.pc+=4;
@@ -1115,7 +1117,7 @@ Error FlatVM::Run() noexcept
                             ram.Read(cpu.state.sp-1)
                         )};
 
-                        Error code { cpu.Push(
+                        const System::ErrorCode code { cpu.Push(
                             stack - amount 
                         )};
 
@@ -1127,7 +1129,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;        
+                        errcx = System::ErrorCode::InvalidInstruction;        
                         break;
                 }
 
@@ -1179,7 +1181,7 @@ Error FlatVM::Run() noexcept
                         {
                             char data[4];
                             BytesFromInteger(top, data);
-                            Error err { ram.WriteSome( cpu.state.sp-8, {data, 4} )};
+                            const System::ErrorCode err { ram.WriteSome( cpu.state.sp-8, {data, 4} )};
 
                             if (err != System::ErrorCode::Ok)
                                 return err;
@@ -1187,7 +1189,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromInteger(bottom, data);
-                        Error err { ram.WriteSome( cpu.state.sp-4, {data, 4})};
+                        const System::ErrorCode err { ram.WriteSome( cpu.state.sp-4, {data, 4})};
 
                         errcx = err;
                         break;
@@ -1210,7 +1212,7 @@ Error FlatVM::Run() noexcept
                         };
 
                         {
-                            Error err { ram.Write(
+                            const System::ErrorCode err { ram.Write(
                                 cpu.state.sp-2,
                                 top 
                             )};
@@ -1219,7 +1221,7 @@ Error FlatVM::Run() noexcept
                                 return err;
                         }
 
-                        Error err { ram.Write(
+                        const System::ErrorCode err { ram.Write(
                             cpu.state.sp-1,
                             bottom
                         )};
@@ -1277,12 +1279,12 @@ Error FlatVM::Run() noexcept
                     {
                         if (cpu.state.sp < 4)
                             CRASH(
-                                Error::RAMAccessError,
+                                System::ErrorCode::RAMAccessError,
                                 "Can't duplicate 32-bits on stack. SP < 4"
                             );
 
                         Slice data { ram.ReadSome(cpu.state.sp-4, 4) };
-                        Error code { cpu.PushSome(data) };
+                        const System::ErrorCode code { cpu.PushSome(data) };
                         
                         errcx = code;
                         break;
@@ -1292,12 +1294,12 @@ Error FlatVM::Run() noexcept
                     {
                         if (cpu.state.sp < 1)
                             CRASH(
-                                Error::RAMAccessError,
+                                System::ErrorCode::RAMAccessError,
                                 "Can't duplicate 8-bits on stack. SP < 1"
                             );
 
                         const char data { ram.Read(cpu.state.sp-1) };
-                        Error code { cpu.Push(data) };
+                        const System::ErrorCode code { cpu.Push(data) };
 
                         errcx = code;
                         break;
@@ -1444,7 +1446,7 @@ Error FlatVM::Run() noexcept
 
                         char data[4];
                         BytesFromInteger(top32, data);
-                        Error err { cpu.PushSome({ data, 4 })};
+                        const System::ErrorCode err { cpu.PushSome({ data, 4 })};
 
                         errcx = err;
                         break;
@@ -1455,7 +1457,7 @@ Error FlatVM::Run() noexcept
                         uchar_t byte { static_cast<uchar_t>(ram.Read(cpu.state.sp-1)) };
 
                         byte = ~byte;
-                        Error err { cpu.Push(byte) };
+                        const System::ErrorCode err { cpu.Push(byte) };
                         errcx = err;
                         break;
                     }
@@ -1628,17 +1630,21 @@ Error FlatVM::Run() noexcept
                         )};
 
 
+#ifdef ENABLE_JIT
                         JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
                         
                         if (err == JITError::Ok)
-                            errcx = Error::Ok;
+                            errcx = System::ErrorCode::Ok;
                         else
                         {
+#endif
                             // Safety test, address must be in bounds of rom
                             RomSafetyCheck(address);
                             cpu.state.pc = address;
-                            errcx = Error::Ok;
+                            errcx = System::ErrorCode::Ok;
+#ifdef ENABLE_JIT
                         }
+#endif
                         break;
                     }
 
@@ -1649,22 +1655,26 @@ Error FlatVM::Run() noexcept
                         )};
 
 
+#ifdef ENABLE_JIT
                         JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
                         
                         if (err == JITError::Ok)
-                            errcx = Error::Ok;
+                            errcx = System::ErrorCode::Ok;
                         else
                         {
+#endif
                             // Safety test, address must be in bounds of rom
                             RomSafetyCheck(address);
                             cpu.state.pc = address;
-                            errcx = Error::Ok;
+                            errcx = System::ErrorCode::Ok;
+#ifdef ENABLE_JIT
                         }
+#endif
                         break;
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 }
 
@@ -1677,19 +1687,19 @@ Error FlatVM::Run() noexcept
                     rom.ReadSome(cpu.state.pc, 4).data
                 )};
 
-                System::ErrorCode err { Error::Ok };
+                System::ErrorCode err { System::ErrorCode::Ok };
                 for (sysbit_t midpoint = cpu.state.sp-size; size > 0; size--)
                 {
                     char tmp { ram.Read(cpu.state.sp-size) };
-                    err = err == Error::Ok ? ram.Write(
+                    err = err == System::ErrorCode::Ok ? ram.Write(
                         cpu.state.sp-size,
                         ram.Read(midpoint-size)   
                     ) : err;
-                    err = err == Error::Ok ?
+                    err = err == System::ErrorCode::Ok ?
                         ram.Write(midpoint-size, tmp) 
                         : err;
 
-                    if (err != Error::Ok)
+                    if (err != System::ErrorCode::Ok)
                         return err;
                 }
                 
@@ -1703,7 +1713,7 @@ Error FlatVM::Run() noexcept
                     rom.ReadSome(cpu.state.pc, 4).data
                 )};
 
-                System::ErrorCode err { Error::Ok };
+                System::ErrorCode err { System::ErrorCode::Ok };
                 cpu.PushSome(
                     ram.ReadSome(cpu.state.sp-size, size)
                 );
@@ -1741,16 +1751,16 @@ Error FlatVM::Run() noexcept
                 {
                     if (cpu.state.sp + count*ByteSize(numMode) > ram.StackSize())
                         CRASH(
-                            Error::StackOverflow, 
+                            System::ErrorCode::StackOverflow, 
                             "In "" instruction rep. Can't push onto stack, it's full"
                         );
                     address = cpu.state.sp;
                     cpu.state.sp += count*ByteSize(numMode);
                 }
                 
-                System::ErrorCode err { Error::Ok };
-                for (sysbit_t i = 0; (i < count) && (err == Error::Ok); i++, address += ByteSize(numMode))
-                    err = err == Error::Ok ? 
+                System::ErrorCode err { System::ErrorCode::Ok };
+                for (sysbit_t i = 0; (i < count) && (err == System::ErrorCode::Ok); i++, address += ByteSize(numMode))
+                    err = err == System::ErrorCode::Ok ? 
                         ram.WriteSome(address, valueData) :
                         err;
 
@@ -1806,7 +1816,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 }
 
@@ -1876,7 +1886,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 }
 
@@ -1937,7 +1947,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 } 
 
@@ -2037,7 +2047,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 }
 
@@ -2101,7 +2111,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 } 
 
@@ -2128,17 +2138,21 @@ Error FlatVM::Run() noexcept
 
 
 
+#ifdef ENABLE_JIT
                 JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
                 
                 if (err == JITError::Ok)
-                    errcx = Error::Ok;
+                    errcx = System::ErrorCode::Ok;
                 else
                 {
+#endif
                     // Safety test, address must be in bounds of rom
                     RomSafetyCheck(address);
                     cpu.state.pc = address;
-                    errcx = Error::Ok;
+                    errcx = System::ErrorCode::Ok;
+#ifdef ENABLE_JIT
                 }
+#endif
             ) 
 
 
@@ -2171,24 +2185,24 @@ Error FlatVM::Run() noexcept
                         cpu.state.pc += 4;
 
                     // address is now the function id
-                    System::ErrorCode err { Error::Ok };
+                    System::ErrorCode err { System::ErrorCode::Ok };
                     try {
                         err = handler(address, &context, cpu.paramBuf.get());
                     } catch (const std::exception& e) {
                         LOGE(
                             System::LogLevel::Medium,
-                            "Error in syscall ",
+                            "const System::ErrorCode in syscall ",
                             std::to_string(address),
-                            " ", System::ErrorCodeString(Error::NativeCallError)
+                            " ", System::ErrorCodeString(System::ErrorCode::NativeCallError)
                         );
-                        return Error::NativeCallError;
+                        return System::ErrorCode::NativeCallError;
                     }
 
-                    if (err != Error::Ok)
+                    if (err != System::ErrorCode::Ok)
                     {
                         LOGE(
                             System::LogLevel::Medium,
-                            "Error in syscall ",
+                            "const System::ErrorCode in syscall ",
                             std::to_string(address),
                             " ", System::ErrorCodeString(err)
                         );
@@ -2200,7 +2214,7 @@ Error FlatVM::Run() noexcept
                     // function is void and returned without and error
                     if (cpu.state.bl == 0)
                     {
-                        errcx = Error::Ok;
+                        errcx = System::ErrorCode::Ok;
                         continue;
                     }
 
@@ -2209,18 +2223,18 @@ Error FlatVM::Run() noexcept
                         Slice retVal (&cpu.paramBuf[1], cpu.state.bl);
                         err = cpu.PushSome(retVal);
 
-                        if (err != Error::Ok)
+                        if (err != System::ErrorCode::Ok)
                         {
                             LOGE(
                                 System::LogLevel::Medium,
-                                "Error in syscall, ",
+                                "const System::ErrorCode in syscall, ",
                                 std::to_string(address),
                                 " couldn't handle return values."
                             );
                             return err;
                         }
                     }
-                    errcx = Error::Ok;
+                    errcx = System::ErrorCode::Ok;
                 }
 
                 // normal call
@@ -2230,6 +2244,7 @@ Error FlatVM::Run() noexcept
                 //  - Store pc
                 //  - Change bp
 
+#ifdef ENABLE_JIT
                 JITError jiterr { BranchIncrease(blocks, address, &jitContext, rom) };
 
                 if (jiterr == JITError::Ok)
@@ -2237,9 +2252,10 @@ Error FlatVM::Run() noexcept
                     errcx = System::ErrorCode::Ok;
                     continue;
                 }
+#endif
 
                 if (cpu.state.sp+8+cpu.state.bl > ram.StackSize())
-                    CRASH(Error::StackOverflow, "Can't push parameters.");
+                    CRASH(System::ErrorCode::StackOverflow, "Can't push parameters.");
 
                 //const Slice params { ram.ReadSome(cpu.state.sp-cpu.state.bl, cpu.state.bl) };
                 //Slice params (&ram+cpu.state.sp-cpu.state.bl, cpu.state.bl);
@@ -2339,7 +2355,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 }
 
@@ -2385,7 +2401,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 }
 
@@ -2447,7 +2463,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 } 
 
@@ -2521,7 +2537,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 } 
 
@@ -2567,7 +2583,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 }
 
@@ -2629,7 +2645,7 @@ Error FlatVM::Run() noexcept
                     }
 
                     default:
-                        errcx = Error::InvalidInstruction;
+                        errcx = System::ErrorCode::InvalidInstruction;
                         break;
                 } 
 
@@ -2640,7 +2656,7 @@ Error FlatVM::Run() noexcept
                 if (cpu.state.ebx < 0 || ram.Size() <= cpu.state.ebx)
                     return System::ErrorCode::RAMAccessError;
 
-                Error err { ram.Deallocate(cpu.state.ebx, cpu.state.ecx) };
+                const System::ErrorCode err { ram.Deallocate(cpu.state.ebx, cpu.state.ecx) };
 
             )              
 
@@ -2654,7 +2670,7 @@ Error FlatVM::Run() noexcept
 
                 char data[4];
                 BytesFromInteger(lhs-rhs, data);
-                Error err { cpu.PushSome({data, 4 })};
+                const System::ErrorCode err { cpu.PushSome({data, 4 })};
 
             )          
 
@@ -2668,7 +2684,7 @@ Error FlatVM::Run() noexcept
 
                 char data[4];
                 BytesFromInteger(lhs-rhs, data);
-                Error err { cpu.PushSome({data, 4 })};
+                const System::ErrorCode err { cpu.PushSome({data, 4 })};
 
             )               
 
@@ -2682,7 +2698,7 @@ Error FlatVM::Run() noexcept
 
                 char data[4];
                 BytesFromFloat<char>(lhs-rhs, data);
-                Error err { cpu.PushSome({data, 4 })};
+                const System::ErrorCode err { cpu.PushSome({data, 4 })};
 
             )            
 
@@ -2694,7 +2710,7 @@ Error FlatVM::Run() noexcept
                 lhs = ram.Read(cpu.state.sp-1);
                 cpu.Pop();
                 
-                Error err { cpu.Push(lhs-rhs) };
+                const System::ErrorCode err { cpu.Push(lhs-rhs) };
 
             )                
 
@@ -2764,7 +2780,7 @@ Error FlatVM::Run() noexcept
 
                 char data[4];
                 BytesFromInteger(lhs-rhs, data);
-                Error err { cpu.PushSome({ data, 4 })};
+                const System::ErrorCode err { cpu.PushSome({ data, 4 })};
 
 
             )           
@@ -2777,7 +2793,7 @@ Error FlatVM::Run() noexcept
 
                 char data[4];
                 BytesFromFloat<char>(lhs-rhs, data);
-                Error err { cpu.PushSome({ data, 4 })};
+                const System::ErrorCode err { cpu.PushSome({ data, 4 })};
 
 
             )        
@@ -2788,14 +2804,14 @@ Error FlatVM::Run() noexcept
                 rhs = ram.Read(cpu.state.sp-1);
                 lhs = ram.Read(cpu.state.sp-2);
                 
-                Error err { cpu.Push(lhs-rhs) };
+                const System::ErrorCode err { cpu.Push(lhs-rhs) };
 
             )            
 
             op_IncrementLocal: block(
                 const sysbit_t index { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
                 if (index < 0)
-                    CRASH(Error::IndexOutOfBounds, "Index can't be negative in ", OpCodesString(rom.Read(cpu.state.pc-1)));
+                    CRASH(System::ErrorCode::IndexOutOfBounds, "Index can't be negative in ", OpCodesString(rom.Read(cpu.state.pc-1)));
                 switch (OpCodes(rom.Read(cpu.state.pc-1)))
                 {
                     case OpCodes::incli:
@@ -2849,7 +2865,7 @@ Error FlatVM::Run() noexcept
 
                     const Slice values { ram.ReadSome(cpu.state.bp+index, size) };
 
-                    Error errc { cpu.PushSome(values) };
+                    const System::ErrorCode errc { cpu.PushSome(values) };
                     if (errc != System::ErrorCode::Ok)
                         return errc;
                     cpu.state.pc += 4;
@@ -2934,20 +2950,24 @@ Error FlatVM::Run() noexcept
                     );
 
                 // Safety test, address must be in bounds of rom
+#ifdef ENABLE_JIT
                 JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
                 if (err == JITError::Ok)
                 {
-                    errcx = Error::Ok;
+                    errcx = System::ErrorCode::Ok;
                     continue;
                 }
                 else if (err == JITError::NonexistentJIT)
                 {
+#endif
                     RomSafetyCheck(address);
                     cpu.state.pc = address;
-                    errcx = Error::Ok;
-                }
+                    errcx = System::ErrorCode::Ok;
+#ifdef ENABLE_JIT
+               }
                 else
-                    errcx = Error::JITError;
+                    errcx = System::ErrorCode::JITError;
+#endif
             )
         } catch (const CSRException& e) {
             std::cout << e;
@@ -2955,6 +2975,7 @@ Error FlatVM::Run() noexcept
         }
     }
 
+    std::cout << cpu.state.eax << '\n';
     return code;
 }
 

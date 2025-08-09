@@ -8,7 +8,7 @@ extern "C" {
 #include "stdint.h"
 #endif
 
-#define ret(size) \
+#define return_with(size) \
     params[0] = size; \
     return ReturnCode::Ok;
 

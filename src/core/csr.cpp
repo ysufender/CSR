@@ -16,7 +16,7 @@ int csrmain(int argc, char** args)
 {
     FastCout::Init();
 
-    System::ErrorCode errc { Error::Ok };
+    System::ErrorCode errc { System::ErrorCode::Ok };
 
     try
     {
@@ -127,7 +127,7 @@ int csrmain(int argc, char** args)
         return 1;
     }
 
-    if (errc != Error::Ok)
+    if (errc != System::ErrorCode::Ok)
         std::cout << 
             "\nExited With " << static_cast<int>(errc) << " (" <<
             System::ErrorCodeString(errc) << ")" << std::endl;

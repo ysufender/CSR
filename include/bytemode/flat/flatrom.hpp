@@ -53,7 +53,7 @@ class FlatROM
         VM_INLINE sysbit_t Size() const { return this->size; }
 
         VM_INLINE uchar_t Read(sysbit_t index) const { return (*this)[index]; }
-        VM_INLINE Error TryRead(sysbit_t index, uchar_t& data) const noexcept
+        VM_INLINE const System::ErrorCode TryRead(sysbit_t index, uchar_t& data) const noexcept
         {
             // ErrorCode::Bad = 1
             System::ErrorCode isOk { index >= this->size };

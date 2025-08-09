@@ -2,35 +2,35 @@
 
 dlID_t DLLoad(std::string_view path)
 {
-#if defined(_WIN32) || defined(__CYGWIN__)
+#ifdef CSR_WIN
     return LoadLibrary(path.data());
-#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
+#elif defined(CSR_UNIX) || defined(CSR_APPLE)
     return dlopen(path.data(), RTLD_NOW);
 #endif
 }
 
 bool DLUnload(dlID_t dlID)
 {
-#if defined(_WIN32) || defined(__CYGWIN__)
+#ifdef CSR_WIN
     return FreeLibrary(dlID);
-#elif defined(unix) || defined(__unix) || defined(__unix__) || defined(__APPLE__) || defined(__MACH__)
+#elif defined(CSR_UNIX) || defined(CSR_APPLE)
     return dlclose(dlID);
 #endif
 }
 
 std::filesystem::path GetExePath()
 {
-#if defined(_WIN32) || defined(__CYGWIN__)
+#ifdef CSR_WIN
     wchar_t path[MAX_PATH];
     GetModuleFileNameW( NULL, path, MAX_PATH );
-#elif defined(unix) || defined(__unix) || defined(__unix__)
+#elif defined(CSR_UNIX)
     // Linux specific
     char path[PATH_MAX];
     ssize_t count = readlink( "/proc/self/exe", path, PATH_MAX );
     if( count < 0 || count >= PATH_MAX )
         return {};
     path[count] = '\0';
-#elif defined(__APPLE__) || defined(__MACH__)
+#elif defined(CSR_APPLE)
     char path[PATH_MAX];
     uint32_t bufsize = PATH_MAX;
     if (!_NSGetExecutablePath(path, &bufsize))

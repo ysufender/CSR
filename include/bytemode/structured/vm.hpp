@@ -10,7 +10,7 @@
 #include "system.hpp"
 
 #if defined(ENABLE_JIT)
-    static_assert(false, "JIT builds are not supported yet for Structured VM.");
+    #error "JIT builds are not supported yet for Structured VM."
 #endif
 
 using AssemblyCollection = std::unordered_map<std::string, Assembly>;
@@ -85,7 +85,7 @@ class VM : IMessageObject
                 if (!this->asmIds.contains(id))
                     break;
 
-            // Since AddAssembly returns Error::Bad when asm count is max, no need to
+            // Since AddAssembly returns System::ErrorCode::Bad when asm count is max, no need to
             // error check here because it'll always find an id. Same with all GenerateNewXID
             // around the codebase.
 

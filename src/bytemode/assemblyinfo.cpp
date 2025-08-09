@@ -65,7 +65,7 @@ Error AssemblyInfo::Deserialize(std::istream& inFile) noexcept
    }
    catch (const std::exception&)
    {
-       return Error::UnhandledException;
+       return System::ErrorCode::UnhandledException;
    }
 
     return System::ErrorCode::Ok;
