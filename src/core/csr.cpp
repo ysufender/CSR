@@ -26,12 +26,33 @@ int csrmain(int argc, char** args)
             PrintHelp(flags);
         else if (flags.GetFlag<CLIParser::FlagType::Bool>("version"))
             PrintHeader();
+#ifdef BUILD_FLAT
 #if defined(BUILD_STRUCTURED)
-#if defined(BUILD_FLAT)
-        else if (!flags.GetFlag<CLIParser::FlagType::Bool>("flat"))
+        else if (flags.GetFlag<CLIParser::FlagType::Bool>("flat"))
 #else
         else
 #endif
+         {
+#ifdef BUILD_STRUCTURED
+            std::vector<std::string> execs { flags.GetFlag<CLIParser::FlagType::StringList>("exe") };
+            if (exec.size() > 1)
+                LOGW("FlatVM requires a single executable. Only the first executable will be used.");
+            std::filesystem::path exec { execs.at(0) };
+#else
+            std::filesystem::path exec { flags.GetFlag<CLIParser::FlagType::String>("exe") };
+#endif
+
+            FlatVM vm {FlatVM::VMSettings {
+                .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
+                .path = exec,
+#ifdef ENABLE_JIT
+                .jit = flags.GetFlag<CLIParser::FlagType::Bool>("jit"),
+#endif
+            }};
+            errc = vm.Run();
+        }
+#endif
+#ifdef BUILD_STRUCTURED
         {
             if (flags.GetFlag<CLIParser::FlagType::Bool>("no-new"))
                 LOGW("Single-process runtime is currently unavailable. A new instance will be created.");
@@ -88,28 +109,6 @@ int csrmain(int argc, char** args)
 
             if (VM::GetVM().Assemblies().size() > 0)
                 errc = VM::GetVM().Run();
-        } 
-#elif defined(BUILD_FLAT)
-        else
-        {
-#if defined(BUILD_STRUCTURED)
-            std::vector<std::string> execs { flags.GetFlag<CLIParser::FlagType::StringList>("exe") };
-            if (exec.size() > 1)
-                LOGW("FlatVM requires a single executable. Only the first executable will be used.");
-            std::filesystem::path exec { execs.at(0) };
-#else
-            std::filesystem::path exec { flags.GetFlag<CLIParser::FlagType::String>("exe") };
-#endif
-
-            FlatVM vm {FlatVM::VMSettings {
-                .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
-                .path = exec,
-#ifdef ENABLE_JIT
-                .jit = flags.GetFlag<CLIParser::FlagType::Bool>("jit"),
-#endif
-            }};
-
-            errc = vm.Run();
         }
 #endif
     }
@@ -147,13 +146,10 @@ void PrintHeader() noexcept
 #endif
               << "\n\tBuild Details: "
 #ifdef BUILD_STRUCTURED
-              << "Structured VM"
-#ifdef BUILD_FLAT
-              << " - "
-#endif
+              << "Structured VM --"
 #endif
 #ifdef BUILD_FLAT
-              <<  "Flat VM"
+              <<  "Flat VM --"
 #endif
               << "\n\tEnable JIT: "
 #ifdef ENABLE_JIT
@@ -184,9 +180,11 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
 #endif
 #if defined(BUILD_STRUCTURED)
     parser.Separator();
-#if defined(BUILD_FLAT)
+#endif
+#if defined(BUILD_FLAT) && (defined(BUILD_STRUCTURED))
     parser.AddFlag<CLIParser::FlagType::Bool>("flat", "Run a flat VM without the whole VM structure.", false);
 #endif
+#if defined(BUILD_STRUCTURED)
     parser.AddFlag<FlagType::Bool>("no-new", "Do not create a new instance of CSR, use an already running one.", false);
     parser.AddFlag<FlagType::Bool>("no-strict-messages", "Don't strictly verify messages in each checkpoint when dispatching.", true);
     parser.AddFlag<FlagType::Bool>("messaging", "Enable communication within VM.", false);
@@ -212,9 +210,9 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
     parser.BindFlag("n", "no-new");
     parser.BindFlag("nsm", "no-strict-messages");
     parser.BindFlag("m", "messaging");
-#if defined(BUILD_FLAT)
-    parser.BindFlag("f", "flat");
 #endif
+#if defined(BUILD_FLAT) && (defined(BUILD_STRUCTURED))
+    parser.BindFlag("f", "flat");
 #endif
     parser.BindFlag("e", "exe");
     parser.BindFlag("u", "unsafe");

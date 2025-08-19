@@ -54,7 +54,13 @@ class FlatVM
 #ifdef ENABLE_JIT
         BlockCounterCollection blocks;
         JITContext jitContext;
+
+        static bool IsHotBlock(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].IsHot(); }
+        static bool IsCompiled(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].IsCompiled(); }
+        static void Increment(void* vm, const uint32_t pos) { reinterpret_cast<FlatVM*>(vm)->blocks[pos].Increment(); }
+        static JITEntry GetEntry(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].GetEntry(); }
 #endif
+
 
         VM_INLINE static int Validate(uint64_t size, uint8_t version)
         {

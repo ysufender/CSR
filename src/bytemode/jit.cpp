@@ -1,6 +1,12 @@
 #include "bytemode/jit.hpp"
+#include "CSRConfig.hpp"
+#include "bytemode/instructions.hpp"
+#include "extensions/converters.hpp"
+#include "system.hpp"
+#include <cstdint>
+#include <string>
 
-JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml)
+JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, JITContext& context)
 {
     static constexpr void* instructions[] {
         &&op_NoOperation,
@@ -52,12 +58,13 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml)
         return JITError::CompilationError;
 
     try {
-        goto *instructions[pc];
+        goto *instructions[rom[pc++]];
 
-        op_NoOperation: { return JITError::UnsupportedInstruction; }
+        op_NoOperation: { asml.nop(); return JITError::Ok; }
         op_StoreThirtyTwo: {
             RAM_WRITE32_SP(0, IntegerFromBytes<sysbit_t>(rom.ReadSome(pc, 4).data))
             asml.add(SP, 4);
+            pc+=4;
             return JITError::Ok;
         }
         op_StoreEight: { return JITError::UnsupportedInstruction; }
@@ -90,7 +97,11 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml)
         op_InvertSafe: { return JITError::UnsupportedInstruction; }
         op_Compare: { return JITError::UnsupportedInstruction; }
         op_PopInstruction: { return JITError::UnsupportedInstruction; }
-        op_Jump: { return JITError::UnsupportedInstruction; }
+        op_Jump: {
+            
+            return JITError::UnsupportedInstruction;
+            const uint32_t symbol { IntegerFromBytes<uint32_t>(rom.ReadSome(pc, 4).data) };
+        }
         op_SwapRange: { return JITError::UnsupportedInstruction; }
         op_DuplicateRange: { return JITError::UnsupportedInstruction; }
         op_Repeat: { return JITError::UnsupportedInstruction; }
@@ -124,30 +135,31 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml)
             if (index < 0)
                 return JITError::VMLevelError;
 
-            switch (rom[pc-1]-static_cast<uchar_t>(OpCodes::incli))
+            switch (OpCodes(rom[pc-1]))
             {
-                case 0: {
-                    RAM_READ32_BP(index, TEMP)
-                    asml.add(TEMP, IntegerFromBytes<sysbit_t>(rom.ReadSome(pc+4, 4).data));
-                    RAM_WRITE32_BP(index, TEMP)
+                case OpCodes::incli: {
+                    RAM_READ32_BP(index, T2)
+                    asml.add(T2, IntegerFromBytes<sysbit_t>(rom.ReadSome(pc+4, 4).data));
+                    RAM_WRITE32_BP(index, T2)
                     pc += 8;
                     return JITError::Ok;
                 }
 
-                case 1: {
-                    RAM_READ32F_BP(index, RF1)
-                    asml.mov(TEMP, reinterpret_cast<uintptr_t>(rom&(pc+4)));
-                    asml.movss(RF2, x86::dword_ptr(TEMP));
+                case OpCodes::inclf: {
+                    RAM_READF_BP(index, RF1)
+                    asml.mov(T2, reinterpret_cast<uintptr_t>(rom&(pc+4)));
+                    asml.movss(RF2, x86::dword_ptr(T2));
                     asml.addss(RF1, RF2);
-                    RAM_WRITE32F_BP(index, RF1)
+                    RAM_WRITEF_BP(index, RF1)
                     pc += 8;
                     return JITError::Ok;
                 }
 
-                case 2: {
-                    RAM_READ8_BP(index, TEMP)
-                    asml.add(TEMP, IntegerFromBytes<sysbit_t>(rom.ReadSome(pc+4, 1).data));
-                    RAM_WRITE8_BP(index, TEMP)
+                case OpCodes::inclb: {
+                    sysbit_t constant { IntegerFromBytes<sysbit_t>(rom.ReadSome(pc+4, 1).data) };
+                    RAM_READ8_BP(index, T2)
+                    asml.add(T2, constant);
+                    RAM_WRITE8_BP(index, T2)
                     pc += 5;
                     return JITError::Ok;
                 }
@@ -158,9 +170,9 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml)
 
         op_ReadLocal: {
             sysbit_t size { static_cast<sysbit_t>(rom.Read(pc-1) == (uchar_t)OpCodes::rdlt ? 4 : 1) };
-            RAM_READ32_BP(IntegerFromBytes<sysbit_t>(rom.ReadSome(pc, 4).data), TEMP)
-            RAM_WRITE32_SP(0, TEMP)
-            asml.add(SP, 4);
+            RAM_READ32_BP(IntegerFromBytes<sysbit_t>(rom.ReadSome(pc, size).data), T2)
+            RAM_WRITE32_SP(0, T2)
+            asml.add(SP, size);
             pc += 4;
             return JITError::Ok;
         }

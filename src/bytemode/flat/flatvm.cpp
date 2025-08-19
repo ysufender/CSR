@@ -159,31 +159,39 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
     };
 
 #ifdef ENABLE_JIT
-    for (const auto& [symbol, addr] : assembly.Symbols())
-        if (rom[addr] <= OpCodesMax)
-            blocks.Add(addr);
+    if (settings.jit)
+    {
+        for (const auto& [symbol, addr] : assembly.Symbols())
+            if (rom[addr] <= OpCodesMax)
+                blocks.Add(addr);
 
-    jitContext = {
-        .reg32 = {
-            &cpu.state.eax,
-            &cpu.state.ebx,
-            &cpu.state.ecx,
-            &cpu.state.edx,
-            &cpu.state.esi,
-            &cpu.state.edi,
-            &cpu.state.pc,
-            &cpu.state.sp,
-            &cpu.state.bp
-        },
-        .reg8 = {
-            &cpu.state.al,
-            &cpu.state.bl,
-            &cpu.state.cl,
-            &cpu.state.dl,
-            &cpu.state.flg
-        },
-        .ram = &ram
-    };
+        jitContext = JITContext {
+            .reg32 = {
+                &cpu.state.eax,
+                &cpu.state.ebx,
+                &cpu.state.ecx,
+                &cpu.state.edx,
+                &cpu.state.esi,
+                &cpu.state.edi,
+                &cpu.state.pc,
+                &cpu.state.sp,
+                &cpu.state.bp
+            },
+            .reg8 = {
+                &cpu.state.al,
+                &cpu.state.bl,
+                &cpu.state.cl,
+                &cpu.state.dl,
+                &cpu.state.flg
+            },
+            .ram = &ram,
+            .vm = this,
+            .IsHotBlock = IsHotBlock,
+            .IsCompiled = IsCompiled,
+            .Increment = Increment,
+            .GetEntry = GetEntry
+        };
+    }
 #endif
 
     context = VMContext {
@@ -1632,7 +1640,7 @@ const System::ErrorCode FlatVM::Run() noexcept
 
 
 #ifdef ENABLE_JIT
-                        JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
+                        JITError err { BranchIncrease(blocks, address, &jitContext, rom, settings.jit) };
                         
                         if (err == JITError::Ok)
                             errcx = System::ErrorCode::Ok;
@@ -1657,7 +1665,7 @@ const System::ErrorCode FlatVM::Run() noexcept
 
 
 #ifdef ENABLE_JIT
-                        JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
+                        JITError err { BranchIncrease(blocks, address, &jitContext, rom, settings.jit) };
                         
                         if (err == JITError::Ok)
                             errcx = System::ErrorCode::Ok;
@@ -2140,7 +2148,7 @@ const System::ErrorCode FlatVM::Run() noexcept
 
 
 #ifdef ENABLE_JIT
-                JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
+                JITError err { BranchIncrease(blocks, address, &jitContext, rom, settings.jit) };
                 
                 if (err == JITError::Ok)
                     errcx = System::ErrorCode::Ok;
@@ -2246,7 +2254,7 @@ const System::ErrorCode FlatVM::Run() noexcept
                 //  - Change bp
 
 #ifdef ENABLE_JIT
-                JITError jiterr { BranchIncrease(blocks, address, &jitContext, rom) };
+                JITError jiterr { BranchIncrease(blocks, address, &jitContext, rom, settings.jit) };
 
                 if (jiterr == JITError::Ok)
                 {
@@ -2950,9 +2958,8 @@ const System::ErrorCode FlatVM::Run() noexcept
                         rom.ReadSome(cpu.state.pc+1, 4).data 
                     );
 
-                // Safety test, address must be in bounds of rom
 #ifdef ENABLE_JIT
-                JITError err { BranchIncrease(blocks, address, &jitContext, rom) };
+                JITError err { BranchIncrease(blocks, address, &jitContext, rom, settings.jit) };
                 if (err == JITError::Ok)
                 {
                     errcx = System::ErrorCode::Ok;
@@ -2961,6 +2968,7 @@ const System::ErrorCode FlatVM::Run() noexcept
                 else if (err != JITError::VMLevelError)
                 {
 #endif
+                    // Safety test, address must be in bounds of rom
                     RomSafetyCheck(address);
                     cpu.state.pc = address;
                     errcx = System::ErrorCode::Ok;
