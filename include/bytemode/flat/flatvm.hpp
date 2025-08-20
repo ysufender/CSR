@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
+#include <chrono>
 
 #include "CSRConfig.hpp"
 #include "bytemode/assemblyinfo.hpp"
@@ -51,16 +53,26 @@ class FlatVM
         FlatCPU cpu;
         SysCallHandler handler;
         VMSettings settings;
+        std::chrono::time_point<std::chrono::steady_clock> startT;
 #ifdef ENABLE_JIT
         BlockCounterCollection blocks;
         JITContext jitContext;
 
-        static bool IsHotBlock(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].IsHot(); }
-        static bool IsCompiled(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].IsCompiled(); }
-        static void Increment(void* vm, const uint32_t pos) { reinterpret_cast<FlatVM*>(vm)->blocks[pos].Increment(); }
-        static JITEntry GetEntry(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].GetEntry(); }
+        VM_INLINE static bool IsCompiled(void* vm, const uint32_t pos)
+        {
+            if (!reinterpret_cast<FlatVM*>(vm)->blocks.Contains(pos))
+                return false;
+            return reinterpret_cast<FlatVM*>(vm)->blocks[pos].IsCompiled();
+        }
+        VM_INLINE static JITEntry GetEntry(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].GetEntry(); }
 #endif
 
+        VM_INLINE static uint64_t Clock(VMContext* context)
+        {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - reinterpret_cast<FlatVM*>(context->context)->startT
+            ).count();
+        }
 
         VM_INLINE static int Validate(uint64_t size, uint8_t version)
         {
@@ -75,6 +87,13 @@ class FlatVM
         {
             FlatVM& vm { *reinterpret_cast<FlatVM*>(context->context) };
             return &vm.ram+addr;
+        }
+
+        VM_INLINE static uint32_t GetVMAddress(VM_API, void* ptr)
+        {
+            FlatVM& vm { *reinterpret_cast<FlatVM*>(context->context) };
+            std::ptrdiff_t diff { reinterpret_cast<char*>(ptr) - &vm.ram };
+            return static_cast<uint32_t>(diff);
         }
 
         VM_INLINE static void* Allocate(VM_API, const uint32_t size)

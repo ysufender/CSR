@@ -53,7 +53,7 @@ static sysbit_t& GetRegister32Bit(RegisterModeFlags reg, FlatCPU::State& state)
         case RegisterModeFlags::pc: return state.pc;
         case RegisterModeFlags::sp: return state.sp;
         case RegisterModeFlags::bp: return state.bp;
-        default: 
+        default: [[unlikely]]
             CRASH(
                 System::ErrorCode::InvalidSpecifier,
                 RegisterModeFlagsString(reg), " is not a 32bit register."
@@ -72,7 +72,7 @@ static uchar_t& GetRegister8Bit(RegisterModeFlags reg, FlatCPU::State& state)
         case RegisterModeFlags::cl: return state.cl;
         case RegisterModeFlags::dl: return state.dl;
         case RegisterModeFlags::flg: return state.flg;
-        default:
+        default: [[unlikely]]
             CRASH(
                 System::ErrorCode::InvalidSpecifier,
                 RegisterModeFlagsString(reg), " is not an 8bit register."
@@ -186,9 +186,7 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
             },
             .ram = &ram,
             .vm = this,
-            .IsHotBlock = IsHotBlock,
             .IsCompiled = IsCompiled,
-            .Increment = Increment,
             .GetEntry = GetEntry
         };
     }
@@ -201,7 +199,8 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
         .Allocate = &FlatVM::Allocate,
         .Deallocate = &FlatVM::Deallocate,
         .BindFunction = &FlatVM::BindFunction,
-        .UnbindFunction = &FlatVM::UnbindFunction
+        .UnbindFunction = &FlatVM::UnbindFunction,
+        .GetVMAddress = &FlatVM::GetVMAddress
     };
 
     if (InitStandardLibrary(handler) != System::ErrorCode::Ok)
@@ -236,6 +235,8 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
 
 const System::ErrorCode FlatVM::Run() noexcept
 {
+    startT = std::chrono::steady_clock::now();
+
     System::ErrorCode code = System::ErrorCode::Ok;
     static constexpr void* jumpTable[] = {
         &&op_NoOperation,
@@ -2244,6 +2245,7 @@ const System::ErrorCode FlatVM::Run() noexcept
                         }
                     }
                     errcx = System::ErrorCode::Ok;
+                    continue;
                 }
 
                 // normal call
@@ -2984,7 +2986,7 @@ const System::ErrorCode FlatVM::Run() noexcept
         }
     }
 
-    std::cout << cpu.state.eax << '\n';
+    //std::cout << cpu.state.eax << '\n';
     return code;
 }
 

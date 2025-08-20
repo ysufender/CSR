@@ -4,7 +4,6 @@ set -e
 
 refresh=false
 generate=false
-windows=false
 memtest=false
 release=false
 
@@ -38,16 +37,6 @@ done
 if [[ $refresh == true && -d build ]]; then
     echo "[BUILD_SCRIPT] Cleaning the build directory..."
     rm -rf build
-fi
-
-if [ $windows == true ]; then
-    echo "[BUILD_SCRIPT] Building for Windows"
-    preset="Debug-MinGW" 
-
-    if [ $memtest == true ]; then
-        echo "[BUILD_SCRIPT] MemTest is only supported for linux builds"
-        exit 1
-    fi
 fi
 
 preset="Debug"

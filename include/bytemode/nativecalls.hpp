@@ -60,6 +60,8 @@ typedef struct VMContext {
     Code (*Deallocate)(VMContext*, const uint32_t addr, const uint32_t size);
     Code (*BindFunction)(VMContext*, const uint32_t id, char (*handler)(VMContext* context, char* paramBuffer));
     Code (*UnbindFunction)(VMContext*, const uint32_t id);
+    uint32_t (*GetVMAddress)(VMContext*, void* ptr);
+    uint64_t (*Clock)(VMContext*);
 } VMContext;
 
 typedef char (*SysFunctionHandler)(VMContext* context, char* paramBuffer);
@@ -70,7 +72,7 @@ typedef SysFunctionHandler sysfnh_t;
 typedef char (*extenderInit_t )(VMContext* context);
 
 // In InitExtender, you must do
-//  >>> context.Validate(context, VM_API_VERSION)
+//  >>> context.Validate(sizeof(VMContext), VM_API_VERSION)
 // and check the return value. If it is 0 then either
 // sizes/alignment doesn't match or API versions are different.
 

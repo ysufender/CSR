@@ -1,12 +1,46 @@
-#include "bytemode/jit.hpp"
-#include "CSRConfig.hpp"
-#include "bytemode/instructions.hpp"
-#include "extensions/converters.hpp"
-#include "system.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
-JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, JITContext& context)
+#include "extensions/converters.hpp"
+#include "bytemode/instructions.hpp"
+#include "bytemode/jit.hpp"
+#include "CSRConfig.hpp"
+
+#define Enumc(regn) static_cast<char>(regn)
+#define Is8BitReg(reg) (Enumc(reg) >= Enumc(RegisterModeFlags::al)) && (Enumc(reg) <= Enumc(RegisterModeFlags::flg))
+
+using namespace x86;
+
+x86::Gp GetRegister(RegisterModeFlags reg)
+{
+    static sysbit_t dummy { 0 };
+    switch (reg)
+    {
+        case RegisterModeFlags::eax: return EAX;
+        case RegisterModeFlags::ebx: return EBX;
+        case RegisterModeFlags::ecx: return ECX;
+        case RegisterModeFlags::edx: return EDX;
+        case RegisterModeFlags::pc: return PC;
+        case RegisterModeFlags::sp: return SP;
+        case RegisterModeFlags::bp: return BP;
+        case RegisterModeFlags::al: return AL;
+        case RegisterModeFlags::bl: return BL;
+        case RegisterModeFlags::cl: return CL;
+        case RegisterModeFlags::flg:
+        case RegisterModeFlags::dl:
+        case RegisterModeFlags::edi:
+        case RegisterModeFlags::esi:
+        default: [[unlikely]]
+            CRASH(
+                System::ErrorCode::InvalidSpecifier,
+                RegisterModeFlagsString(reg), " is not an 8bit register."
+            );
+            return T3;
+    }
+}
+
+JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, JITContext& context, const uint32_t start)
 {
     static constexpr void* instructions[] {
         &&op_NoOperation,
@@ -62,8 +96,13 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, 
 
         op_NoOperation: { asml.nop(); return JITError::Ok; }
         op_StoreThirtyTwo: {
-            RAM_WRITE32_SP(0, IntegerFromBytes<sysbit_t>(rom.ReadSome(pc, 4).data))
-            asml.add(SP, 4);
+            sysbit_t imm { IntegerFromBytes<sysbit_t>(rom.ReadSome(pc, 4).data) };
+            asml.mov(T2, dword_ptr(rreg32, rsp));
+            asml.mov(dword_ptr(rram, T2), imm);
+            asml.add(dword_ptr(rreg32, rsp), 4);
+            //asml.mov(T1, qword_ptr(firstParamReg, offsetof(JITContext, ram)));
+            //asml.mov(dword_ptr(T1, SP), imm);
+            //asml.add(SP, 4);
             pc+=4;
             return JITError::Ok;
         }
@@ -72,7 +111,24 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, 
         op_LoadFromStack: { return JITError::UnsupportedInstruction; }
         op_ReadFromHeap: { return JITError::UnsupportedInstruction; }
         op_ReadFromRegister: { return JITError::UnsupportedInstruction; }
-        op_Move: { return JITError::UnsupportedInstruction; }
+        op_Move: { 
+            return JITError::UnsupportedInstruction;
+            OpCodes op { rom.Read(pc-1) };
+            RegisterModeFlags regF { rom.Read(pc) };  
+            int size { Is8BitReg(regF) ? 1 : 4 };
+
+            if (op == OpCodes::movc)
+            {
+                if (size == 1)
+                    asml.mov(GetRegister(regF), rom.Read(pc+1));
+                else
+                    asml.mov(GetRegister(regF), IntegerFromBytes<uint32_t>(rom.ReadSome(pc+1, 4).data));
+                pc += size+1;
+            }
+            else
+                return JITError::UnsupportedInstruction;
+            return JITError::Ok;
+        }
         op_Add32: { return JITError::UnsupportedInstruction; }
         op_AddFloat: { return JITError::UnsupportedInstruction; }
         op_Add8: { return JITError::UnsupportedInstruction; }
@@ -98,9 +154,44 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, 
         op_Compare: { return JITError::UnsupportedInstruction; }
         op_PopInstruction: { return JITError::UnsupportedInstruction; }
         op_Jump: {
-            
             return JITError::UnsupportedInstruction;
-            const uint32_t symbol { IntegerFromBytes<uint32_t>(rom.ReadSome(pc, 4).data) };
+            if (rom.Read(pc-1) == (uchar_t)OpCodes::jmpr) [[unlikely]]
+            {
+                return JITError::UnsupportedInstruction;
+            }
+            else [[likely]]
+            {
+                const uint32_t symbol { IntegerFromBytes<uint32_t>(rom.ReadSome(pc, 4).data) };
+                if (!(start <= symbol && symbol <= pc-1))
+                {
+                    Label lbl { asml.newLabel() };
+                    asml.mov(T2, firstParamReg);
+                    asml.push(secondParamReg);
+                    asml.push(x86::rax);
+                    asml.mov(firstParamReg, qword_ptr(x86::rdi, offsetof(JITContext, vm)));
+                    asml.mov(secondParamReg, symbol);
+                    asml.call(qword_ptr(T2, offsetof(JITContext, IsCompiled)));
+                    asml.test(x86::al, x86::al); 
+                    asml.jz(lbl);
+
+                    asml.call(qword_ptr(T2, offsetof(JITContext, GetEntry)));
+                    asml.mov(T3, x86::rax);
+                    asml.pop(x86::rax);
+                    asml.pop(secondParamReg);
+                    asml.mov(firstParamReg, T2);
+                    restore()
+                    asml.jmp(T3);
+                    
+                    asml.bind(lbl);
+                    restore()
+                    asml.ret();
+                    pc += 4;
+                    return JITError::Ok;
+                }
+
+                pc--; 
+                return JITError::Finish;
+            }
         }
         op_SwapRange: { return JITError::UnsupportedInstruction; }
         op_DuplicateRange: { return JITError::UnsupportedInstruction; }
@@ -131,35 +222,38 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, 
         op_SubSafe8: { return JITError::UnsupportedInstruction; }
 
         op_IncrementLocal: {
+            return JITError::UnsupportedInstruction;
             const sysbit_t index { IntegerFromBytes<sysbit_t>(rom.ReadSome(pc, 4).data) };  
-            if (index < 0)
-                return JITError::VMLevelError;
 
             switch (OpCodes(rom[pc-1]))
             {
                 case OpCodes::incli: {
-                    RAM_READ32_BP(index, T2)
-                    asml.add(T2, IntegerFromBytes<sysbit_t>(rom.ReadSome(pc+4, 4).data));
-                    RAM_WRITE32_BP(index, T2)
+                    const sysbit_t inc { IntegerFromBytes<sysbit_t>(rom.ReadSome(pc+4, 4).data) };
+                    asml.mov(T1, qword_ptr(firstParamReg, offsetof(JITContext, ram)));
+                    if (inc == 1)
+                        asml.inc(dword_ptr(T1, BP, 0, index));
+                    else
+                        asml.add(dword_ptr(T1, BP, 0, index), inc);
                     pc += 8;
                     return JITError::Ok;
                 }
 
                 case OpCodes::inclf: {
-                    RAM_READF_BP(index, RF1)
-                    asml.mov(T2, reinterpret_cast<uintptr_t>(rom&(pc+4)));
+                    const float inc { FloatFromBytes(rom.ReadSome(pc+4, 4).data) };
+                    asml.mov(T1, qword_ptr(firstParamReg, offsetof(JITContext, ram)));
+                    asml.movss(RF1, dword_ptr(T1, BP, 0, index));
+                    asml.mov(T2, reinterpret_cast<const float*>(rom&(pc+4)));
                     asml.movss(RF2, x86::dword_ptr(T2));
                     asml.addss(RF1, RF2);
-                    RAM_WRITEF_BP(index, RF1)
+                    asml.movss(dword_ptr(T1), RF1);
                     pc += 8;
                     return JITError::Ok;
                 }
 
                 case OpCodes::inclb: {
-                    sysbit_t constant { IntegerFromBytes<sysbit_t>(rom.ReadSome(pc+4, 1).data) };
-                    RAM_READ8_BP(index, T2)
-                    asml.add(T2, constant);
-                    RAM_WRITE8_BP(index, T2)
+                    uint8_t inc { IntegerFromBytes<uint8_t>(rom.ReadSome(pc+4, 1).data) };
+                    asml.mov(T1, qword_ptr(firstParamReg, offsetof(JITContext, ram)));
+                    asml.add(byte_ptr(T1, BP, 0, index), inc);
                     pc += 5;
                     return JITError::Ok;
                 }
@@ -169,15 +263,37 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, 
         }
 
         op_ReadLocal: {
-            sysbit_t size { static_cast<sysbit_t>(rom.Read(pc-1) == (uchar_t)OpCodes::rdlt ? 4 : 1) };
-            RAM_READ32_BP(IntegerFromBytes<sysbit_t>(rom.ReadSome(pc, size).data), T2)
-            RAM_WRITE32_SP(0, T2)
-            asml.add(SP, size);
+            sysbit_t index { IntegerFromBytes<sysbit_t>(rom.ReadSome(pc, 4).data) };
+            //asml.mov(T1, qword_ptr(firstParamReg, offsetof(JITContext, ram)));
+            if (rom.Read(pc-1) == uchar_t(OpCodes::rdlt))
+            {
+                //asml.mov(T2, dword_ptr(T1, BP, 0, index));
+                //asml.mov(dword_ptr(T1, SP), T2);
+                //asml.add(SP, 4);
+                asml.mov(T1, dword_ptr(rreg32, rsp));
+                asml.mov(T2, dword_ptr(rreg32, rbp));
+                asml.mov(T2, dword_ptr(rram, T2, 0, index));
+                asml.mov(dword_ptr(rram, T1), T2);
+                asml.add(dword_ptr(rreg32, rsp), 4);
+            }
+            else
+            {
+                asml.mov(T1, dword_ptr(rreg32, rsp));
+                asml.mov(T2, dword_ptr(rreg32, rbp));
+                asml.mov(T2, dword_ptr(rram, T2, 0, index));
+                asml.mov(dword_ptr(rram, T1), T2);
+                asml.inc(dword_ptr(rreg32, rsp));
+                //asml.mov(T2, byte_ptr(T1, BP, 0, index));
+                //asml.mov(dword_ptr(T1, SP), T2);
+                //asml.inc(SP);
+            }
             pc += 4;
             return JITError::Ok;
         }
 
-        op_CompareJump: { return JITError::UnsupportedInstruction; }
+        op_CompareJump: { 
+            return JITError::UnsupportedInstruction;
+        }
     }
     catch (const std::exception& e)
     { return JITError::CompilationError; }
