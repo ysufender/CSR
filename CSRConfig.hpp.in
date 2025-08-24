@@ -11,6 +11,7 @@
 #cmakedefine ENABLE_JIT 
 #cmakedefine BUILD_FLAT
 #cmakedefine BUILD_STRUCTURED
+#cmakedefine TOOLCHAIN_MODE
 
 #define VM_INLINE inline __attribute__((always_inline))
 #define VM_API VMContext* context

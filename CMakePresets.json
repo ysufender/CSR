@@ -20,7 +20,8 @@
                 "ENABLE_JIT": "ON",
                 "OUTPUT_PATH": "",
                 "BUILD_FLAT": "ON",
-                "BUILD_STRUCTURED": "OFF"
+                "BUILD_STRUCTURED": "OFF",
+                "TOOLCHAIN_MODE": "OFF"
             }
         },
         {

@@ -8,16 +8,16 @@
 #include <memory>
 #include <string>
 
-#include "bytemode/assemblyinfo.hpp"
-#include "bytemode/jit.hpp"
-#include "bytemode/nativecalls.hpp"
-#include "bytemode/instructions.hpp"
-#include "extensions/converters.hpp"
 #include "extensions/streamextensions.hpp"
+#include "extensions/syntaxextensions.hpp"
+#include "bytemode/assemblyinfo.hpp"
 #include "bytemode/flat/flatram.hpp"
 #include "bytemode/flat/flatvm.hpp"
+#include "extensions/converters.hpp"
+#include "bytemode/instructions.hpp"
+#include "bytemode/nativecalls.hpp"
+#include "bytemode/jit.hpp"
 #include "CSRConfig.hpp"
-#include "platform.hpp"
 #include "system.hpp"
 
 #define OPR const System::ErrorCode
@@ -110,54 +110,8 @@ static bool CompareVarious(T lhs, T rhs, uchar_t mode)
 
 const System::ErrorCode InitStandardLibrary(SysCallHandler& handler);
 
-FlatVM::FlatVM(FlatVM::VMSettings settings) :
-    settings(settings),
-    ram(),
-    rom(),
-    cpu(ram),
-    handler(),
-#ifdef ENABLE_JIT
-    blocks(),
-    jitContext(),
-#endif
-    assembly()
+void FlatVM::SetUpCommon()
 {
-    if (!std::filesystem::exists(settings.path))
-        CRASH(System::ErrorCode::SourceFileNotFound,
-            "Couldn't find executable ", settings.path.string());
-    std::ifstream bytecode { System::OpenInFile(settings.path) };
-    bytecode.seekg(-sizeof(uint64_t), std::ios::end);
-    uint64_t size { };
-    Extensions::Serialization::DeserializeInteger(size, bytecode);
-    bytecode.seekg(-(sizeof(uint64_t)+size), std::ios::end);
-    IStreamPos(bytecode, bytecodeEnd, {
-        bytecode.close();
-        CRASH(System::ErrorCode::FileIOError, "Couldn't load executable ", settings.path.c_str());
-    });
-    assembly.Deserialize(bytecode);
-
-    //if (settings.path.extension() != ".jef") 
-    if (!(assembly.Flags() & AssemblyFlags::Executable))
-        CRASH(System::ErrorCode::UnsupportedFileType,
-            "FlatVM does not support given filetype ", settings.path.c_str(), ". It is not marked as an executable.");
-
-#ifdef ENABLE_JIT
-    if (!(assembly.Flags() & AssemblyFlags::SymbolInfo) && settings.jit) [[unlikely]]
-        LOGW("Current execution is marked as JIT target however the file ", settings.path.c_str(), " does not contain symbol information.");
-#endif
-
-    bytecode.seekg(0, std::ios::beg);
-    std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(bytecodeEnd) };
-    bytecode.read(data.get(), bytecodeEnd);
-    bytecode.close();
-
-    rom = FlatROM { rval(data), static_cast<sysbit_t>(bytecodeEnd) };
-    cpu.state.pc = IntegerFromBytes<sysbit_t>(rom.ReadSome(0, 4).data);
-    ram = FlatRAM {
-        IntegerFromBytes<sysbit_t>(rom.ReadSome(4, 4).data),
-        IntegerFromBytes<sysbit_t>(rom.ReadSome(8, 4).data)
-    };
-
 #ifdef ENABLE_JIT
     if (settings.jit)
     {
@@ -209,28 +163,114 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
     if (!settings.unsafe)
         return;
 
-    std::filesystem::path dlPath { std::filesystem::absolute(settings.path.parent_path().append("lib"+settings.path.filename().string())) };
-#ifdef CSR_WIN
-    dlPath.replace_extension("dll");
-#elif defined(CSR_UNIX)
-    dlPath.replace_extension("so");
-#elif defined(CSR_APPLE)__un
-    dlPath.replace_extension("dylib");
+    if (InitExtender(context, handler, settings.path) != System::ErrorCode::Ok)
+        CRASH(System::ErrorCode::DLInitError, "Failed to initialize extender.");
+}
+
+std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(std::istream& bytecode)
+{
+    bytecode.seekg(-sizeof(uint64_t), std::ios::end);
+    uint64_t size { };
+    Extensions::Serialization::DeserializeInteger(size, bytecode);
+    bytecode.seekg(-(sizeof(uint64_t)+size), std::ios::end);
+    IStreamPos(bytecode, bytecodeEnd, {
+        CRASH(System::ErrorCode::FileIOError, "Couldn't load executable ", settings.path.c_str());
+    });
+    assembly.Deserialize(bytecode);
+
+    //if (settings.path.extension() != ".jef") 
+    if (!(assembly.Flags() & AssemblyFlags::Executable))
+        CRASH(System::ErrorCode::UnsupportedFileType,
+            "FlatVM does not support given filetype ", settings.path.c_str(), ". It is not marked as an executable.");
+
+#ifdef ENABLE_JIT
+    if (!(assembly.Flags() & AssemblyFlags::SymbolInfo) && settings.jit) [[unlikely]]
+        LOGW("Current execution is marked as JIT target however the file ", settings.path.c_str(), " does not contain symbol information.");
 #endif
 
-    LOGD("Loading ",
-        dlPath.string(),
-        " for assembly ",
-        settings.path.filename().string()
-    );
-    dlID_t extDl { handler.LoadDl(dlPath.c_str()) };
+    bytecode.seekg(0, std::ios::beg);
+    std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(bytecodeEnd) };
+    bytecode.read(data.get(), bytecodeEnd);
+    return {rval(data), bytecodeEnd};
+}
 
-    LOGD("Calling InitExtender for", dlPath.string());
-    extenderInit_t extInit { DLSym<extenderInit_t>(extDl, "InitExtender") };
-    if (!extInit)
-        CRASH(System::ErrorCode::DLInitError, "No InitExtender symbol found for ", dlPath.c_str());
-    if (extInit(&context) != static_cast<char>(System::ErrorCode::Ok))
-        CRASH(System::ErrorCode::DLInitError, "Failed to initialize extender.");
+FlatVM::FlatVM(FlatVM::VMSettings settings) :
+    settings(settings),
+    ram(),
+    rom(),
+    cpu(ram),
+    handler(),
+#ifdef ENABLE_JIT
+    blocks(),
+    jitContext(),
+#endif
+    assembly()
+{
+    if (!std::filesystem::exists(settings.path))
+        CRASH(System::ErrorCode::SourceFileNotFound,
+            "Couldn't find executable ", settings.path.string());
+    std::ifstream bytecode { System::OpenInFile(settings.path) };
+    auto [data, size] { ReadBytecode(bytecode) };
+    bytecode.close();
+
+    rom = FlatROM { rval(data), static_cast<sysbit_t>(size) };
+    cpu.state.pc = IntegerFromBytes<sysbit_t>(rom.ReadSome(0, 4).data);
+    ram = FlatRAM {
+        IntegerFromBytes<sysbit_t>(rom.ReadSome(4, 4).data),
+        IntegerFromBytes<sysbit_t>(rom.ReadSome(8, 4).data)
+    };
+
+    SetUpCommon();
+}
+
+FlatVM::FlatVM(FlatVM::VMSettings settings, std::istream& bytecode) :
+    settings(settings),
+    ram(),
+    rom(),
+    cpu(ram),
+    handler(),
+#ifdef ENABLE_JIT
+    blocks(),
+    jitContext(),
+#endif
+    assembly()
+{
+    auto [data, size] { ReadBytecode(bytecode) };
+
+    rom = FlatROM { rval(data), static_cast<sysbit_t>(size) };
+    cpu.state.pc = IntegerFromBytes<sysbit_t>(rom.ReadSome(0, 4).data);
+    ram = FlatRAM {
+        IntegerFromBytes<sysbit_t>(rom.ReadSome(4, 4).data),
+        IntegerFromBytes<sysbit_t>(rom.ReadSome(8, 4).data)
+    };
+
+    SetUpCommon();
+}
+
+FlatVM::FlatVM(FlatVM::VMSettings settings, char* const buf, const sysbit_t bufsize) :
+    settings(settings),
+    ram(),
+    rom(),
+    cpu(ram),
+    handler(),
+#ifdef ENABLE_JIT
+    blocks(),
+    jitContext(),
+#endif
+    assembly()
+{
+    std::stringstream bytecode;
+    bytecode.rdbuf()->pubsetbuf(buf, bufsize);
+    auto [data, size] { ReadBytecode(bytecode) };
+
+    rom = FlatROM { rval(data), static_cast<sysbit_t>(size) };
+    cpu.state.pc = IntegerFromBytes<sysbit_t>(rom.ReadSome(0, 4).data);
+    ram = FlatRAM {
+        IntegerFromBytes<sysbit_t>(rom.ReadSome(4, 4).data),
+        IntegerFromBytes<sysbit_t>(rom.ReadSome(8, 4).data)
+    };
+
+    SetUpCommon();
 }
 
 const System::ErrorCode FlatVM::Run() noexcept

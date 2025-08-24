@@ -76,7 +76,6 @@ typedef char (*extenderInit_t )(VMContext* context);
 // and check the return value. If it is 0 then either
 // sizes/alignment doesn't match or API versions are different.
 
-
 #ifdef __cplusplus
 }
 #endif

@@ -115,3 +115,37 @@ sysfnh_t SysCallHandler::MakeFunctionHandler(dlID_t dll, std::string_view functi
     );
     return nullptr;
 }
+
+System::ErrorCode InitExtender(VMContext& context, SysCallHandler& handler, const std::filesystem::path& path) noexcept
+{
+    std::filesystem::path dlPath { std::filesystem::absolute(path.parent_path().append("lib"+path.filename().string())) };
+#ifdef CSR_WIN
+    dlPath.replace_extension("dll");
+#elif defined(CSR_UNIX)
+    dlPath.replace_extension("so");
+#elif defined(CSR_APPLE)__un
+    dlPath.replace_extension("dylib");
+#endif
+
+    LOGD("Loading ",
+        dlPath.string(),
+        " for assembly ",
+        path.filename().string()
+    );
+    dlID_t extDl { handler.LoadDl(dlPath.c_str()) };
+
+    LOGD("Calling InitExtender for", dlPath.string());
+    extenderInit_t extInit { DLSym<extenderInit_t>(extDl, "InitExtender") };
+    if (!extInit)
+    {
+        LOGE(System::LogLevel::Medium, "No InitExtender symbol found for ", dlPath.c_str());
+        return System::ErrorCode::DLInitError;
+    }
+    if (extInit(&context) != static_cast<char>(System::ErrorCode::Ok))
+    {
+        LOGE(System::LogLevel::Medium, "Failed to initialize extender.");
+        return System::ErrorCode::DLInitError;
+    }
+
+    return System::ErrorCode::Ok;
+}

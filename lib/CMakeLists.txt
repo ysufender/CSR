@@ -10,6 +10,7 @@ endif (ENABLE_JIT)
 
 # Add subdirectories here
 add_subdirectory(CLIParser)
+
 if (ENABLE_JIT)
     message(STATUS "Entering asmjit...")
     add_subdirectory(asmjit)
@@ -26,6 +27,7 @@ if (ENABLE_JIT)
             asmjit::asmjit
     )
 endif (ENABLE_JIT)
+
 target_link_libraries(libs
     INTERFACE
         CLIParser

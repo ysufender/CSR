@@ -44,3 +44,5 @@ class SysCallHandler
         SysFunctionMap boundFuncs; 
         DLList dlList;
 };
+
+System::ErrorCode InitExtender(VMContext& context, SysCallHandler& handler, const std::filesystem::path& path) noexcept;

@@ -47,3 +47,5 @@ using namespace std::string_view_literals;
     mode const std::string_view& name##String(name enumer) { \
         return name##String(static_cast<char>(enumer)); \
     }
+
+#define not_implemented(name) LOGE(System::LogLevel::High, name, " Not Implemented.");

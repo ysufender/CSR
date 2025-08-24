@@ -3,8 +3,8 @@
 #include <cstddef>
 #include <functional>
 #include <chrono>
+#include <istream>
 
-#include "CSRConfig.hpp"
 #include "bytemode/assemblyinfo.hpp"
 #include "bytemode/flat/flatrom.hpp"
 #include "bytemode/flat/flatram.hpp"
@@ -12,8 +12,9 @@
 #include "bytemode/nativecalls.hpp"
 #include "bytemode/instructions.hpp"
 #include "bytemode/syscall.hpp"
-#include "system.hpp"
 #include "bytemode/jit.hpp"
+#include "CSRConfig.hpp"
+#include "system.hpp"
 
 class FlatVM
 {
@@ -26,24 +27,34 @@ class FlatVM
 #endif
             std::filesystem::path path;
 #ifdef ENABLE_JIT
-            //static_assert(false, "JIT Builds are not supported yet with Flat VM.");
+    #warning "Even though JIT builds are allowed and has performance benefits, real JIT compilation is not complete yet. So your program will NOT run if you set the VMSettings::jit to true."
             bool jit;
 #endif
         };
 
+        // to create from filepath
         FlatVM(VMSettings settings);
+
+        // to create from an already read buffer.
+        // VM manages the buffer afterwards.
+        FlatVM(VMSettings settings, char* const buf, const sysbit_t bufsize);
+
+#ifdef __cplusplus
+    public:
+        // to create from given stream
+        FlatVM(VMSettings settings, std::istream& source);
+#endif
 
         FlatVM(FlatVM const&) = delete;
         FlatVM(FlatVM const&&) = delete;
         FlatVM& operator=(FlatVM const&) = delete;
         FlatVM& operator=(FlatVM const&&) = delete;
 
+
         VM_INLINE const VMSettings& GetSettings() const noexcept
         { return this->settings; }
 
         const System::ErrorCode Run() noexcept;
-
-        const System::ErrorCode BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
 
     private:
         AssemblyInfo assembly;
@@ -58,6 +69,11 @@ class FlatVM
         BlockCounterCollection blocks;
         JITContext jitContext;
 
+        void SetUpCommon();
+        std::pair<std::unique_ptr<const char[]>, std::streamoff> ReadBytecode(std::istream& bytecode);
+
+        const System::ErrorCode BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
+
         VM_INLINE static bool IsCompiled(void* vm, const uint32_t pos)
         {
             if (!reinterpret_cast<FlatVM*>(vm)->blocks.Contains(pos))
@@ -66,13 +82,6 @@ class FlatVM
         }
         VM_INLINE static JITEntry GetEntry(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].GetEntry(); }
 #endif
-
-        VM_INLINE static uint64_t Clock(VMContext* context)
-        {
-            return std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - reinterpret_cast<FlatVM*>(context->context)->startT
-            ).count();
-        }
 
         VM_INLINE static int Validate(uint64_t size, uint8_t version)
         {

@@ -51,6 +51,7 @@ message(STATUS "ENABLE_JIT: ${ENABLE_JIT}")
 message(STATUS "OUTPUT_PATH: ${OUTPUT_PATH}")
 message(STATUS "BUILD_FLAT: ${BUILD_FLAT}")
 message(STATUS "BUILD_STRUCTURED: ${BUILD_STRUCTURED}")
+message(STATUS "TOOLCHAIN_MODE: ${TOOLCHAIN_MODE}")
 
 #
 # File Configures
@@ -61,9 +62,15 @@ configure_file(
     @ONLY
 )
 
-add_executable(csr
-    src/main.cpp
-)
+if (TOOLCHAIN_MODE)
+    add_library(csr
+        src/main.cpp
+    )
+else()
+    add_executable(csr
+        src/main.cpp
+    )
+endif (TOOLCHAIN_MODE)
 
 set_target_properties(csr
     PROPERTIES

@@ -16,7 +16,7 @@ class FlatROM : public BaseROM
             size(0)
         { }
 
-        VM_INLINE FlatROM(std::unique_ptr<char[]> data, sysbit_t size) :
+        VM_INLINE FlatROM(std::unique_ptr<const char[]> data, sysbit_t size) :
             data(rval(data)),
             size(size)
         { }
@@ -76,6 +76,6 @@ class FlatROM : public BaseROM
         }
 
     private:
-        std::unique_ptr<char[]> data;
+        std::unique_ptr<const char[]> data;
         sysbit_t size;
 };
