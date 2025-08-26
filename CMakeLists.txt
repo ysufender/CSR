@@ -6,27 +6,21 @@ project(CSR
     LANGUAGES CXX
 )
 
-if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+if (NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "^(GNU|Clang)")
     message(
         FATAL_ERROR 
-        "Sorry this project is meant to be compiled with a GNU compiler.
-        You can still compile it but I've never tested it with anything other
-        than g++.
-        
-        If you still want to continue, you can remove this check in CSR/CMakeLists.txt"
+        "Sorry this project is meant to be compiled with a GNU/Clang compiler.
+        since it uses features supported only by those two. I never tested with MSVC
+        of any other though, if you really want to give it a shot, you can remove this
+        check in the main CMakeLists.txt file."
     )
-endif(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+endif (NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "^(GNU|Clang)")
 
-
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    #add_compile_options("-O0")
-elseif("${CMAKE_BUILD_TYPE}" STREQUAL "MemTest")
-    message(STATUS "Building in MemTest mode.")
-    add_compile_options(
-        "-g"
-        "-O0"
-    )
-endif("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+if (BUILD_TEST)
+    set(TARGET_NAME "csr_test")
+else ()
+    set(TARGET_NAME "csr")
+endif (BUILD_TEST)
 
 #
 # Link libstdc++ statically if compiling with mingw. because it
@@ -46,6 +40,7 @@ endif("${CXX_COMPILER_NAME}" STREQUAL "x86_64-w64-mingw32-g++")
 #
 # CLI Arguments 
 # 
+message(STATUS "BUILD_TEST: ${BUILD_TEST}")
 message(STATUS "BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 message(STATUS "ENABLE_JIT: ${ENABLE_JIT}")
 message(STATUS "OUTPUT_PATH: ${OUTPUT_PATH}")
@@ -62,17 +57,24 @@ configure_file(
     @ONLY
 )
 
-if (TOOLCHAIN_MODE)
-    add_library(csr
+if (BUILD_TEST)
+    set(CMAKE_BUILD_TYPE "Debug")
+    set(OUTPUT_PATH "Test")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g -fprofile-arcs -ftest-coverage")
+    add_executable(${TARGET_NAME}
+        src/main.cpp # Dummy
+    )
+elseif (TOOLCHAIN_MODE)
+    add_library(${TARGET_NAME}
         src/main.cpp
     )
 else()
-    add_executable(csr
+    add_executable(${TARGET_NAME}
         src/main.cpp
     )
-endif (TOOLCHAIN_MODE)
+endif (BUILD_TEST)
 
-set_target_properties(csr
+set_target_properties(${TARGET_NAME}
     PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/${OUTPUT_PATH}/lib"
         LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin//${OUTPUT_PATH}/lib"
@@ -80,24 +82,38 @@ set_target_properties(csr
 )
 
 include_directories(
-        ${PROJECT_SOURCE_DIR}/include
-        ${PROJECT_BINARY_DIR}/include
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_BINARY_DIR}/include
 )
 
 # After the include call so everything includes those above
 add_subdirectory(lib)
 add_subdirectory(src)
 
+if (BUILD_TEST)
+    add_subdirectory(test)
+endif (BUILD_TEST)
+
 # Add postbuild commands here
-#add_custom_command(TARGET csr POST_BUILD
+#add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
 #    COMMAND ${CMAKE_COMMAND} -E copy_directory
 #            "${LIBSTDJASM_OUTPUT_DIR}"
 #            "${PROJECT_BINARY_DIR}/bin/${OUTPUT_PATH}/"
 #)
 #end_command
 
-target_link_libraries(csr
-    PUBLIC 
-        libs
-        src
-)
+if (NOT BUILD_TEST)
+    target_link_libraries(${TARGET_NAME}
+        PUBLIC 
+            libs
+            src
+    )
+
+else ()
+    target_link_libraries(${TARGET_NAME}
+        PUBLIC
+            libs
+            src
+            test
+    )
+endif (NOT BUILD_TEST)

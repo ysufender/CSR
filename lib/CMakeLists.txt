@@ -15,6 +15,11 @@ if (ENABLE_JIT)
     message(STATUS "Entering asmjit...")
     add_subdirectory(asmjit)
 endif (ENABLE_JIT)
+
+if (BUILD_TEST)
+    message(STATUS "Entering catch")
+    add_subdirectory(catch2)
+endif (BUILD_TEST)
 # end_sub
 
 # Add postbuild commands here
@@ -27,6 +32,13 @@ if (ENABLE_JIT)
             asmjit::asmjit
     )
 endif (ENABLE_JIT)
+
+if (BUILD_TEST)
+    target_link_libraries(libs
+        INTERFACE
+            Catch2::Catch2WithMain
+    )
+endif (BUILD_TEST)
 
 target_link_libraries(libs
     INTERFACE

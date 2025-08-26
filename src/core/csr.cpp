@@ -1,4 +1,6 @@
 #include "CSRConfig.hpp"
+
+#ifndef TOOLCHAIN_MODE
 #include "CLIParser.hpp"
 #include "fastcout.hpp"
 #include "system.hpp"
@@ -219,3 +221,4 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
 
     return parser.Parse();
 }
+#endif

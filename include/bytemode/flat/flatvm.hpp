@@ -39,11 +39,8 @@ class FlatVM
         // VM manages the buffer afterwards.
         FlatVM(VMSettings settings, char* const buf, const sysbit_t bufsize);
 
-#ifdef __cplusplus
-    public:
         // to create from given stream
         FlatVM(VMSettings settings, std::istream& source);
-#endif
 
         FlatVM(FlatVM const&) = delete;
         FlatVM(FlatVM const&&) = delete;
