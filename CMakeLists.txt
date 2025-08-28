@@ -74,6 +74,14 @@ include_directories(
     ${PROJECT_BINARY_DIR}/include
 )
 
+if (TOOLCHAIN_MODE)
+    target_include_directories(${TARGET_NAME}
+        PUBLIC
+            ${PROJECT_SOURCE_DIR}/include
+            ${PROJECT_BINARY_DIR}/include           
+    )
+endif (TOOLCHAIN_MODE)
+
 # After the include call so everything includes those above
 add_subdirectory(lib)
 add_subdirectory(src)
