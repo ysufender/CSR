@@ -66,11 +66,6 @@ class FlatVM
         BlockCounterCollection blocks;
         JITContext jitContext;
 
-        void SetUpCommon();
-        std::pair<std::unique_ptr<const char[]>, std::streamoff> ReadBytecode(std::istream& bytecode);
-
-        const System::ErrorCode BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
-
         VM_INLINE static bool IsCompiled(void* vm, const uint32_t pos)
         {
             if (!reinterpret_cast<FlatVM*>(vm)->blocks.Contains(pos))
@@ -79,6 +74,13 @@ class FlatVM
         }
         VM_INLINE static JITEntry GetEntry(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].GetEntry(); }
 #endif
+
+        void SetUpCommon();
+        std::pair<std::unique_ptr<const char[]>, std::streamoff> ReadBytecode(std::istream& bytecode);
+
+        const System::ErrorCode BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
+
+
 
         VM_INLINE static int Validate(uint64_t size, uint8_t version)
         {

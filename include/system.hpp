@@ -8,7 +8,6 @@
 
 #include "extensions/syntaxextensions.hpp"
 #include "extensions/stringextensions.hpp"
-#include "CLIParser.hpp"
 
 #ifndef NDEBUG
     #define LOGD(...) System::LogInternal(Extensions::String::Concat({"[DEBUG] ", __VA_ARGS__}), __FILE__, __LINE__)
@@ -57,7 +56,8 @@ struct System
     E(ProcessInterrupt) \
     E(IOError) \
     E(NativeCallError) \
-    E(JITError)
+    E(JITError) \
+    E(CLIParseError)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

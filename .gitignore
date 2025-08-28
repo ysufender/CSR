@@ -2,6 +2,7 @@
 build/
 .editorconfig
 .cache/
+test/
 
 .clangd
 

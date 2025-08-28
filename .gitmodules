@@ -4,6 +4,3 @@
 [submodule "lib/asmjit"]
 	path = lib/asmjit
 	url = https://github.com/asmjit/asmjit.git
-[submodule "lib/catch2"]
-	path = lib/catch2
-	url = https://github.com/catchorg/Catch2.git

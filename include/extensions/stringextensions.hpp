@@ -19,6 +19,7 @@ namespace Extensions::String
         std::is_same_v<T, std::string>;
         std::is_same_v<T, std::string_view>;
     };
+
     template<string T>
     std::string Concat(const std::vector<std::string>& strings);
     std::string Concat(const std::vector<std::string_view>& strings);

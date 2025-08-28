@@ -1,4 +1,5 @@
 #include "CSRConfig.hpp"
+#include "extensions/stringextensions.hpp"
 
 #ifndef TOOLCHAIN_MODE
 #include "CLIParser.hpp"
@@ -42,6 +43,9 @@ int csrmain(int argc, char** args)
             std::filesystem::path exec { execs.at(0) };
 #else
             std::filesystem::path exec { flags.GetFlag<CLIParser::FlagType::String>("exe") };
+
+            if (exec.empty())
+                CRASH(System::ErrorCode::NoSourceFile, "CSR must have at least one file to execute.");
 #endif
 
             FlatVM vm {FlatVM::VMSettings {
@@ -219,6 +223,15 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
     parser.BindFlag("e", "exe");
     parser.BindFlag("u", "unsafe");
 
-    return parser.Parse();
+    try
+    {
+        return parser.Parse();
+    }
+    catch (const std::exception& e)
+    {
+        throw CSR_ERR(System::ErrorCode::CLIParseError, Extensions::String::Concat({"An exception occured while parsing the CLI.\n\tProvided Information: ", e.what()}));
+    }
+
+    __builtin_unreachable();
 }
 #endif

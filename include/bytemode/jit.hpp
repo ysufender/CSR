@@ -1,16 +1,17 @@
 #pragma once
 
 #include "CSRConfig.hpp"
-#include <cstddef>
-#include <string>
-#include <unistd.h>
 
 #ifdef ENABLE_JIT
 #include <cstdint>
+#include <cstddef>
+#include <string>
 #include <cassert>
+#include <unistd.h>
 #include <csetjmp>
 #include <utility>
 #include <csignal>
+#include <unordered_map>
 
 #define DUMP_ASM
 

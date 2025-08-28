@@ -1,4 +1,5 @@
 add_library(libs INTERFACE)
+set(libraries "")
 
 # Add prebuild commands here
 if (ENABLE_JIT)
@@ -9,39 +10,25 @@ endif (ENABLE_JIT)
 # end_pre
 
 # Add subdirectories here
-add_subdirectory(CLIParser)
+if (NOT TOOLCHAIN_MODE)
+    message(STATUS "Entering CLIParser...")
+    add_subdirectory(CLIParser)
+    list(APPEND libraries "CLIParser")
+endif (NOT TOOLCHAIN_MODE)
 
 if (ENABLE_JIT)
     message(STATUS "Entering asmjit...")
     add_subdirectory(asmjit)
+    list(APPEND libraries "asmjit::asmjit")
 endif (ENABLE_JIT)
-
-if (BUILD_TEST)
-    message(STATUS "Entering catch")
-    add_subdirectory(catch2)
-endif (BUILD_TEST)
 # end_sub
 
 # Add postbuild commands here
 # end_command
 
 # Link subdirectories here
-if (ENABLE_JIT)
-    target_link_libraries(libs
-        INTERFACE
-            asmjit::asmjit
-    )
-endif (ENABLE_JIT)
-
-if (BUILD_TEST)
-    target_link_libraries(libs
-        INTERFACE
-            Catch2::Catch2WithMain
-    )
-endif (BUILD_TEST)
-
 target_link_libraries(libs
     INTERFACE
-        CLIParser
+        ${libraries}
 )
 # end_link

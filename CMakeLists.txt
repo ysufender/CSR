@@ -16,11 +16,7 @@ if (NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "^(GNU|Clang)")
     )
 endif (NOT "${CMAKE_CXX_COMPILER_ID}" MATCHES "^(GNU|Clang)")
 
-if (BUILD_TEST)
-    set(TARGET_NAME "csr_test")
-else ()
-    set(TARGET_NAME "csr")
-endif (BUILD_TEST)
+set(TARGET_NAME "csr")
 
 #
 # Link libstdc++ statically if compiling with mingw. because it
@@ -40,7 +36,6 @@ endif("${CXX_COMPILER_NAME}" STREQUAL "x86_64-w64-mingw32-g++")
 #
 # CLI Arguments 
 # 
-message(STATUS "BUILD_TEST: ${BUILD_TEST}")
 message(STATUS "BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 message(STATUS "ENABLE_JIT: ${ENABLE_JIT}")
 message(STATUS "OUTPUT_PATH: ${OUTPUT_PATH}")
@@ -57,14 +52,7 @@ configure_file(
     @ONLY
 )
 
-if (BUILD_TEST)
-    set(CMAKE_BUILD_TYPE "Debug")
-    set(OUTPUT_PATH "Test")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g -fprofile-arcs -ftest-coverage")
-    add_executable(${TARGET_NAME}
-        src/main.cpp # Dummy
-    )
-elseif (TOOLCHAIN_MODE)
+if (TOOLCHAIN_MODE)
     add_library(${TARGET_NAME}
         src/main.cpp
     )
@@ -72,7 +60,7 @@ else()
     add_executable(${TARGET_NAME}
         src/main.cpp
     )
-endif (BUILD_TEST)
+endif (TOOLCHAIN_MODE)
 
 set_target_properties(${TARGET_NAME}
     PROPERTIES
@@ -90,10 +78,6 @@ include_directories(
 add_subdirectory(lib)
 add_subdirectory(src)
 
-if (BUILD_TEST)
-    add_subdirectory(test)
-endif (BUILD_TEST)
-
 # Add postbuild commands here
 #add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
 #    COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -102,18 +86,8 @@ endif (BUILD_TEST)
 #)
 #end_command
 
-if (NOT BUILD_TEST)
-    target_link_libraries(${TARGET_NAME}
-        PUBLIC 
-            libs
-            src
-    )
-
-else ()
-    target_link_libraries(${TARGET_NAME}
-        PUBLIC
-            libs
-            src
-            test
-    )
-endif (NOT BUILD_TEST)
+target_link_libraries(${TARGET_NAME}
+    PUBLIC 
+        libs
+        src
+)
