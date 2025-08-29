@@ -33,14 +33,17 @@ class FlatVM
         };
 
         // to create from filepath
+        // fiel must be in proper bytecode format, including assemblyinfo at the end.
         FlatVM(VMSettings settings);
 
+#ifdef TOOLCHAIN_MODE 
         // to create from an already read buffer.
-        // VM manages the buffer afterwards.
-        FlatVM(VMSettings settings, char* const buf, const sysbit_t bufsize);
+        // bytecode must not contain assemblyinfo.
+        FlatVM(VMSettings settings, AssemblyInfo info, char* const buf, const sysbit_t bufsize);
 
         // to create from given stream
-        FlatVM(VMSettings settings, std::istream& source);
+        FlatVM(VMSettings settings, AssemblyInfo info, std::istream& source);
+#endif
 
         FlatVM(FlatVM const&) = delete;
         FlatVM(FlatVM const&&) = delete;

@@ -169,6 +169,7 @@ void FlatVM::SetUpCommon()
 
 std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(std::istream& bytecode)
 {
+#ifndef TOOLCHAIN_MODE
     bytecode.seekg(-sizeof(uint64_t), std::ios::end);
     uint64_t size { };
     Extensions::Serialization::DeserializeInteger(size, bytecode);
@@ -177,6 +178,12 @@ std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(st
         CRASH(System::ErrorCode::FileIOError, "Couldn't load executable ", settings.path.c_str());
     });
     assembly.Deserialize(bytecode);
+#else
+    bytecode.seekg(0, std::ios::end);
+    IStreamPos(bytecode, bytecodeEnd, {
+        CRASH(System::ErrorCode::VMError, "Couldn't properly load given bytecode.");
+    });
+#endif
 
     //if (settings.path.extension() != ".jef") 
     if (!(assembly.Flags() & AssemblyFlags::Executable))
@@ -223,7 +230,8 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
     SetUpCommon();
 }
 
-FlatVM::FlatVM(FlatVM::VMSettings settings, std::istream& bytecode) :
+#ifdef TOOLCHAIN_MODE
+FlatVM::FlatVM(FlatVM::VMSettings settings, AssemblyInfo info, std::istream& bytecode) :
     settings(settings),
     ram(),
     rom(),
@@ -233,7 +241,7 @@ FlatVM::FlatVM(FlatVM::VMSettings settings, std::istream& bytecode) :
     blocks(),
     jitContext(),
 #endif
-    assembly()
+    assembly(info)
 {
     auto [data, size] { ReadBytecode(bytecode) };
 
@@ -247,7 +255,7 @@ FlatVM::FlatVM(FlatVM::VMSettings settings, std::istream& bytecode) :
     SetUpCommon();
 }
 
-FlatVM::FlatVM(FlatVM::VMSettings settings, char* const buf, const sysbit_t bufsize) :
+FlatVM::FlatVM(FlatVM::VMSettings settings, AssemblyInfo info, char* const buf, const sysbit_t bufsize) :
     settings(settings),
     ram(),
     rom(),
@@ -257,7 +265,7 @@ FlatVM::FlatVM(FlatVM::VMSettings settings, char* const buf, const sysbit_t bufs
     blocks(),
     jitContext(),
 #endif
-    assembly()
+    assembly(info)
 {
     std::stringstream bytecode;
     bytecode.rdbuf()->pubsetbuf(buf, bufsize);
@@ -272,6 +280,7 @@ FlatVM::FlatVM(FlatVM::VMSettings settings, char* const buf, const sysbit_t bufs
 
     SetUpCommon();
 }
+#endif
 
 const System::ErrorCode FlatVM::Run() noexcept
 {

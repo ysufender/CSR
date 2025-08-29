@@ -26,6 +26,24 @@ struct AssemblyInfo
         using UnknownSymbolCollection = std::unordered_map<SymbolInfo::first_type, SymbolInfo::second_type>;
         using SymbolMap = std::unordered_map<size_t, sysbit_t>;
 
+#ifdef TOOLCHAIN_MODE
+        AssemblyInfo() = default;
+
+        AssemblyInfo(
+            const std::string& path,
+            uchar_t flags,
+            const UnknownSymbolCollection& unknownSymbols,
+            const ImportCollection& runtimeImports,
+            const SymbolMap& symbolMap
+        )
+            : path(path),
+            flags(flags),
+            unknownSymbols(unknownSymbols),
+            runtimeImports(runtimeImports),
+            symbolMap(symbolMap)
+        {}
+#endif
+
         Error Deserialize(std::istream& inFile) noexcept;
 
         VM_INLINE std::string_view Path() const { return path; }
