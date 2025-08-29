@@ -1,11 +1,12 @@
-add_library(flat
+add_library(_csr_flat
     STATIC
         flatvm.cpp
         flatram.cpp
 )
+add_library(csr::bytemode::flat ALIAS _csr_flat)
 
-target_link_libraries(flat
+target_link_libraries(_csr_flat
     PRIVATE
-        libs
-        core
+        csr::libs
+        csr::core
 )

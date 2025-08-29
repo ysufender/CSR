@@ -1,4 +1,5 @@
-add_library(libs INTERFACE)
+add_library(_csr_libs INTERFACE)
+add_library(csr::libs ALIAS _csr_libs)
 set(libraries "")
 
 # Add prebuild commands here
@@ -27,7 +28,7 @@ endif (ENABLE_JIT)
 # end_command
 
 # Link subdirectories here
-target_link_libraries(libs
+target_link_libraries(_csr_libs
     INTERFACE
         ${libraries}
 )

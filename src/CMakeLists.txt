@@ -1,4 +1,5 @@
-add_library(src INTERFACE)
+add_library(_csr_src INTERFACE)
+add_library(csr::src ALIAS _csr_src)
 
 # Add subdirectories here
 add_subdirectory(core)
@@ -14,9 +15,16 @@ endif (BYTEMODE)
 
 
 # Link subdirectories here
-target_link_libraries(src
+target_link_libraries(_csr_src
     INTERFACE
-        core
-        extensions
+        csr::core
+        csr::extensions
 )
+
+if (BYTEMODE)
+    target_link_libraries(_csr_src
+        INTERFACE
+            csr::bytemode
+    )
+endif (BYTEMODE)
 # end_link

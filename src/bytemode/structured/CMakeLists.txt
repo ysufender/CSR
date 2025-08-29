@@ -1,4 +1,4 @@
-add_library(structured
+add_library(_csr_structured
     STATIC
         process.cpp
         assembly.cpp        
@@ -9,9 +9,10 @@ add_library(structured
         instructions.cpp
         vm.cpp
 )
+add_library(csr::bytemode::structured ALIAS _csr_structured)
 
-target_link_libraries(structured
+target_link_libraries(_csr_structured
     PRIVATE
-        libs
-        core
+        csr::libs
+        csr::core
 )

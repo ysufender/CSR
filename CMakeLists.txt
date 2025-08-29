@@ -96,6 +96,6 @@ add_subdirectory(src)
 
 target_link_libraries(${TARGET_NAME}
     PUBLIC 
-        libs
-        src
+        csr::libs
+        csr::src
 )
