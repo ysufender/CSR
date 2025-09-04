@@ -56,6 +56,13 @@ class FlatVM
 
         const System::ErrorCode Run() noexcept;
 
+#ifdef TOOLCHAIN_MODE
+    public:
+#else
+    private:
+#endif
+        const System::ErrorCode Cycle() noexcept;
+
     private:
         AssemblyInfo assembly;
         VMContext context;
