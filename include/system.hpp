@@ -57,7 +57,8 @@ struct System
     E(IOError) \
     E(NativeCallError) \
     E(JITError) \
-    E(CLIParseError)
+    E(CLIParseError) \
+    E(DivideByZero)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
 

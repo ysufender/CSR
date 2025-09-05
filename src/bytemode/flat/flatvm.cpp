@@ -56,7 +56,7 @@ static sysbit_t& GetRegister32Bit(RegisterModeFlags reg, FlatCPU::State& state)
         default: [[unlikely]]
             CRASH(
                 System::ErrorCode::InvalidSpecifier,
-                RegisterModeFlagsString(reg), " is not a 32bit register."
+                std::to_string((int)reg), " is not a 32bit register."
             );
             return dummy;
     }
@@ -75,7 +75,7 @@ static uchar_t& GetRegister8Bit(RegisterModeFlags reg, FlatCPU::State& state)
         default: [[unlikely]]
             CRASH(
                 System::ErrorCode::InvalidSpecifier,
-                RegisterModeFlagsString(reg), " is not an 8bit register."
+                std::to_string((int)reg), " is not an 8bit register."
             );
             return dummy;
     }
@@ -373,7 +373,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
         }
 
         if (op >= std::size(jumpTable)) [[unlikely]] {
-            LOGE(System::LogLevel::Medium, "Invalid opcode '", OpCodesString(op), "' at PC=", std::to_string(cpu.state.pc));
+            LOGE(System::LogLevel::Medium, "Invalid opcode '", std::to_string(op), "' at PC=", std::to_string(cpu.state.pc));
             return System::ErrorCode::InvalidInstruction;
         }
 
@@ -588,8 +588,8 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 CRASH(System::ErrorCode::InvalidSpecifier,
                     "PC: ", std::to_string(cpu.state.pc-1),
                     " ", OpCodesString(op),
-                    " ", RegisterModeFlagsString(reg1),
-                    " ", RegisterModeFlagsString(reg2),
+                    " ", std::to_string((int)reg1),
+                    " ", std::to_string((int)reg2),
                     " Given registers are not compatible with given numeric type."
                 );
 
@@ -2370,6 +2370,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                         ram.ReadSome(cpu.state.sp-4, 4).data
                     )};
 
+                    if (rhs == 0)
+                        return System::ErrorCode::DivideByZero;
+
                     err = cpu.PopSome(8);
                     if (err != System::ErrorCode::Ok)
                         return err;
@@ -2388,6 +2391,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     float lhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-8, 4).data) };
                     float rhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data) };
 
+                    if (rhs == 0)
+                        return System::ErrorCode::DivideByZero;
+
                     err = cpu.PopSome(8);
                     if (err != System::ErrorCode::Ok)
                         return err;
@@ -2402,6 +2408,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 {
                     uchar_t lhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-2)) };
                     uchar_t rhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-1)) };
+
+                    if (rhs == 0)
+                        return System::ErrorCode::DivideByZero;
 
                     err = cpu.PopSome(2);
                     if (err != System::ErrorCode::Ok)
@@ -2427,6 +2436,8 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 {
                     sysbit_t lhs { GetRegister32Bit(reg1, cpu.state) };
                     sysbit_t& rhs { GetRegister32Bit(reg2, cpu.state) };
+                    if (rhs == 0)
+                        return System::ErrorCode::DivideByZero;
                     rhs = lhs / rhs;
                     break;
                 }
@@ -2440,6 +2451,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state), data);
                     float rhs { FloatFromBytes(data) };
 
+                    if (rhs == 0)
+                        return System::ErrorCode::DivideByZero;
+
                     BytesFromFloat(lhs / rhs, data);
                     GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(data);
 
@@ -2450,6 +2464,10 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 {
                     uchar_t lhs { GetRegister8Bit(reg1, cpu.state) };
                     uchar_t& rhs { GetRegister8Bit(reg2, cpu.state) };
+
+                    if (rhs == 0)
+                        return System::ErrorCode::DivideByZero;
+
                     rhs = lhs / rhs;
                     break;
                 }
@@ -2476,6 +2494,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                         ram.ReadSome(cpu.state.sp-4, 4).data
                     )};
 
+                    if (rhs == 0)
+                        return System::ErrorCode::DivideByZero;
+
                     sysbit_t res { lhs / rhs };
                     char data[4];
                     BytesFromInteger<sysbit_t>(res, data);
@@ -2490,6 +2511,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     float lhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-8, 4).data) };
                     float rhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data) };
 
+                    if (rhs == 0)
+                        return System::ErrorCode::DivideByZero;
+
                     float res { lhs / rhs };
                     char data[4];
                     BytesFromFloat(res, data);
@@ -2500,6 +2524,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 {
                     uchar_t lhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-2)) };
                     uchar_t rhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-1)) };
+
+                    if (rhs == 0)
+                        return System::ErrorCode::DivideByZero;
 
                     uchar_t res { static_cast<uchar_t>(lhs / rhs) };
                     return cpu.Push(res);
@@ -2587,8 +2614,8 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 CRASH(System::ErrorCode::InvalidSpecifier,
                     "PC: ", std::to_string(cpu.state.pc-1),
                     " ", OpCodesString(op),
-                    " ", RegisterModeFlagsString(regLhs),
-                    " ", RegisterModeFlagsString(regRhs),
+                    " ", std::to_string((int)regLhs),
+                    " ", std::to_string((int)regRhs),
                     " Given registers are not compatible with given numeric type."
                 );
 
