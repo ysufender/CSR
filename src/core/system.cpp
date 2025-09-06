@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include "system.hpp"
+#include "csr.hpp"
 
 
 // 
@@ -16,18 +17,27 @@
 //
 void System::LogInternal(std::string_view message, std::string_view file, int line)
 {
+    if (CSR::Settings().silent)
+        return;
+
     size_t idx { file.find_first_of("CSR") };
     std::cout << "[CSR::Log](" << file.substr(idx, file.size() - idx) << ":" << line << ") >>> "  << message << '\n';
 }
 
 void System::LogWarning(std::string_view message, std::string_view file, int line)
 {
+    if (CSR::Settings().silent)
+        return;
+
     size_t idx { file.find_first_of("CSR") };
     std::cout << "[CSR::Warning](" << file.substr(idx, file.size() - idx) << ':' << line << ") >>> " << message << '\n';
 }
 
 void System::LogError(std::string_view message, LogLevel level, std::string_view file, int line, System::ErrorCode errCode)
 {
+    if (CSR::Settings().silent)
+        return;
+
     size_t idx { file.find_first_of("CSR") };
 
     switch (level)

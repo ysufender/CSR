@@ -234,4 +234,21 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
 
     __builtin_unreachable();
 }
+#else
+#include "csr.hpp"
+
+namespace CSR
+{
+    static CSRSettings globalSettings { };
+
+    void Setup(CSRSettings settings)
+    {
+        globalSettings = settings;
+    }
+
+    CSRSettings Settings()
+    {
+        return globalSettings;
+    }
+}
 #endif
