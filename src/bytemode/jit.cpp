@@ -97,9 +97,9 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, 
         op_NoOperation: { asml.nop(); return JITError::Ok; }
         op_StoreThirtyTwo: {
             sysbit_t imm { IntegerFromBytes<sysbit_t>(rom.ReadSome(pc, 4).data) };
-            asml.mov(T2, dword_ptr(rreg32, rsp));
+            asml.mov(T2, dword_ptr(rreg32, rrsp));
             asml.mov(dword_ptr(rram, T2), imm);
-            asml.add(dword_ptr(rreg32, rsp), 4);
+            asml.add(dword_ptr(rreg32, rrsp), 4);
             //asml.mov(T1, qword_ptr(firstParamReg, offsetof(JITContext, ram)));
             //asml.mov(dword_ptr(T1, SP), imm);
             //asml.add(SP, 4);
@@ -270,19 +270,19 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, 
                 //asml.mov(T2, dword_ptr(T1, BP, 0, index));
                 //asml.mov(dword_ptr(T1, SP), T2);
                 //asml.add(SP, 4);
-                asml.mov(T1, dword_ptr(rreg32, rsp));
+                asml.mov(T1, dword_ptr(rreg32, rrsp));
                 asml.mov(T2, dword_ptr(rreg32, rbp));
                 asml.mov(T2, dword_ptr(rram, T2, 0, index));
                 asml.mov(dword_ptr(rram, T1), T2);
-                asml.add(dword_ptr(rreg32, rsp), 4);
+                asml.add(dword_ptr(rreg32, rrsp), 4);
             }
             else
             {
-                asml.mov(T1, dword_ptr(rreg32, rsp));
+                asml.mov(T1, dword_ptr(rreg32, rrsp));
                 asml.mov(T2, dword_ptr(rreg32, rbp));
                 asml.mov(T2, dword_ptr(rram, T2, 0, index));
                 asml.mov(dword_ptr(rram, T1), T2);
-                asml.inc(dword_ptr(rreg32, rsp));
+                asml.inc(dword_ptr(rreg32, rrsp));
                 //asml.mov(T2, byte_ptr(T1, BP, 0, index));
                 //asml.mov(dword_ptr(T1, SP), T2);
                 //asml.inc(SP);

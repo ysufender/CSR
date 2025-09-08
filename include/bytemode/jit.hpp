@@ -77,7 +77,7 @@ struct JITContext
 #define resi 4*sizeof(uint32_t*)
 #define redi 5*sizeof(uint32_t*)
 #define rpc  6*sizeof(uint32_t*)
-#define rsp  7*sizeof(uint32_t*)
+#define rrsp  7*sizeof(uint32_t*)
 #define rbp  8*sizeof(uint32_t*)
 #define ral  0*sizeof(uint8_t*)
 #define rbl  1*sizeof(uint8_t*)
