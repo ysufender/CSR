@@ -26,7 +26,9 @@
 #include "fastcout.hpp"
 #endif
 
-#ifndef NDEBUG
+#include "platform.hpp"
+
+#if !defined(NDEBUG) && defined(CSR_UNIX)
 #include "execinfo.h"
 #endif
 
@@ -220,7 +222,7 @@ VM_INLINE static bool is_branching(const uchar_t opx)
 static sigjmp_buf env {};
 static void SegfaultHandler(int signum)
 {
-#ifndef NDEBUG
+#if !defined(NDEBUG) && defined(CSR_UNIX)
     void* array[10];
     int size { backtrace(array, sizeof(array)/sizeof(void*)) };
     std::cerr << "Error: signal " << signum << '\n';
