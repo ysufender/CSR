@@ -32,6 +32,8 @@ class FlatRAM
                 );
         }
 
+        VM_INLINE Slice Dump() const { return { this->data.get(), this->Size() }; }
+
         VM_INLINE FlatRAM& operator=(FlatRAM&& other)
         {
             this->stackSize = other.stackSize;

@@ -43,6 +43,11 @@ class FlatVM
 
         // to create from given stream
         FlatVM(VMSettings settings, AssemblyInfo info, std::istream& source);
+
+        VM_INLINE Slice DumpROM() const { return rom.Data(); }
+        VM_INLINE Slice DumpRAM() const { return ram.Dump(); }
+        VM_INLINE FlatCPU::State DumpCPU() const { return cpu.DumpState(); }
+        VM_INLINE SysCallHandler& GetSysCallHandler() { return handler; }
 #endif
 
         FlatVM(FlatVM const&) = delete;
