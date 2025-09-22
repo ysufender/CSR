@@ -115,8 +115,7 @@ class FlatVM
         VM_INLINE static uint32_t GetVMAddress(VM_API, void* ptr)
         {
             FlatVM& vm { *reinterpret_cast<FlatVM*>(context->context) };
-            std::ptrdiff_t diff { reinterpret_cast<char*>(ptr) - &vm.ram };
-            return static_cast<uint32_t>(diff);
+            return static_cast<uint32_t>((char*)ptr - &vm.ram);
         }
 
         VM_INLINE static void* Allocate(VM_API, const uint32_t size)

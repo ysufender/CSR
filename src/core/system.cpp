@@ -17,8 +17,10 @@
 //
 void System::LogInternal(std::string_view message, std::string_view file, int line)
 {
+#ifdef TOOLCHAIN_MODE
     if (CSR::Settings().silent)
         return;
+#endif
 
     size_t idx { file.find_first_of("CSR") };
     std::cout << "[CSR::Log](" << file.substr(idx, file.size() - idx) << ":" << line << ") >>> "  << message << '\n';
@@ -26,8 +28,10 @@ void System::LogInternal(std::string_view message, std::string_view file, int li
 
 void System::LogWarning(std::string_view message, std::string_view file, int line)
 {
+#ifdef TOOLCHAIN_MODE
     if (CSR::Settings().silent)
         return;
+#endif
 
     size_t idx { file.find_first_of("CSR") };
     std::cout << "[CSR::Warning](" << file.substr(idx, file.size() - idx) << ':' << line << ") >>> " << message << '\n';
@@ -35,8 +39,10 @@ void System::LogWarning(std::string_view message, std::string_view file, int lin
 
 void System::LogError(std::string_view message, LogLevel level, std::string_view file, int line, System::ErrorCode errCode)
 {
+#ifdef TOOLCHAIN_MODE
     if (CSR::Settings().silent)
         return;
+#endif
 
     size_t idx { file.find_first_of("CSR") };
 

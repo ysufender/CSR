@@ -18,6 +18,7 @@
 #include "bytemode/nativecalls.hpp"
 #include "bytemode/jit.hpp"
 #include "CSRConfig.hpp"
+#include "fastcout.hpp"
 #include "system.hpp"
 
 #define OPR const System::ErrorCode
@@ -2538,23 +2539,49 @@ const System::ErrorCode FlatVM::Cycle() noexcept
         )
 
         op_Return: block(
+            // callstack is:
+            //  bp 4bytes
+            //  pc 4bytes
+            // current bp is AFTER the callstack
+
+            if (cpu.state.sp - cpu.state.bp < cpu.state.bl)
+                return System::ErrorCode::StackUnderflow;
+
+            sysbit_t bpToReturnTo { IntegerFromBytes<sysbit_t>(
+                ram.ReadSome(cpu.state.bp - 8, 4).data
+            )};
+            sysbit_t pcToReturnTo { IntegerFromBytes<sysbit_t>(
+                ram.ReadSome(cpu.state.bp - 4, 4).data
+            )};
+
+
+            System::ErrorCode err;
+            
+            if (cpu.state.bl != 0)
+            {
+                Slice returnValues { ram.ReadSome(
+                    cpu.state.sp - cpu.state.bl,
+                    cpu.state.bl
+                )};
+                err = cpu.PopSome(cpu.state.sp - cpu.state.bp + 8);
+                if (err != System::ErrorCode::Ok)
+                    return err;
+                err = cpu.PushSome(returnValues);
+            }
+            else
+                err = cpu.PopSome(cpu.state.sp - cpu.state.bp + 8);
+
+            cpu.state.bp = bpToReturnTo;
+            cpu.state.pc = pcToReturnTo;
+            
+            return err;
+        )
+
+        op_Deallocate: block(
             if (cpu.state.ebx < 0 || ram.Size() <= cpu.state.ebx)
                 return System::ErrorCode::RAMAccessError;
 
             return ram.Deallocate(cpu.state.ebx, cpu.state.ecx);
-        )
-
-        op_Deallocate: block(
-            sysbit_t rhs;
-            sysbit_t lhs;
-            rhs = IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data);
-            cpu.PopSome(4);
-            lhs = IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data);
-            cpu.PopSome(4);
-
-            char data[4];
-            BytesFromInteger(lhs-rhs, data);
-            return cpu.PushSome({data, 4 });
         )
 
         op_Sub32: block(
