@@ -170,6 +170,7 @@ void FlatVM::SetUpCommon()
 
 std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(std::istream& bytecode)
 {
+    // TODO: All bytecodes must include AssemblyInfo
 #ifndef TOOLCHAIN_MODE
     bytecode.seekg(-sizeof(uint64_t), std::ios::end);
     uint64_t size { };
@@ -290,8 +291,8 @@ const System::ErrorCode FlatVM::Run() noexcept
 
     try
     {
-        do errcx = Cycle();
-        while (cpu.state.pc < rom.Size() && errcx == System::ErrorCode::Ok);
+        while (cpu.state.pc < rom.Size() && errcx == System::ErrorCode::Ok)
+            errcx = Cycle();
     }
     catch (const CSRException& e)
     {
@@ -354,6 +355,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
         &&op_IncrementLocal, &&op_IncrementLocal, &&op_IncrementLocal,
         &&op_ReadLocal, &&op_ReadLocal,
         &&op_CompareJump,
+        &&op_CompareLocal,
+        // &&op_PushStackFrame,
+        &&op_SetFlag
     };
 
     try
@@ -368,7 +372,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
 #endif
         uchar_t op;
         System::ErrorCode code = rom.TryRead(cpu.state.pc, op);
-        if ( code != System::ErrorCode::Ok) [[unlikely]] {
+        if (code != System::ErrorCode::Ok) [[unlikely]] {
             LOGE(System::LogLevel::Medium, "ROM read error: ", System::ErrorCodeString(code));
             return code;
         }
@@ -659,7 +663,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
 
         op_MemCopy: block(
             uchar_t compressedModes { static_cast<uchar_t>(rom.Read(cpu.state.pc)) };
-            MemoryModeFlags from { MemoryModeFlags(compressedModes >> 4) };
+            MemoryModeFlags from { MemoryModeFlags(compressedModes & 0xF0) };
             MemoryModeFlags to { MemoryModeFlags(compressedModes & 0x0F) };
 
             sysbit_t fromAddr { GetRegister32Bit(RegisterModeFlags::eax, cpu.state) };
@@ -1462,7 +1466,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 static_cast<uchar_t>(compressedModes >> 5)
             };
             const uchar_t compareMode {
-                static_cast<const uchar_t>(compressedModes & 0b00011111)
+                static_cast<const uchar_t>(compressedModes & 0x1F)
             };
 
             switch (OpCodes(rom.Read(cpu.state.pc-2)))
@@ -2106,7 +2110,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 } catch (const std::exception& e) {
                     LOGE(
                         System::LogLevel::Medium,
-                        "const System::ErrorCode in syscall ",
+                        "Error in syscall ",
                         std::to_string(address),
                         " ", System::ErrorCodeString(System::ErrorCode::NativeCallError)
                     );
@@ -2117,7 +2121,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 {
                     LOGE(
                         System::LogLevel::Medium,
-                        "const System::ErrorCode in syscall ",
+                        "Error in syscall ",
                         std::to_string(address),
                         " ", System::ErrorCodeString(err)
                     );
@@ -2139,7 +2143,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     {
                         LOGE(
                             System::LogLevel::Medium,
-                            "const System::ErrorCode in syscall, ",
+                            "Error in syscall, ",
                             std::to_string(address),
                             " couldn't handle return values."
                         );
@@ -2178,9 +2182,15 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             BytesFromInteger(cpu.state.bp, data);
             System::ErrorCode err = cpu.PushSome({data, 4});
 
+            if (err != System::ErrorCode::Ok)
+                return err;
+
             // Store pc
             BytesFromInteger(cpu.state.pc + (op == OpCodes::cal ? 4 : 1), data);
-            cpu.PushSome({data, 4});
+            err = cpu.PushSome({data, 4});
+
+            if (err != System::ErrorCode::Ok)
+                return err;
 
             // Change pc and bp
             cpu.state.pc = address;
@@ -2194,7 +2204,6 @@ const System::ErrorCode FlatVM::Cycle() noexcept
     //            errcx = err;
     //            break;
             cpu.state.sp += cpu.state.bl;
-
         )
 
         op_MulStack: block(
@@ -2865,6 +2874,105 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             else
                 return System::ErrorCode::JITError;
 #endif
+        )
+
+        op_CompareLocal: block(
+            const uchar_t compressedModes { static_cast<const uchar_t>(
+                rom.Read(cpu.state.pc)
+            )};
+            cpu.state.pc++;
+
+            const Numo numMode { static_cast<uchar_t>(compressedModes >> 5) };
+            const uchar_t compareMode { static_cast<const uchar_t>(compressedModes & 0x1F) };
+
+            const sysbit_t idx1 { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, sizeof(sysbit_t)).data) };
+            const sysbit_t idx2 { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc+sizeof(sysbit_t), sizeof(sysbit_t)).data) };
+            cpu.state.pc += 2*sizeof(sysbit_t);
+
+            if (numMode == Numo::UInt)
+            {
+                sysbit_t int1 { IntegerFromBytes<sysbit_t>(
+                    ram.ReadSome(cpu.state.bp+idx1, 4).data
+                )};
+                sysbit_t int2 { IntegerFromBytes<sysbit_t>(
+                    ram.ReadSome(cpu.state.bp+idx2, 4).data
+                )};
+                cpu.state.sp -= 8;
+                cpu.state.bl = CompareVarious(int1, int2, compareMode);
+            }
+            else if (numMode == Numo::Float)
+            {
+                float float1 { FloatFromBytes(
+                    ram.ReadSome(cpu.state.bp+idx1, 4).data
+                )};
+                float float2 { FloatFromBytes(
+                    ram.ReadSome(cpu.state.bp+idx2, 4).data
+                )};
+
+                cpu.state.sp -= 8;
+                cpu.state.bl = CompareVarious(float1, float2, compareMode);
+            }
+            else if (numMode == Numo::Int)
+            {
+                int int1 { IntegerFromBytes<int32_t>(
+                    ram.ReadSome(cpu.state.bp+idx1, 4).data
+                )};
+                int int2 { IntegerFromBytes<int32_t>(
+                    ram.ReadSome(cpu.state.bp+idx2, 4).data
+                )};
+
+                cpu.state.sp -= 8;
+                cpu.state.bl = CompareVarious(int1, int2, compareMode);
+            }
+            else if (numMode == Numo::UByte)
+            {
+                uchar_t byte1 { static_cast<uchar_t>(
+                    ram.Read(cpu.state.bp+idx1)
+                )};
+                uchar_t byte2 { static_cast<uchar_t>(
+                    ram.Read(cpu.state.bp+idx1)
+                )};
+
+                cpu.state.sp -= 2;
+                cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
+            }
+            else
+            {
+                char byte1 { ram.Read(cpu.state.bp+idx1) };
+                char byte2 { ram.Read(cpu.state.sp+idx2) };
+
+                cpu.state.sp -= 2;
+                cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
+            }
+            return System::ErrorCode::Ok;
+        )
+
+        /*op_PushStackFrame: block(
+            LOGD("Hello");
+            char data[4];
+
+            // bp
+            BytesFromInteger(cpu.state.bp, data);
+            System::ErrorCode err = cpu.PushSome({data, 4});
+
+            // pc
+            // BytesFromInteger(cpu.state.pc, data);
+            // System::ErrorCode err { cpu.PushSome({data, 4}) };
+
+            // TODO: Consider setting the new BP, or letting the user do it.
+            return err;
+        )*/
+
+        op_SetFlag: block(
+            uchar_t compressed { rom.Read(cpu.state.pc) };
+            uchar_t flagToSet { static_cast<uchar_t>(compressed >> 4) };
+            uchar_t value { static_cast<uchar_t>(compressed & 0x0F) };
+            cpu.state.pc++;
+
+            if (value == 1)
+                cpu.state.flg |= (1 << flagToSet);
+            else
+                cpu.state.flg &= ~(1 << flagToSet);
         )
     }
     catch (const CSRException& e)

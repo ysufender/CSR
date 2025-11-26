@@ -70,7 +70,10 @@ MAKE_ENUM(CompareModeFlags, les, 21, CMPER, OUT_CLASS)
     E(subi) E(subf) E(subb) E(subri) E(subrf) E(subrb) E(subsi) E(subsf) E(subsb) \
     E(incli) E(inclf) E(inclb) \
     E(rdlt) E(rdle) \
-    E(cnj)
+    E(cnj) \
+    E(cml) \
+    E(psf) \
+    E(stf)
 MAKE_ENUM(OpCodes, nop, 0, OPER, OUT_CLASS)
 #undef OPER
 

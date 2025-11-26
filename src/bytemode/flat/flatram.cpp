@@ -56,7 +56,7 @@ const System::ErrorCode FlatRAM::Deallocate(const sysbit_t address, const sysbit
     if (address >= (stackSize + heapSize) || address < 0 || (address + size) > stackSize + heapSize) [[unlikely]]
     {
         LOGE(System::LogLevel::Medium, 
-             "const System::ErrorCode in RAM. Attempt to read out of bounds memory ", std::to_string(address));
+             "Error in RAM. Attempt to read out of bounds memory ", std::to_string(address));
         return System::ErrorCode::RAMAccessError;
     }
 
@@ -67,7 +67,7 @@ const System::ErrorCode FlatRAM::Deallocate(const sysbit_t address, const sysbit
         if ((this->allocationMap[index] & (1 << offset)) == 0) [[unlikely]]
         {
             LOGE(System::LogLevel::Medium,
-                "const System::ErrorCode in RAM. Attemt to double free memory ", std::to_string(address)
+                "Error in RAM. Attemt to double free memory ", std::to_string(address)
             );
             return System::ErrorCode::DoubleFree;
         }

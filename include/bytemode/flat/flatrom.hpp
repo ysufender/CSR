@@ -57,7 +57,7 @@ class FlatROM : public BaseROM
         VM_INLINE uchar_t Read(sysbit_t index) const override { return (*this)[index]; }
         VM_INLINE const System::ErrorCode TryRead(sysbit_t index, uchar_t& data) const noexcept override
         {
-            // ErrorCode::Bad = 1
+            // ErrorCode::Bad == 1
             System::ErrorCode isOk { index >= this->size };
             if (isOk == System::ErrorCode::Ok)
                 data = (*this)[index];

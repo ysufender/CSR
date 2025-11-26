@@ -50,7 +50,7 @@ class FlatRAM
             if (address >= (stackSize+heapSize)) [[unlikely]]
                 CRASH(
                     System::ErrorCode::RAMAccessError, 
-                    "const System::ErrorCode in RAM. Attempt to read out of bounds memory ", std::to_string(address)
+                    "Error in RAM. Attempt to read out of bounds memory ", std::to_string(address)
                 ); 
             return this->data[address];
         }
@@ -68,7 +68,7 @@ class FlatRAM
             if (address >= (stackSize+heapSize) || (address+size) > (stackSize+heapSize)) [[unlikely]]
                 CRASH(
                     System::ErrorCode::RAMAccessError, 
-                    "const System::ErrorCode in RAM. Attempt to read out of bounds memory ", std::to_string(address)
+                    "Error in RAM. Attempt to read out of bounds memory ", std::to_string(address)
                 );
             return { this->data.get()+address, size };
         }
@@ -80,7 +80,7 @@ class FlatRAM
             {
                 LOGE(
                     System::LogLevel::Medium, 
-                    "const System::ErrorCode in RAM. Attempt to write to out of bounds memory ",
+                    "Error in RAM. Attempt to write to out of bounds memory ",
                     std::to_string(address)
                 );
                 return System::ErrorCode::RAMAccessError;
