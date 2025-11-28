@@ -52,6 +52,7 @@ namespace ReturnCode
 
 typedef char Code;
 
+// TODO: Rewrite from here on to use libffi
 typedef struct VMContext {
     void* context;
     int (*Validate)(uint64_t size, uint8_t version);

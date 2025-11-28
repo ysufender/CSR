@@ -2095,7 +2095,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
 
             // (cpu.state.flg & 1) is the syscall flag
             // make syscall
-            if (cpu.state.flg & 1)
+            // TODO: Removed this, create another instruction for syscalls which uses libffi,
+            //       or preferrably the wrappers of it provided by SysCallHandler
+            /*if (cpu.state.flg & 1)
             {
                 std::memcpy(cpu.paramBuf.get(), &ram+cpu.state.sp-cpu.state.bl, cpu.state.bl);
                 cpu.state.sp -= cpu.state.bl;
@@ -2106,7 +2108,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 // address is now the function id
                 System::ErrorCode err { System::ErrorCode::Ok };
                 try {
-                    err = handler(address, &context, cpu.paramBuf.get());
+                    err = this->handler(address, &context, cpu.paramBuf.get());
                 } catch (const std::exception& e) {
                     LOGE(
                         System::LogLevel::Medium,
@@ -2151,7 +2153,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     }
                 }
                 return System::ErrorCode::Ok;
-            }
+            }*/
 
             // normal call
             // Copy params beforehand

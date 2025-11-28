@@ -11,6 +11,8 @@
 #include "CSRConfig.hpp"
 #include "fastcout.hpp"
 
+// TODO: Rewrite with libffi
+
 namespace
 {
     __attribute__((used)) static const char* const newline = "\n";

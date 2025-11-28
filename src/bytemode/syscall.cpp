@@ -8,6 +8,8 @@
 #include "platform.hpp"
 #include "system.hpp"
 
+// TODO: Rewrite with libffi
+
 SysCallHandler::SysCallHandler() :
     boundFuncs(),
     dlList()
