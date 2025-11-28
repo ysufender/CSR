@@ -53,7 +53,6 @@ class CPU
     private: 
         Board& board;
         State state;
-        std::unique_ptr<char[]> paramBuf;
 
         using OperationFunction = Error (*)(CPU& cpu) noexcept;
 

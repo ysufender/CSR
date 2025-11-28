@@ -12,8 +12,7 @@
 
 CPU::CPU(Board& board) : 
     board(board),
-    state(),
-    paramBuf(std::make_unique_for_overwrite<char[]>(std::numeric_limits<uchar_t>::max()))
+    state()
 {
     // Check ROM for stack/heap sizes beforehand.
     uchar_t tmp;

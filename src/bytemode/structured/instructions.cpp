@@ -2254,7 +2254,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
 
         // (cpu.state.flg & 1) is the syscall flag
         // make syscall
-        if (cpu.state.flg & 1)
+        /*if (cpu.state.flg & 1)
         {
             std::memcpy(cpu.paramBuf.get(), &cpu.board.ram+cpu.state.sp-cpu.state.bl, cpu.state.bl);
             cpu.state.sp -= cpu.state.bl;
@@ -2301,7 +2301,7 @@ OPR CPU::CallFunc(CPU &cpu) noexcept
                 }
             }
             return System::ErrorCode::Ok;
-        }
+        }*/
 
         // normal call
         // Copy params beforehand

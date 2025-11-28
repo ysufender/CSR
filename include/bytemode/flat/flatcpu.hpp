@@ -35,7 +35,7 @@ class FlatCPU
         };
 
         FlatCPU() = delete;
-        VM_INLINE FlatCPU(FlatRAM& ram) : ram(ram), paramBuf(std::make_unique_for_overwrite<char[]>(std::numeric_limits<uchar_t>::max())) { }
+        VM_INLINE FlatCPU(FlatRAM& ram) : ram(ram) { }
         
         VM_INLINE const State& DumpState() const noexcept
         { return this->state; }
@@ -131,5 +131,4 @@ class FlatCPU
     private: 
         FlatRAM& ram;
         State state;
-        std::unique_ptr<char[]> paramBuf;
 };

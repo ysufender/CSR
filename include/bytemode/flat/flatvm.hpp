@@ -9,7 +9,6 @@
 #include "bytemode/flat/flatrom.hpp"
 #include "bytemode/flat/flatram.hpp"
 #include "bytemode/flat/flatcpu.hpp"
-#include "bytemode/nativecalls.hpp"
 #include "bytemode/instructions.hpp"
 #include "bytemode/syscall.hpp"
 #include "bytemode/jit.hpp"
@@ -70,7 +69,6 @@ class FlatVM
 
     private:
         AssemblyInfo assembly;
-        VMContext context;
         FlatROM rom;
         FlatRAM ram;
         FlatCPU cpu;
@@ -95,50 +93,7 @@ class FlatVM
 
         const System::ErrorCode BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
 
+        void* GetRealAddress(const uint32_t addr) { return (&this->ram)+addr; }
 
-
-        VM_INLINE static int Validate(uint64_t size, uint8_t version)
-        {
-            if (size != sizeof(VMContext)) [[unlikely]]
-                return 0;
-            if (version != VM_API_VERSION) [[unlikely]]
-                return 0;
-            [[likely]] return 1; 
-        }
-
-        VM_INLINE static void* GetRealAddress(VM_API, const uint32_t addr)
-        {
-            FlatVM& vm { *reinterpret_cast<FlatVM*>(context->context) };
-            return &vm.ram+addr;
-        }
-
-        VM_INLINE static uint32_t GetVMAddress(VM_API, void* ptr)
-        {
-            FlatVM& vm { *reinterpret_cast<FlatVM*>(context->context) };
-            return static_cast<uint32_t>((char*)ptr - &vm.ram);
-        }
-
-        VM_INLINE static void* Allocate(VM_API, const uint32_t size)
-        {
-            FlatVM& vm { *reinterpret_cast<FlatVM*>(context->context) };
-            return &vm.ram+vm.ram.Allocate(size);
-        }
-
-        VM_INLINE static Code Deallocate(VM_API, const uint32_t addr, const uint32_t size)
-        {
-            FlatVM& vm { *reinterpret_cast<FlatVM*>(context->context) };
-            return static_cast<char>(vm.ram.Deallocate(addr, size));
-        }
-        
-        VM_INLINE static Code BindFunction(VM_API, const uint32_t id, SysFunctionHandler handler)
-        {
-            FlatVM& vm { *reinterpret_cast<FlatVM*>(context->context) };
-            return vm.handler.BindFunction(id, handler);
-        }
-
-        VM_INLINE static Code UnbindFunction(VM_API, const uint32_t id)
-        {
-            FlatVM& vm { *reinterpret_cast<FlatVM*>(context->context) };
-            return vm.handler.UnbindFunction(id);
-        }
+        uint32_t GetVMAddress(void* ptr) { return static_cast<uint32_t>((char*)ptr - &this->ram); }
 };

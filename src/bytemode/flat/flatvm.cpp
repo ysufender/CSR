@@ -7,7 +7,9 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 
+#include "bytemode/syscall.hpp"
 #include "extensions/streamextensions.hpp"
 #include "extensions/syntaxextensions.hpp"
 #include "bytemode/assemblyinfo.hpp"
@@ -147,25 +149,11 @@ void FlatVM::SetUpCommon()
     }
 #endif
 
-    context = VMContext {
-        .context = this,
-        .Validate = &FlatVM::Validate,
-        .GetRealAddress = &FlatVM::GetRealAddress,
-        .Allocate = &FlatVM::Allocate,
-        .Deallocate = &FlatVM::Deallocate,
-        .BindFunction = &FlatVM::BindFunction,
-        .UnbindFunction = &FlatVM::UnbindFunction,
-        .GetVMAddress = &FlatVM::GetVMAddress
-    };
-
     if (InitStandardLibrary(handler) != System::ErrorCode::Ok)
         CRASH(System::ErrorCode::VMError, "Failed to initialize standard library functions.");
 
     if (!settings.unsafe)
         return;
-
-    if (InitExtender(context, handler, settings.path) != System::ErrorCode::Ok)
-        CRASH(System::ErrorCode::DLInitError, "Failed to initialize extender.");
 }
 
 std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(std::istream& bytecode)
@@ -357,7 +345,8 @@ const System::ErrorCode FlatVM::Cycle() noexcept
         &&op_CompareJump,
         &&op_CompareLocal,
         // &&op_PushStackFrame,
-        &&op_SetFlag
+        &&op_SetFlag,
+        &&op_SysCall
     };
 
     try
@@ -2975,6 +2964,27 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 cpu.state.flg |= (1 << flagToSet);
             else
                 cpu.state.flg &= ~(1 << flagToSet);
+        )
+        
+        op_SysCall: block(
+            // TODO: Handle native ptr <-> VM ptr conversions
+            // &bl is not set, values are pushed to stack then syscall is made.
+            // values are eaten.
+            // sys <ptr-to-signature-str>
+            sysbit_t vmPtr { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
+            const char* strptr { (&ram)+vmPtr };
+            const std::string_view str(strptr+4, IntegerFromBytes<sysbit_t>(strptr));
+            FunctionHandlerSignature sign { ParseFunctionSignature(str) };
+            int argSize; for (const auto& arg : sign.arguments) argSize += GetTypeSize(DetectType(arg, false));
+            int retSize { GetTypeSize(DetectType(sign.returnType, true)) };
+            char* retPtr { (&ram)+cpu.state.sp-argSize };
+            char* argPtr { retPtr+retSize };
+
+
+
+            handler(Extensions::String::Hash(sign.name), reinterpret_cast<void**>(argPtr), retPtr);
+            cpu.state.sp = GetVMAddress(retPtr)+retSize;
+            cpu.state.pc += 4;
         )
     }
     catch (const CSRException& e)

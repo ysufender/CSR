@@ -10,7 +10,7 @@
 
 namespace Extensions::String 
 {
-    std::vector<std::string> Split(const std::string& str, char delimiter, bool removeTrailing = true);
+    std::vector<std::string> Split(const std::string_view& str, char delimiter, bool removeTrailing = true);
 
     // I don't know how this works.
     // not the concept part the template<string T> Concat part
