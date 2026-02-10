@@ -52,6 +52,12 @@ list(APPEND libraries "libffi::libffi")
 # end_command
 
 # Link subdirectories here
+if(TOOLCHAIN_MODE)
+    foreach(lib ${libraries})
+        target_sources(_csr_libs INTERFACE $<TARGET_OBJECTS:${lib}>)
+    endforeach()
+endif(TOOLCHAIN_MODE)
+
 target_link_libraries(_csr_libs
     INTERFACE
         ${libraries}

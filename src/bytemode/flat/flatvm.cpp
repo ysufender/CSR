@@ -1,13 +1,17 @@
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <exception>
+#include <ffi.h>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "bytemode/syscall.hpp"
 #include "extensions/streamextensions.hpp"
@@ -17,10 +21,8 @@
 #include "bytemode/flat/flatvm.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/instructions.hpp"
-#include "bytemode/nativecalls.hpp"
 #include "bytemode/jit.hpp"
 #include "CSRConfig.hpp"
-#include "fastcout.hpp"
 #include "system.hpp"
 
 #define OPR const System::ErrorCode
@@ -42,45 +44,39 @@
 
 using Numo = NumericModeFlags;
 
-static sysbit_t& GetRegister32Bit(RegisterModeFlags reg, FlatCPU::State& state)
+static System::Result<sysbit_t*> GetRegister32Bit(RegisterModeFlags reg, FlatCPU::State& state)
 {
     static sysbit_t dummy { 0 };
     switch (reg)
     {
-        case RegisterModeFlags::eax: return state.eax;
-        case RegisterModeFlags::ebx: return state.ebx;
-        case RegisterModeFlags::ecx: return state.ecx;
-        case RegisterModeFlags::edx: return state.edx;
-        case RegisterModeFlags::esi: return state.esi;
-        case RegisterModeFlags::edi: return state.edi;
-        case RegisterModeFlags::pc: return state.pc;
-        case RegisterModeFlags::sp: return state.sp;
-        case RegisterModeFlags::bp: return state.bp;
+        case RegisterModeFlags::eax: return &state.eax;
+        case RegisterModeFlags::ebx: return &state.ebx;
+        case RegisterModeFlags::ecx: return &state.ecx;
+        case RegisterModeFlags::edx: return &state.edx;
+        case RegisterModeFlags::esi: return &state.esi;
+        case RegisterModeFlags::edi: return &state.edi;
+        case RegisterModeFlags::pc: return &state.pc;
+        case RegisterModeFlags::sp: return &state.sp;
+        case RegisterModeFlags::bp: return &state.bp;
         default: [[unlikely]]
-            CRASH(
-                System::ErrorCode::InvalidSpecifier,
-                std::to_string((int)reg), " is not a 32bit register."
-            );
-            return dummy;
+            LOGE(System::LogLevel::High, std::to_string((int)reg), " is not a 32bit register.");
+            return System::ErrorCode::InvalidSpecifier;
     }
 }
 
-static uchar_t& GetRegister8Bit(RegisterModeFlags reg, FlatCPU::State& state)
+static System::Result<uchar_t*> GetRegister8Bit(RegisterModeFlags reg, FlatCPU::State& state)
 {
     static uchar_t dummy { 0 };
     switch (reg)
     {
-        case RegisterModeFlags::al: return state.al;
-        case RegisterModeFlags::bl: return state.bl;
-        case RegisterModeFlags::cl: return state.cl;
-        case RegisterModeFlags::dl: return state.dl;
-        case RegisterModeFlags::flg: return state.flg;
+        case RegisterModeFlags::al: return &state.al;
+        case RegisterModeFlags::bl: return &state.bl;
+        case RegisterModeFlags::cl: return &state.cl;
+        case RegisterModeFlags::dl: return &state.dl;
+        case RegisterModeFlags::flg: return &state.flg;
         default: [[unlikely]]
-            CRASH(
-                System::ErrorCode::InvalidSpecifier,
-                std::to_string((int)reg), " is not an 8bit register."
-            );
-            return dummy;
+            LOGE(System::LogLevel::High, std::to_string((int)reg), " is not an 8bit register.");
+            return System::ErrorCode::InvalidSpecifier;
     }
 }
 
@@ -113,14 +109,21 @@ static bool CompareVarious(T lhs, T rhs, uchar_t mode)
 
 const System::ErrorCode InitStandardLibrary(SysCallHandler& handler);
 
-void FlatVM::SetUpCommon()
+System::ErrorCode FlatVM::SetUpCommon()
 {
 #ifdef ENABLE_JIT
     if (settings.jit)
     {
         for (const auto& [symbol, addr] : assembly.Symbols())
-            if (rom[addr] <= OpCodesMax)
+        {
+            System::Result<uchar_t> res { rom[addr] };
+
+            if (System::None(res))
+                return System::GetErr(res);
+
+            if (System::Get(res) <= OpCodesMax)
                 blocks.Add(addr);
+        }
 
         jitContext = JITContext {
             .reg32 = {
@@ -150,13 +153,16 @@ void FlatVM::SetUpCommon()
 #endif
 
     if (InitStandardLibrary(handler) != System::ErrorCode::Ok)
-        CRASH(System::ErrorCode::VMError, "Failed to initialize standard library functions.");
+    {
+        LOGE(System::LogLevel::High, "Failed to initialize standard library functions.");
+        return System::ErrorCode::VMError;
+    }
 
-    if (!settings.unsafe)
-        return;
+    return System::ErrorCode::Ok;
 }
 
-std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(std::istream& bytecode)
+using BytecodePair = std::pair<std::unique_ptr<const char[]>, std::streamoff>;
+System::Result<BytecodePair> FlatVM::ReadBytecode(std::istream& bytecode)
 {
     // TODO: All bytecodes must include AssemblyInfo
 #ifndef TOOLCHAIN_MODE
@@ -164,9 +170,10 @@ std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(st
     uint64_t size { };
     Extensions::Serialization::DeserializeInteger(size, bytecode);
     bytecode.seekg(-(sizeof(uint64_t)+size), std::ios::end);
-    IStreamPos(bytecode, bytecodeEnd, {
-        CRASH(System::ErrorCode::FileIOError, "Couldn't load executable ", settings.path.c_str());
-    });
+    IStreamPos(bytecode, bytecodeEnd, {{
+        LOGE(System::LogLevel::High, "Couldn't load executable ", settings.path.c_str());
+        return System::ErrorCode::FileIOError;
+    }});
     assembly.Deserialize(bytecode);
 #else
     bytecode.seekg(0, std::ios::end);
@@ -177,8 +184,10 @@ std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(st
 
     //if (settings.path.extension() != ".jef")
     if (!(assembly.Flags() & AssemblyFlags::Executable))
-        CRASH(System::ErrorCode::UnsupportedFileType,
-            "FlatVM does not support given filetype ", settings.path.c_str(), ". It is not marked as an executable.");
+    {
+        LOGE(System::LogLevel::High, "FlatVM does not support given filetype ", settings.path.c_str(), ". It is not marked as an executable.");
+        return System::ErrorCode::UnsupportedFileType;
+    }
 
 #ifdef ENABLE_JIT
     if (!(assembly.Flags() & AssemblyFlags::SymbolInfo) && settings.jit) [[unlikely]]
@@ -188,10 +197,28 @@ std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(st
     bytecode.seekg(0, std::ios::beg);
     std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(bytecodeEnd) };
     bytecode.read(data.get(), bytecodeEnd);
-    return {rval(data), bytecodeEnd};
+
+    return System::Result<BytecodePair>{
+        std::in_place_type<BytecodePair>,
+            rval(data),
+            bytecodeEnd
+    };
 }
 
-FlatVM::FlatVM(FlatVM::VMSettings settings) :
+System::Result<FlatVM> FlatVM::New(VMSettings settings)
+{
+    if (!std::filesystem::exists(settings.path))
+    {
+        LOGE(System::LogLevel::High, "Couldn't find executable ", settings.path.string());
+        return System::ErrorCode::SourceFileNotFound;
+    }
+
+    System::Result<std::ifstream> bytecodeRes { System::OpenInFile(settings.path) };
+
+
+}
+
+FlatVM::FlatVM(FlatVM::VMSettings settings, std::istream& bytecode) :
     settings(settings),
     ram(),
     rom(),
@@ -203,11 +230,8 @@ FlatVM::FlatVM(FlatVM::VMSettings settings) :
 #endif
     assembly()
 {
-    if (!std::filesystem::exists(settings.path))
-        CRASH(System::ErrorCode::SourceFileNotFound,
-            "Couldn't find executable ", settings.path.string());
-    std::ifstream bytecode { System::OpenInFile(settings.path) };
-    auto [data, size] { ReadBytecode(bytecode) };
+    System::Result<BytecodePair> bytecodeRes { ReadBytecode(bytecode) };
+    // TODO: Continue
     bytecode.close();
 
     rom = FlatROM { rval(data), static_cast<sysbit_t>(size) };
@@ -296,7 +320,7 @@ const System::ErrorCode FlatVM::Run() noexcept
     return errcx;
 }
 
-const System::ErrorCode FlatVM::Cycle() noexcept
+const System::ErrorCode FlatVM::Cycle()
 {
     System::ErrorCode code = System::ErrorCode::Ok;
     static constexpr void* jumpTable[] = {
@@ -346,7 +370,8 @@ const System::ErrorCode FlatVM::Cycle() noexcept
         &&op_CompareLocal,
         // &&op_PushStackFrame,
         &&op_SetFlag,
-        &&op_SysCall
+        &&op_SysCall,
+        &&op_BitXor, &&op_BitXor, &&op_BitXor,
     };
 
     try
@@ -1168,7 +1193,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
         )
 
         op_BitNor: block(
-            LOGW("This operation ", nameof(BitNor), " is stupid as hell. Why does it exist?");
+            // LOGW("This operation ", nameof(BitNor), " is stupid as hell. Why does it exist?");
             return BitLogic(
                 {OpCodes::norst, OpCodes::norse, OpCodes::norr},
                 [](sysbit_t a, sysbit_t b) -> sysbit_t { return ~(a | b);}
@@ -2082,68 +2107,6 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     cpu.state
                 );
 
-            // (cpu.state.flg & 1) is the syscall flag
-            // make syscall
-            // TODO: Removed this, create another instruction for syscalls which uses libffi,
-            //       or preferrably the wrappers of it provided by SysCallHandler
-            /*if (cpu.state.flg & 1)
-            {
-                std::memcpy(cpu.paramBuf.get(), &ram+cpu.state.sp-cpu.state.bl, cpu.state.bl);
-                cpu.state.sp -= cpu.state.bl;
-
-                if (op == OpCodes::cal)
-                    cpu.state.pc += 4;
-
-                // address is now the function id
-                System::ErrorCode err { System::ErrorCode::Ok };
-                try {
-                    err = this->handler(address, &context, cpu.paramBuf.get());
-                } catch (const std::exception& e) {
-                    LOGE(
-                        System::LogLevel::Medium,
-                        "Error in syscall ",
-                        std::to_string(address),
-                        " ", System::ErrorCodeString(System::ErrorCode::NativeCallError)
-                    );
-                    return System::ErrorCode::NativeCallError;
-                }
-
-                if (err != System::ErrorCode::Ok)
-                {
-                    LOGE(
-                        System::LogLevel::Medium,
-                        "Error in syscall ",
-                        std::to_string(address),
-                        " ", System::ErrorCodeString(err)
-                    );
-                    return err;
-                }
-
-                cpu.state.bl = cpu.paramBuf[0];
-
-                // function is void and returned without and error
-                if (cpu.state.bl == 0)
-                    return System::ErrorCode::Ok;
-
-                if (cpu.state.bl != 0)
-                {
-                    Slice retVal (&cpu.paramBuf[1], cpu.state.bl);
-                    err = cpu.PushSome(retVal);
-
-                    if (err != System::ErrorCode::Ok)
-                    {
-                        LOGE(
-                            System::LogLevel::Medium,
-                            "Error in syscall, ",
-                            std::to_string(address),
-                            " couldn't handle return values."
-                        );
-                        return err;
-                    }
-                }
-                return System::ErrorCode::Ok;
-            }*/
-
             // normal call
             // Copy params beforehand
             // Create callstack
@@ -2166,7 +2129,8 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             //cpu.state.sp += 8 - cpu.state.bl;
             //ram.WriteSome(cpu.state.sp, params);
             //cpu.state.sp -= cpu.state.bl + 8;
-            std::memmove(&ram+cpu.state.sp+8, &ram+cpu.state.sp-cpu.state.bl, cpu.state.bl);
+            cpu.state.sp -= cpu.state.bl;
+            std::memmove(ram&(cpu.state.sp+8), ram&(cpu.state.sp), cpu.state.bl);
 
             // Store bp
             char data[4];
@@ -2185,15 +2149,8 @@ const System::ErrorCode FlatVM::Cycle() noexcept
 
             // Change pc and bp
             cpu.state.pc = address;
-            cpu.state.bp = cpu.state.sp;
+            cpu.state.bp = sysbit_t{cpu.state.sp};
 
-            // Copy params
-    //        System::ErrorCode err;
-    //        Slice params(cpu.paramBuf.get(), cpu.state.bl);
-    //        err = ram.WriteSome(cpu.state.sp, params);
-    //        if (err != System::ErrorCode::Ok)
-    //            errcx = err;
-    //            break;
             cpu.state.sp += cpu.state.bl;
         )
 
@@ -2965,26 +2922,141 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             else
                 cpu.state.flg &= ~(1 << flagToSet);
         )
-        
+
         op_SysCall: block(
-            // TODO: Handle native ptr <-> VM ptr conversions
-            // &bl is not set, values are pushed to stack then syscall is made.
+            // &bl is still set,
+            // values are pushed to stack then syscall is made.
             // values are eaten.
-            // sys <ptr-to-signature-str>
-            sysbit_t vmPtr { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
-            const char* strptr { (&ram)+vmPtr };
-            const std::string_view str(strptr+4, IntegerFromBytes<sysbit_t>(strptr));
-            FunctionHandlerSignature sign { ParseFunctionSignature(str) };
-            int argSize; for (const auto& arg : sign.arguments) argSize += GetTypeSize(DetectType(arg, false));
-            int retSize { GetTypeSize(DetectType(sign.returnType, true)) };
-            char* retPtr { (&ram)+cpu.state.sp-argSize };
-            char* argPtr { retPtr+retSize };
+            // sys <size:string>
+            const char* strptr { (rom&cpu.state.pc)+sizeof(sysbit_t) };
+            sysbit_t size { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
+            std::string_view signatureStr(strptr, size);
 
+            if (signatureStr == "CSR_Println")
+            {
+                cpu.state.pc += size + sizeof(sysbit_t);
+                sysbit_t vmAddr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data) };
+                size = { IntegerFromBytes<sysbit_t>(ram.ReadSome(vmAddr, 4).data) };
+                strptr = static_cast<const char*>(GetRealAddress(vmAddr+4));
+                std::cout.write(strptr, size);
+                std::cout.put('\n');
+                cpu.state.sp -= cpu.state.bl;
+                cpu.state.bl = 0;
+            }
+            else if (signatureStr == "CSR_Print")
+            {
+                cpu.state.pc += size + sizeof(sysbit_t);
+                sysbit_t vmAddr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data) };
+                size = { IntegerFromBytes<sysbit_t>(ram.ReadSome(vmAddr, 4).data) };
+                strptr = static_cast<const char*>(GetRealAddress(vmAddr+4));
+                std::cout.write(strptr, size);
+                cpu.state.sp -= cpu.state.bl;
+                cpu.state.bl = 0;
+            }
+            else if (signatureStr == "CSR_U32ToFloat")
+            {
+                cpu.state.pc += size + sizeof(sysbit_t);
+                cpu.state.sp -= 4;
+                sysbit_t u32 { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
+                char data[4];
+                BytesFromFloat(static_cast<float>(u32), data);
+                cpu.PushSome({data, 4});
+                cpu.state.bl = 4;
+            }
+            else if (signatureStr == "CSR_I32ToFloat")
+            {
+                cpu.state.pc += size + sizeof(sysbit_t);
+                cpu.state.sp -= 4;
+                int32_t i32 { IntegerFromBytes<int32_t>(ram.ReadSome(cpu.state.sp, 4).data) };
+                char data[4];
+                BytesFromFloat(static_cast<float>(i32), data);
+                cpu.PushSome({data, 4});
+                cpu.state.bl = 4;
+            }
+            else if (signatureStr == "CSR_FloatToU32")
+            {
+                cpu.state.pc += size + sizeof(sysbit_t);
+                cpu.state.sp -= 4;
+                float f { FloatFromBytes(ram.ReadSome(cpu.state.sp, 4).data) };
+                char data[4];
+                BytesFromInteger(static_cast<sysbit_t>(f), data);
+                cpu.PushSome({data, 4});
+                cpu.state.bl = 4;
+            }
+            else if (signatureStr == "CSR_FloatToU32")
+            {
+                cpu.state.pc += size + sizeof(sysbit_t);
+                cpu.state.sp -= 4;
+                float f { FloatFromBytes(ram.ReadSome(cpu.state.sp, 4).data) };
+                char data[4];
+                BytesFromInteger(static_cast<int32_t>(f), data);
+                cpu.PushSome({data, 4});
+                cpu.state.bl = 4;
+            }
+            else if (signatureStr == "CSR_PrintU32")
+            {
+                cpu.state.pc += size + sizeof(sysbit_t);
+                cpu.state.sp -= 4;
+                sysbit_t u32 { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
+                std::string str { std::to_string(u32) };
+                std::cout.write(str.data(), str.size());
+                std::cout.put('\n');
+                cpu.state.bl = 0;
+            }
+            else if (signatureStr == "CSR_Clock")
+            {
+                cpu.state.pc += size + sizeof(sysbit_t);
+                char bytes[4];
+                BytesFromInteger<sysbit_t>((std::chrono::steady_clock::now() - startT).count(), bytes);
+                cpu.PushSome({bytes, 4});
+                cpu.state.bl = 4;
+            }
+            else
+                LOGE(System::LogLevel::High, "Due to problems with FFI implementation, FFI is not yet supported. Fn: ", signatureStr);
 
+            /*
+            const auto ret { handler.MakeFunctionHandler(signatureStr) };
+            const FunctionHandlerSignature signature { ret.first };
+            const SysFunctionHandler fn { ret.second };
 
-            handler(Extensions::String::Hash(sign.name), reinterpret_cast<void**>(argPtr), retPtr);
-            cpu.state.sp = GetVMAddress(retPtr)+retSize;
-            cpu.state.pc += 4;
+            size_t totalSize { 0 };
+            for (const auto& arg : signature.arguments)
+                totalSize += handler.GetTypeSize(handler.DetectType(arg, false), false);
+
+            cpu.state.sp -= cpu.state.bl;
+            size_t argSize { signature.arguments.size() };
+            std::vector<std::uintptr_t> shadowArgs { argSize };
+            void* args[argSize];
+            void* returnVal { ram&cpu.state.sp };
+
+            // rewrite
+
+            std::cout << "Addr: " << IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) << '\n';
+            char* argPtr { ram&cpu.state.sp };
+            size_t index { 0 };
+            for (const auto arg : signature.arguments)
+            {
+                const ffi_type* const type { handler.DetectType(arg, false) };
+                if (type == &ffi_type_uint32)
+                    shadowArgs.emplace_back(IntegerFromBytes<sysbit_t>(argPtr));
+                else
+                    LOGE(System::LogLevel::High, "Unexpected Parameter Type at Syscall");
+                args[index] = (shadowArgs.end()-1).base();
+                argPtr += handler.GetTypeSize(type, false);
+                index++;
+            }
+
+            std::cout << "Addr: " << *((sysbit_t*)args[0]) << '\n';
+            handler(fn, args, returnVal);
+            cpu.state.pc += size + 4;
+            */
+        )
+
+        op_BitXor: block(
+            return BitLogic(
+                {OpCodes::xorst, OpCodes::xorse, OpCodes::xorr},
+                [](sysbit_t a, sysbit_t b) -> sysbit_t { return a ^ b; }
+            );
         )
     }
     catch (const CSRException& e)
@@ -3035,6 +3107,7 @@ OPR FlatVM::BitLogic(arr<OpCodes, 3> op, fn bitwise) noexcept
             }
 
             cpu.state.pc++;
+            cpu.state.sp -= 8;
             return System::ErrorCode::Ok;
         }
         if (opc == op.at(1))
@@ -3065,6 +3138,7 @@ OPR FlatVM::BitLogic(arr<OpCodes, 3> op, fn bitwise) noexcept
             }
 
             cpu.state.pc++;
+            cpu.state.sp -= 2;
             return System::ErrorCode::Ok;
         }
         if (opc == op.at(2))

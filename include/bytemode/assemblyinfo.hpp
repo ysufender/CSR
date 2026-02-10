@@ -44,7 +44,7 @@ struct AssemblyInfo
         {}
 #endif
 
-        Error Deserialize(std::istream& inFile) noexcept;
+        System::ErrorCode Deserialize(std::istream& inFile) noexcept;
 
         VM_INLINE std::string_view Path() const { return path; }
         VM_INLINE uchar_t Flags() const { return flags; }

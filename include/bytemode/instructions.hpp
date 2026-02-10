@@ -72,8 +72,10 @@ MAKE_ENUM(CompareModeFlags, les, 21, CMPER, OUT_CLASS)
     E(rdlt) E(rdle) \
     E(cnj) \
     E(cml) \
-    E(psf) \
-    E(stf)
+    /*E(psf)*/ \
+    E(stf) \
+    E(sys) \
+    E(xorst) E(xorse) E(xorr)
 MAKE_ENUM(OpCodes, nop, 0, OPER, OUT_CLASS)
 #undef OPER
 

@@ -41,7 +41,7 @@ public:
         });
     }
 
-    static VM_INLINE Error Flush() noexcept
+    static VM_INLINE System::ErrorCode Flush() noexcept
     {
         if (FastCout::singleton == nullptr)
             return System::ErrorCode::IOError;

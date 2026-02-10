@@ -24,7 +24,6 @@ std::filesystem::path GetExePath()
     wchar_t path[MAX_PATH];
     GetModuleFileNameW( NULL, path, MAX_PATH );
 #elif defined(CSR_UNIX)
-    // Linux specific
     char path[PATH_MAX];
     ssize_t count = readlink( "/proc/self/exe", path, PATH_MAX );
     if( count < 0 || count >= PATH_MAX )

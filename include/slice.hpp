@@ -5,28 +5,45 @@
 
 struct Slice
 {
-    public:
-        inline __attribute__((hot)) Slice(const Slice& other) : data(other.data), size(other.size) { }
-        inline __attribute__((hot)) Slice(const Slice&& other) : data(other.data), size(other.size) { }
-
-        inline __attribute__((hot)) Slice(const char* const memory, const sysbit_t size) :
+    private:
+        VM_INLINE Slice(const char* const memory, const sysbit_t size) :
             data(memory), size(size)
+        { }
+
+    public:
+        VM_INLINE Slice(const Slice& other) : data(other.data), size(other.size) { }
+        VM_INLINE Slice(const Slice&& other) : data(other.data), size(other.size) { }
+
+        static VM_INLINE __attribute__((hot)) System::Result<Slice> New(const char* memory, const sysbit_t size)
         {
             if (memory == nullptr) [[unlikely]]
-                CRASH(System::ErrorCode::Bad, "Can't initialize Slice with nullptr");
+            {
+                LOGE(System::LogLevel::High, "Can't initialize Slice with nullptr");
+                return System::ErrorCode::Bad;
+            }
+
+            [[likely]]
+            return Slice { memory, size };
         }
 
-        inline __attribute__((hot)) char operator[](const sysbit_t index) const
+        VM_INLINE System::Result<char> operator[](const sysbit_t index) const
         {
             if (index < 0 || index >= size) [[unlikely]]
-                CRASH(System::ErrorCode::IndexOutOfBounds, "Can't access out-of-bounds memory in a slice."); 
+            {
+                LOGE(System::LogLevel::High, "Can't access out-of-bounds memory in a slice."); 
+                return System::ErrorCode::IndexOutOfBounds;
+            }
+
+            [[likely]]
             return data[index];
         }
 
-        inline __attribute__((hot)) Error TryRead(const sysbit_t index, char& out) noexcept
+        VM_INLINE System::ErrorCode TryRead(const sysbit_t index, char& out) noexcept
         {
             if (index < 0 || index >= size) [[unlikely]]
                 return System::ErrorCode::IndexOutOfBounds;
+
+            [[likely]]
             out = data[index];
             return System::ErrorCode::Ok;
         }

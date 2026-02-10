@@ -4,6 +4,8 @@
 #include <exception>
 #include <iostream>
 #include <string_view>
+#include <type_traits>
+#include <variant>
 
 #include "CSRConfig.hpp"
 
@@ -23,7 +25,6 @@
         std::cerr << "An unexpected exception occured during process.\n\tProvided information: " << exc.what() << '\n'; \
         catchother  \
     }
-
 
 using namespace std::string_view_literals;
 

@@ -1,6 +1,6 @@
 #include "bytemode/flat/flatram.hpp"
 
-sysbit_t FlatRAM::Allocate(sysbit_t size)
+System::Result<sysbit_t> FlatRAM::Allocate(sysbit_t size)
 {
     sysbit_t counter = size;
     sysbit_t allocationAddr = 0;
@@ -33,13 +33,15 @@ sysbit_t FlatRAM::Allocate(sysbit_t size)
     }
 
     if (counter != 0) [[unlikely]]
-        CRASH(System::ErrorCode::HeapOverflow,
-              "Can't allocate memory of size ", std::to_string(size),
-              " bytes from RAM. Board is out of memory.");
+    {
+        LOGE(System::LogLevel::High, "Can't allocate memory of size ", std::to_string(size), " bytes from RAM. Board is out of memory.");
+        return System::ErrorCode::HeapOverflow;
+    }
     else if (!set) [[unlikely]]
-        CRASH(System::ErrorCode::FragmentedHeap,
-              "Can't allocate memory of size ", std::to_string(size),
-              " bytes from RAM. No suitable fragment found on heap.");
+    {
+        LOGE(System::LogLevel::High, "Can't allocate memory of size ", std::to_string(size), " bytes from RAM. No suitable fragment found on heap.");
+        return System::ErrorCode::FragmentedHeap;
+    }
 
     for (sysbit_t i = allocationAddr - this->StackSize(); size > 0; i++, size--)
     {
@@ -55,8 +57,7 @@ const System::ErrorCode FlatRAM::Deallocate(const sysbit_t address, const sysbit
 {
     if (address >= (stackSize + heapSize) || address < 0 || (address + size) > stackSize + heapSize) [[unlikely]]
     {
-        LOGE(System::LogLevel::Medium, 
-             "Error in RAM. Attempt to read out of bounds memory ", std::to_string(address));
+        LOGE(System::LogLevel::High, "Error in RAM. Attempt to read out of bounds memory ", std::to_string(address));
         return System::ErrorCode::RAMAccessError;
     }
 
@@ -66,9 +67,7 @@ const System::ErrorCode FlatRAM::Deallocate(const sysbit_t address, const sysbit
         const uchar_t offset = static_cast<uchar_t>(i % 8);
         if ((this->allocationMap[index] & (1 << offset)) == 0) [[unlikely]]
         {
-            LOGE(System::LogLevel::Medium,
-                "Error in RAM. Attemt to double free memory ", std::to_string(address)
-            );
+            LOGE(System::LogLevel::High, "Error in RAM. Attemt to double free memory ", std::to_string(address));
             return System::ErrorCode::DoubleFree;
         }
         this->allocationMap[index] &= ~(uchar_t{1} << offset);
