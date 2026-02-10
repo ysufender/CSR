@@ -9,8 +9,6 @@
 #include <string_view>
 
 #include "system.hpp"
-#include "csr.hpp"
-
 
 // 
 // System Implementation
@@ -18,7 +16,7 @@
 void System::LogInternal(std::string_view message, std::string_view file, int line)
 {
 #ifdef TOOLCHAIN_MODE
-    if (CSR::Settings().silent)
+    if (CSR::Settings() & CSR_Settings_Silent)
         return;
 #endif
 
@@ -29,7 +27,7 @@ void System::LogInternal(std::string_view message, std::string_view file, int li
 void System::LogWarning(std::string_view message, std::string_view file, int line)
 {
 #ifdef TOOLCHAIN_MODE
-    if (CSR::Settings().silent)
+    if (CSR::Settings() & CSR_Settings_Silent)
         return;
 #endif
 
@@ -40,7 +38,7 @@ void System::LogWarning(std::string_view message, std::string_view file, int lin
 void System::LogError(std::string_view message, LogLevel level, std::string_view file, int line, System::ErrorCode errCode)
 {
 #ifdef TOOLCHAIN_MODE
-    if (CSR::Settings().silent)
+    if (CSR::Settings() & CSR_Settings_Silent)
         return;
 #endif
 
@@ -50,40 +48,48 @@ void System::LogError(std::string_view message, LogLevel level, std::string_view
     {
         case System::LogLevel::Low:
             break;
-        case System::LogLevel::Medium:
-            std::cerr << "IMPORTANT ERROR ";
-            break;
         case System::LogLevel::High:
-            std::cerr << "ALERT [CSR::Error](" << file.substr(idx, file.size() - idx) << ':' << line << ") >>> " << message << '\n';
-            throw CSRException{message.data(), file.data(), line, errCode};
+            std::cerr << "ALERT";
             break;
     }
 
     std::cerr << "[CSR::Error](" << file.substr(idx, file.size() - idx) << ':' << line << ") >>> " << message << '\n';
 }
 
-std::ifstream System::OpenInFile(const std::filesystem::path& path, const std::ios::openmode mode)
+System::Result<std::ifstream> System::OpenInFile(const std::filesystem::path& path, const std::ios::openmode mode)
 {
     if (!std::filesystem::exists(path))
-        CRASH(System::ErrorCode::FileIOError, "The file at path '", path.generic_string(), "' does not exist.");
+    {
+        LOGE(LogLevel::High, "The file at path '", path.generic_string(), "' does not exist.");
+        return System::ErrorCode::FileIOError;
+    }
 
     std::ifstream file { path, mode };
 
     if (file.fail() || file.bad() || !file.is_open())
-        CRASH(System::ErrorCode::FileIOError, "An error occured while opening the file '", path.generic_string(), "'.");
+    {
+        LOGE(LogLevel::High, "An error occured while opening the file '", path.generic_string(), "'.");
+        return System::ErrorCode::FileIOError;
+    }
 
     return file;
 }
 
-std::ofstream System::OpenOutFile(const std::filesystem::path& path, const std::ios::openmode mode)
+System::Result<std::ofstream> System::OpenOutFile(const std::filesystem::path& path, const std::ios::openmode mode)
 {
     if (!std::filesystem::exists(path))
-        CRASH(System::ErrorCode::FileIOError, "The file at path '", path.generic_string(), "' does not exist.");
+    {
+        LOGE(LogLevel::High, "The file at path '", path.generic_string(), "' does not exist.");
+        return System::ErrorCode::FileIOError;
+    }
 
     std::ofstream file { path, mode };
 
     if (file.fail() || file.bad() || !file.is_open())
-        CRASH(System::ErrorCode::FileIOError, "An error occured while opening the file '", path.generic_string(), "'.");
+    {
+        LOGE(LogLevel::High, "An error occured while opening the file '", path.generic_string(), "'.");
+        return System::ErrorCode::FileIOError;
+    }
 
     return file;
 }

@@ -6,13 +6,17 @@
 #include "bytemode/syscall.hpp"
 #include "CSRConfig.hpp"
 #include "extensions/stringextensions.hpp"
+#include "fastcout.hpp"
 
 extern "C"
 {
-    void CSR_Println(const char* strToPrint)
+    void CSR_Println(sysbit_t addr)
     {
-        sysbit_t size { IntegerFromBytes<sysbit_t>(strToPrint) };
+        std::cout << "Hello " << addr << "\n";
+        /*sysbit_t size { IntegerFromBytes<sysbit_t>(strToPrint) };
         std::cout.write(strToPrint+4, size);
+        */
+        FastCout::Flush();
     }
 
     uint8_t CSR_NativePtrSize() { return sizeof(void*); }
@@ -23,11 +27,11 @@ extern "C"
     }
 }
 
-Error InitStandardLibrary(SysCallHandler& handler)
+System::ErrorCode InitStandardLibrary(SysCallHandler& handler)
 {
     using Extensions::String::Hash;
 
-    handler.BindFunction(Hash("CSR_Println"), handler.MakeFunctionHandler("void CSR_Println char*"));
-    handler.BindFunction(Hash("CSR_NativePtrSize"), handler.MakeFunctionHandler("uchar CSR_NativePtrSize"));
+    // TODO
+
     return System::ErrorCode::Ok;
 }

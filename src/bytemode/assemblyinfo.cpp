@@ -4,13 +4,13 @@
 #include "extensions/streamextensions.hpp"
 #include "system.hpp"
 
-Error AssemblyInfo::Deserialize(std::istream& inFile) noexcept
+System::ErrorCode AssemblyInfo::Deserialize(std::istream& inFile) noexcept
 {
     using namespace Extensions;
 
     if (inFile.fail() || inFile.bad())
     {
-        LOGE(System::LogLevel::Medium, "Couldn't open file while deserializing assembly info.");
+        LOGE(System::LogLevel::High, "Couldn't open file while deserializing assembly info.");
         return System::ErrorCode::FileIOError;
     }
 

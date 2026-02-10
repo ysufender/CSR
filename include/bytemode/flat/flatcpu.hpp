@@ -48,24 +48,13 @@ class FlatCPU
             if (this->state.sp+1 > this->ram.StackSize())
             {
                 LOGE(
-                    System::LogLevel::Medium,
+                    System::LogLevel::High,
                     "In FlatCPU, can't push value onto stack, stack is full."
                 );
                 return System::ErrorCode::StackOverflow;
             }
 
             return this->ram.Write(this->state.sp++, value);
-
-            //if (errc == System::ErrorCode::Ok)
-                //this->state.sp++;
-            //else
-            //    LOGE(
-            //        System::LogLevel::Medium,
-            //        "In FlatCPU, error while pushing value onto stack. const System::ErrorCode code: ",
-            //        System::ErrorCodeString(errc)
-            //    );
-
-            //return errc;
         }
 
         VM_INLINE const System::ErrorCode Pop() noexcept
@@ -73,7 +62,7 @@ class FlatCPU
             if (this->state.sp < 1)
             {
                 LOGE(
-                        System::LogLevel::Medium,
+                        System::LogLevel::High,
                         "In FlatCPU, error while popping value from stack. Can't pop while SP < 1. const System::ErrorCode Code: ",
                         System::ErrorCodeString(System::ErrorCode::IndexOutOfBounds)
                     );
@@ -90,7 +79,7 @@ class FlatCPU
             if (this->state.sp+values.size > this->ram.StackSize())
             {
                 LOGE(
-                    System::LogLevel::Medium,
+                    System::LogLevel::High,
                     "In FlatCPU, can't push value onto stack, stack is full."
                 );
                 return System::ErrorCode::StackOverflow;
@@ -98,14 +87,7 @@ class FlatCPU
 
             const System::ErrorCode errc { this->ram.WriteSome(this->state.sp, values) };
 
-            //if (errc == System::ErrorCode::Ok)
-                this->state.sp+=values.size;
-            //else
-            //    LOGE(
-            //        System::LogLevel::Medium,
-            //        "In FlatCPU, error while pushing value onto stack. const System::ErrorCode code: ",
-            //        System::ErrorCodeString(errc)
-            //    );
+            this->state.sp+=values.size;
 
             return errc;
         }
@@ -115,7 +97,7 @@ class FlatCPU
             if (this->state.sp-size < 0)
             {
                 LOGE(
-                    System::LogLevel::Medium,
+                    System::LogLevel::High,
                     "In FlatCPU, error while popping value from stack. Can't pop while SP-size < 0. const System::ErrorCode Code: ",
                     System::ErrorCodeString(System::ErrorCode::IndexOutOfBounds)
                 );

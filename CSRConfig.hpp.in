@@ -13,7 +13,11 @@
 #cmakedefine BUILD_STRUCTURED
 #cmakedefine TOOLCHAIN_MODE
 
+#ifndef TOOLCHAIN_MODE
 #define VM_INLINE inline __attribute__((always_inline))
+#else
+#define VM_INLINE __attribute__((hot))
+#endif
 #define VM_API VMContext* context
 
 using sysbit_t = uint32_t;

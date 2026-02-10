@@ -1,10 +1,4 @@
 #include "CSRConfig.hpp"
-#include "extensions/stringextensions.hpp"
-
-#ifndef TOOLCHAIN_MODE
-#include "CLIParser.hpp"
-#include "fastcout.hpp"
-#include "system.hpp"
 #include "csr.hpp"
 
 #ifdef BUILD_FLAT
@@ -15,9 +9,42 @@
 static_assert(false, "Structured VM is incomplete and not compatible with the current version of JASM. Use FlatVM instead.");
 #endif
 
+#ifndef TOOLCHAIN_MODE
+#include <csignal>
+#include <exception>
+#include <sched.h>
+#include <string>
+#include <unistd.h>
+#include <sys/wait.h>
+
+#include "extensions/stringextensions.hpp"
+
+#include "CLIParser.hpp"
+#include "fastcout.hpp"
+#include "system.hpp"
+
+void sigHandler(int signum)
+{
+    pid_t pid { fork() };
+
+    if (pid == 0)
+    {
+        LOGE(System::LogLevel::Medium, "Unexpected signal (", std::to_string(signum), "), aborting the program.");
+        if (FastCout::Flush() != System::ErrorCode::Ok)
+            std::cerr << "[ERROR] Couldn't flush the stoud, some messages may be missing.";
+        _exit(0);
+    }
+    else
+        waitpid(pid, nullptr, 0);
+
+    _exit(1);
+}
+
 int csrmain(int argc, char** args)
 {
     FastCout::Init();
+    std::signal(SIGABRT, sigHandler);
+    std::signal(SIGSEGV, sigHandler);
 
     System::ErrorCode errc { System::ErrorCode::Ok };
 
@@ -29,94 +56,21 @@ int csrmain(int argc, char** args)
             PrintHelp(flags);
         else if (flags.GetFlag<CLIParser::FlagType::Bool>("version"))
             PrintHeader();
-#ifdef BUILD_FLAT
-#if defined(BUILD_STRUCTURED)
-        else if (flags.GetFlag<CLIParser::FlagType::Bool>("flat"))
-#else
-        else
-#endif
-         {
-#ifdef BUILD_STRUCTURED
-            std::vector<std::string> execs { flags.GetFlag<CLIParser::FlagType::StringList>("exe") };
-            if (exec.size() > 1)
-                LOGW("FlatVM requires a single executable. Only the first executable will be used.");
-            std::filesystem::path exec { execs.at(0) };
-#else
-            std::filesystem::path exec { flags.GetFlag<CLIParser::FlagType::String>("exe") };
 
-            if (exec.empty())
-                CRASH(System::ErrorCode::NoSourceFile, "CSR must have at least one file to execute.");
-#endif
+        std::filesystem::path exec { flags.GetFlag<CLIParser::FlagType::String>("exe") };
 
-            FlatVM vm {FlatVM::VMSettings {
-                .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
-                .path = exec,
+        if (exec.empty())
+            CRASH(System::ErrorCode::NoSourceFile, "CSR must have at least one file to execute.");
+
+        FlatVM vm {FlatVM::VMSettings {
+            .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
+            .path = exec,
 #ifdef ENABLE_JIT
-                .jit = flags.GetFlag<CLIParser::FlagType::Bool>("jit"),
+            .jit = flags.GetFlag<CLIParser::FlagType::Bool>("jit"),
 #endif
-            }};
-            errc = vm.Run();
-        }
-#endif
-#ifdef BUILD_STRUCTURED
-        {
-            if (flags.GetFlag<CLIParser::FlagType::Bool>("no-new"))
-                LOGW("Single-process runtime is currently unavailable. A new instance will be created.");
+        }};
 
-            VM::GetVM().Setup(VM::VMSettings {
-                .strictMessages = !flags.GetFlag<CLIParser::FlagType::Bool>("no-strict-messages"),
-                .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
-#ifndef NDEBUG
-                .step = flags.GetFlag<CLIParser::FlagType::Bool>("step"),
-#endif
-                .communication = flags.GetFlag<CLIParser::FlagType::Bool>("messaging")
-            });
-
-            std::vector<std::string> files { flags.GetFlag<CLIParser::FlagType::StringList>("exe") };
-
-            if (files.size() == 0)
-                CRASH(System::ErrorCode::NoSourceFile, "CSR must have at least one file to execute.");
-
-            for (const std::filesystem::path& file : files)
-            {
-                LOGE(System::LogLevel::High, "Structured VM is not compatible with the current JASM. Use FlatVM by using -f flag");
-                errc = VM::GetVM().AddAssembly({
-#ifdef ENABLE_JIT
-                    .jit = flags.GetFlag<CLIParser::FlagType::Bool>("jit"),
-#endif
-                    .name = file.filename().generic_string(),
-                    .path = file,
-                    /*type = will be set by the Assembly class*/
-                });
-
-                switch (errc) 
-                {
-                    case System::ErrorCode::Bad:
-                        LOGE(System::LogLevel::Medium, "Can't register assembly '", file.filename().generic_string(), "', it already exists.");
-                        break;
-                    case System::ErrorCode::IndexOutOfBounds:
-                        LOGE(System::LogLevel::Medium, "Can't register assembly '", file.filename().generic_string(), "', VM has reached the max number of assemblies.");
-                        break;
-                    case System::ErrorCode::SourceFileNotFound:
-                        LOGE(System::LogLevel::Medium, "File at given path '", file.generic_string(), "' can't be found.");
-                        break;
-                    case System::ErrorCode::FileIOError:
-                        LOGE(System::LogLevel::Medium, "Couldn't open assembly '", file.generic_string(), "'.");
-                        break;
-                    case System::ErrorCode::UnsupportedFileType:
-                        LOGE(System::LogLevel::Medium, "Couldn't open assembly '", file.generic_string(), "'.");
-                        break;
-                    case System::ErrorCode::Ok:
-                        break;
-                    default:
-                        LOGE(System::LogLevel::Medium, "Error, '", System::ErrorCodeString(errc), "'");
-                }
-            }
-
-            if (VM::GetVM().Assemblies().size() > 0)
-                errc = VM::GetVM().Run();
-        }
-#endif
+        errc = vm.Run();
     }
     catch (const CSRException& exc)
     {
@@ -136,6 +90,7 @@ int csrmain(int argc, char** args)
         std::cout << 
             "\nExited With " << static_cast<int>(errc) << " (" <<
             System::ErrorCodeString(errc) << ")" << std::endl;
+
     return static_cast<int>(errc);
 }
 
@@ -212,14 +167,7 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
 
     parser.BindFlag("h", "help");
     parser.BindFlag("v", "version");
-#if defined(BUILD_STRUCTURED)
-    parser.BindFlag("n", "no-new");
-    parser.BindFlag("nsm", "no-strict-messages");
-    parser.BindFlag("m", "messaging");
-#endif
-#if defined(BUILD_FLAT) && (defined(BUILD_STRUCTURED))
-    parser.BindFlag("f", "flat");
-#endif
+
     parser.BindFlag("e", "exe");
     parser.BindFlag("u", "unsafe");
 
@@ -237,18 +185,61 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
 #else
 #include "csr.hpp"
 
-namespace CSR
+//
+// API Funcs
+//
+CSRInfo CSRGetBuildInfo()
 {
-    static CSRSettings globalSettings { };
+    return (CSRInfo){
+        CSR_VERSION,
+        CSR_DESCRIPTION,
+        CSR_VERSION_MAJOR,
+        CSR_VERSION_MINOR,
+        CSR_VERSION_PATCH,
+        0
+#ifdef ENABLE_JIT
+        | CSR_BuildFlags_EnableJIT
+#endif
+#ifdef BUILD_FLAT
+        | CSR_BuildFlags_BuildFlat
+#endif
+#ifdef BUILD_STRUCTURED
+        | CSR_BuildFlags_BuildStructured
+#endif
+    };
+}
 
-    void Setup(CSRSettings settings)
-    {
-        globalSettings = settings;
-    }
+static CSRSettingFlags flags {  };
+void CSRSettings(CSRSettingFlags settings) { flags = settings;
+}
 
-    CSRSettings Settings()
-    {
-        return globalSettings;
-    }
+CSRSettingFlags CSR::Settings() { return flags; }
+
+//
+// VMContext
+//
+CSRVMContext CreateVMContext(int unsafe, int jit, const Str executable)
+{
+    FlatVM* vm { new FlatVM{{
+        static_cast<bool>(unsafe),
+#ifndef NDEBUG
+        false,
+#endif
+        executable,
+        static_cast<bool>(jit)
+    }}};
+    return (CSRVMContext){ vm };
+}
+
+CSRErrorCode RunVM(CSRVMContext context)
+{
+    FlatVM* vm { static_cast<FlatVM*>(context.ptr) };
+    return CSRErrorCode(vm->Run());
+}
+
+void DeleteVMContext(CSRVMContext context)
+{
+    FlatVM* vm { static_cast<FlatVM*>(context.ptr) };
+    delete vm;
 }
 #endif

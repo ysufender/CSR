@@ -8,6 +8,8 @@
 #define CSR_WIN
     #include <windows.h>
 
+    #define EXPORT __declspec(dllexport)
+
     using dlID_t = HINSTANCE;
     using sym_t = FARPROC
 #elif defined(unix) || defined(__unix) || defined(__unix__)
@@ -16,6 +18,8 @@
     #include <unistd.h>
     #include <climits>
 
+    #define EXPORT __attribute__((visibility("default")))
+
     using dlID_t = void*;
     using sym_t = void*;
 #elif defined(__APPLE__) || defined(__MACH__)
@@ -23,6 +27,8 @@
     #include <dlfcn.h>
     #include <mach-o/dyld.h>
     #include <climits>
+
+    #define EXPORT __attribute__((visibility("default")))
 
     using dlID_t = void*;
     using sym_t = void*;

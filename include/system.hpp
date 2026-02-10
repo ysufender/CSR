@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
+#include <variant>
 
 #include "extensions/syntaxextensions.hpp"
 #include "extensions/stringextensions.hpp"
@@ -58,14 +59,29 @@ struct System
     E(NativeCallError) \
     E(JITError) \
     E(CLIParseError) \
-    E(DivideByZero)
+    E(DivideByZero) \
+    E(SysCallError)
 MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
 #undef ERER
+
+    template<typename T>
+    using Result = std::variant<T, System::ErrorCode>;
+
+    template<typename T>
+    static constexpr bool Some(Result<T> res) { return std::holds_alternative<T>(res); }
+
+    template<typename T>
+    static constexpr T Get(Result<T> res) { return std::get<T>(res); }
+
+    template<typename T>
+    static constexpr bool None(Result<T> res) { return std::holds_alternative<System::ErrorCode>(res); }
+
+    template<typename T>
+    static constexpr System::ErrorCode GetErr(Result<T> res) { return std::get<System::ErrorCode>(res); }
 
     enum class LogLevel
     {
         Low,
-        Medium,
         High
     };
 
@@ -73,8 +89,8 @@ MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
     static void LogWarning(std::string_view message, std::string_view file, int line);
     static void LogError(std::string_view message, LogLevel level, std::string_view file, int line, System::ErrorCode errCode);
 
-    static std::ifstream OpenInFile(const std::filesystem::path& path, const std::ios::openmode mode = std::ios::binary);
-    static std::ofstream OpenOutFile(const std::filesystem::path& path, const std::ios::openmode mode = std::ios::binary);
+    static Result<std::ifstream> OpenInFile(const std::filesystem::path& path, const std::ios::openmode mode = std::ios::binary);
+    static Result<std::ofstream> OpenOutFile(const std::filesystem::path& path, const std::ios::openmode mode = std::ios::binary);
 
     private:
         System() = delete;
@@ -95,8 +111,6 @@ MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
         void operator delete[](void*) = delete;
 };
 
-using Error = const System::ErrorCode;
-
 class CSRException : public std::runtime_error
 {
     private:
@@ -112,7 +126,7 @@ class CSRException : public std::runtime_error
         CSRException(std::string message, std::string file, int line, System::ErrorCode errCode);
         
         const int GetLine() const noexcept { return _line; }
-        Error GetCode() const noexcept { return _errCode; }
+        System::ErrorCode GetCode() const noexcept { return _errCode; }
         const std::string& GetFile() const noexcept { return _file; }
         const std::string& GetMsg() const noexcept { return _message; }
 

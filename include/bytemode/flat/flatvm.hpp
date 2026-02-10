@@ -15,6 +15,10 @@
 #include "CSRConfig.hpp"
 #include "system.hpp"
 
+#ifdef ENABLE_JIT
+    #warning "Even though JIT builds are allowed and has performance benefits, real JIT compilation is not complete yet. So your program will NOT run if you set the VMSettings::jit to true."
+#endif
+
 class FlatVM
 {
     public:
@@ -26,14 +30,11 @@ class FlatVM
 #endif
             std::filesystem::path path;
 #ifdef ENABLE_JIT
-    #warning "Even though JIT builds are allowed and has performance benefits, real JIT compilation is not complete yet. So your program will NOT run if you set the VMSettings::jit to true."
             bool jit;
 #endif
         };
 
-        // to create from filepath
-        // fiel must be in proper bytecode format, including assemblyinfo at the end.
-        FlatVM(VMSettings settings);
+        static System::Result<FlatVM> New(VMSettings settings);
 
 #ifdef TOOLCHAIN_MODE 
         // to create from an already read buffer.
@@ -65,9 +66,13 @@ class FlatVM
 #else
     private:
 #endif
-        const System::ErrorCode Cycle() noexcept;
+        const System::ErrorCode Cycle();
 
     private:
+        // to create from filepath
+        // file must be in proper bytecode format, including assemblyinfo at the end.
+        FlatVM(VMSettings settings, std::istream& bytecode);
+
         AssemblyInfo assembly;
         FlatROM rom;
         FlatRAM ram;
@@ -88,12 +93,11 @@ class FlatVM
         VM_INLINE static JITEntry GetEntry(void* vm, const uint32_t pos) { return reinterpret_cast<FlatVM*>(vm)->blocks[pos].GetEntry(); }
 #endif
 
-        void SetUpCommon();
-        std::pair<std::unique_ptr<const char[]>, std::streamoff> ReadBytecode(std::istream& bytecode);
+        System::ErrorCode SetUpCommon();
+        System::Result<std::pair<std::unique_ptr<const char[]>, std::streamoff>> ReadBytecode(std::istream& bytecode);
 
         const System::ErrorCode BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
 
-        void* GetRealAddress(const uint32_t addr) { return (&this->ram)+addr; }
-
-        uint32_t GetVMAddress(void* ptr) { return static_cast<uint32_t>((char*)ptr - &this->ram); }
+        VM_INLINE void* GetRealAddress(const uint32_t addr) { return (&this->ram)+addr; }
+        VM_INLINE uint32_t GetVMAddress(void* ptr) { return static_cast<uint32_t>((char*)ptr - &this->ram); }
 };

@@ -39,8 +39,6 @@ endif("${CXX_COMPILER_NAME}" STREQUAL "x86_64-w64-mingw32-g++")
 message(STATUS "BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 message(STATUS "ENABLE_JIT: ${ENABLE_JIT}")
 message(STATUS "OUTPUT_PATH: ${OUTPUT_PATH}")
-message(STATUS "BUILD_FLAT: ${BUILD_FLAT}")
-message(STATUS "BUILD_STRUCTURED: ${BUILD_STRUCTURED}")
 message(STATUS "TOOLCHAIN_MODE: ${TOOLCHAIN_MODE}")
 
 #
@@ -99,3 +97,4 @@ target_link_libraries(${TARGET_NAME}
         csr::libs
         csr::src
 )
+

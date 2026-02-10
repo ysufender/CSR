@@ -1,6 +1,9 @@
+#include <cstddef>
+#include <dlfcn.h>
 #include <ffi.h>
 #include <string>
 #include <string_view>
+#include <variant>
 
 #include "bytemode/nativecalls.hpp"
 #include "extensions/syntaxextensions.hpp"
@@ -34,7 +37,7 @@ System::ErrorCode SysCallHandler::BindFunction(sysbit_t id, SysFunctionHandler h
     return System::ErrorCode::Ok;
 }
 
-dlID_t SysCallHandler::LoadDl(std::string_view dllPath) 
+System::Result<dlID_t> SysCallHandler::LoadDl(std::string_view dllPath) 
 {
     dlID_t dll { DLLoad(dllPath) };
 
@@ -60,11 +63,8 @@ dlID_t SysCallHandler::LoadDl(std::string_view dllPath)
         std::string errMsg { dlerror() };
 #endif
 
-        CRASH(
-            System::ErrorCode::DLLoadError,
-            "Couldn't load DL ", dllPath,
-            "\n\tInfo: ", errMsg
-        );
+        LOGE(System::LogLevel::High, "Couldn't load DL ", dllPath, "\n\tInfo: ", errMsg);
+        return System::ErrorCode::DLLoadError;
     }
 
 #if defined(CSR_UNIX) || defined(CSR_APPLE)
@@ -75,22 +75,43 @@ dlID_t SysCallHandler::LoadDl(std::string_view dllPath)
     return dll;
 }
 
-SysFunctionHandler SysCallHandler::MakeFunctionHandler(std::string_view functionSignature) const
+using HandlerPair = std::pair<FunctionHandlerSignature, SysFunctionHandler>;
+
+System::Result<HandlerPair> SysCallHandler::MakeFunctionHandler(std::string_view functionSignature)
 {
-    void (*handler)();
+    const FunctionHandlerSignature sign { ParseFunctionSignature(functionSignature) };
+    const size_t hash { Extensions::String::Hash(sign.name) };
+    if (this->boundFuncs.contains(hash))
+        return System::Result<HandlerPair>{
+            std::in_place_type<HandlerPair>,
+                sign,
+                this->boundFuncs.at(hash)
+        };
+
+    handle_t handler { nullptr };
 
     for (dlID_t dl : dlList)
     {
-        handler = DLSym<void(*)()>(dl, functionSignature);
-        if (handler)
-            break;
+        handler = DLSym<handle_t>(dl, sign.name);
+        if (handler) break;
     }
 
     if (handler)
-        return MakeCifFromSignature(
-            ParseFunctionSignature(functionSignature),
-            handler
-        );
+    {
+        System::Result<const SysFunctionHandler> fnHandler { MakeCifFromSignature(sign, handler) };
+
+        if (std::holds_alternative<System::ErrorCode>(fnHandler))
+            return std::get<System::ErrorCode>(fnHandler);
+
+        const SysFunctionHandler handler { std::get<const SysFunctionHandler>(fnHandler) };
+
+        this->BindFunction(hash, handler);
+        return System::Result<HandlerPair>{
+            std::in_place_type<HandlerPair>,
+                sign,
+                handler
+        };
+    }
 
 #ifdef CSR_WIN
     DWORD errID { GetLastError() };
@@ -112,82 +133,97 @@ SysFunctionHandler SysCallHandler::MakeFunctionHandler(std::string_view function
     std::string  errMsg { dlerror() };
 #endif
 
-    CRASH(
-        System::ErrorCode::DLSymbolError,
-        "Couldn't get symbol ", functionSignature,
-        "\n\tInfo: ", errMsg
-    );
-    return {};
+    LOGE(System::LogLevel::High, "Couldn't get symbol ", sign.name, "\n\tInfo: ", errMsg);
+    return System::ErrorCode::DLSymbolError;
 }
 
 // Format must be "returnType fnName ..spaceSeperatedParamTypes..."
 // param types must be one of:
 //      - (u)int32
-//      - bool
 //      - (u)int8
 //      - float
-//      - pointers to any of these
-//      - or native pointers
+//      - or pointers to these, with 'ptr'
 // return types are the same but extra 'void'
 // 'const' keyword is not allowed.
-FunctionHandlerSignature ParseFunctionSignature(std::string_view signature)
+FunctionHandlerSignature SysCallHandler::ParseFunctionSignature(std::string_view signature)
 {
+    // skips whitespace
     std::vector<std::string> lexed { Extensions::String::Split(signature, ' ') };
     return {
-        lexed.at(0),
         lexed.at(1),
+        lexed.at(0),
         std::vector<std::string> { lexed.begin()+2, lexed.end() }
     };
 }
 
-ffi_type* DetectType(const std::string_view type, bool isReturn)
+// if the pointer is ends with *, then the argument/return value is
+// converted between VM/native pointers. If they're ptr, they're sent
+// directly.
+System::Result<ffi_type*> SysCallHandler::DetectType(const std::string_view type, bool isReturn)
 {
-    if (type.ends_with('*') || type == "ptr")
+    if (type == "ptr")
         return &ffi_type_pointer;
     else if (type == "int")
         return &ffi_type_sint32;
-    else if (type == "uint")
+    else if (type == "uint" || type.ends_with('*'))
         return &ffi_type_uint32;
     else if (type == "float")
         return &ffi_type_float;
-    else if (type == "bool")
-        return &ffi_type_uint8;
     else if (type == "char")
         return &ffi_type_sint8;
     else if (type == "uchar")
         return &ffi_type_uint8;
     else if (type == "void" && isReturn)
         return &ffi_type_void;
-    else {
-        CRASH(
-            System::ErrorCode::NativeCallError,
-            "Given type ", type, " is not supported by CSR in native function calls."
-        );
-        return &ffi_type_void;
+    else
+    {
+        LOGE(System::LogLevel::High, "Given type ", type, " is not supported by CSR in native function calls.");
+        return System::ErrorCode::NativeCallError;
     }
 }
 
-SysFunctionHandler MakeCifFromSignature(const FunctionHandlerSignature& signature, void (*fn)())
+System::Result<const SysFunctionHandler> SysCallHandler::MakeCifFromSignature(const FunctionHandlerSignature& signature, handle_t fn)
 {
     ffi_cif cif;
     ffi_type* args[signature.arguments.size()];
-    ffi_type* returnType { DetectType(signature.returnType, true) };
+
+    System::Result<ffi_type*> returnTypeResult { DetectType(signature.returnType, true) };
+
+    if (std::holds_alternative<System::ErrorCode>(returnTypeResult))
+        return std::get<System::ErrorCode>(returnTypeResult);
+
+    ffi_type* returnType { std::get<ffi_type*>(returnTypeResult) };
 
     for (int i = 0; i < signature.arguments.size(); i++)
-        args[i] = DetectType(signature.arguments.at(i), false);
+    {
+        System::Result<ffi_type*> argType { DetectType(signature.arguments.at(i), false) };
+
+        if (std::holds_alternative<System::ErrorCode>(argType))
+            return std::get<System::ErrorCode>(argType);
+
+        args[i] = std::get<ffi_type*>(argType);
+    }
 
     if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, signature.arguments.size(), returnType, args) != FFI_OK)
-        CRASH(
-            System::ErrorCode::NativeCallError,
-            "Couldn't create a handler for native function '", signature.name, "'."
-        );
-    return { fn, cif };
+    {
+        LOGE(System::LogLevel::High, "Couldn't create a handler for native function '", signature.name, "'.");
+        return System::ErrorCode::NativeCallError;
+    }
+
+    return System::Result<const SysFunctionHandler>{
+        std::in_place_type<const SysFunctionHandler>,
+            fn,
+            cif
+    };
 }
 
-int GetTypeSize(const ffi_type* type)
+System::Result<int> SysCallHandler::GetTypeSize(const ffi_type* type, bool isReturn)
 {
+    /*if (type == &ffi_type_pointer && isReturn)
+        return 4;
+    else */
     if (type == &ffi_type_pointer)
-        return sizeof(void*);
+        return static_cast<int>(sizeof(void*));
     else if (type == &ffi_type_sint32)
         return 4;
     else if (type == &ffi_type_uint32)
@@ -198,15 +234,11 @@ int GetTypeSize(const ffi_type* type)
         return 1;
     else if (type == &ffi_type_sint8)
         return 1;
-    else if (type == &ffi_type_uint8)
-        return 1;
     else if (type == &ffi_type_void)
         return 0;
-    else {
-        CRASH(
-            System::ErrorCode::NativeCallError,
-            "Given type is not supported by CSR in native function calls."
-        );
-        return 0;
+    else
+    {
+        LOGE(System::LogLevel::High, "Given type is not supported by CSR in native function calls.");
+        return System::ErrorCode::NativeCallError;
     }
 }
