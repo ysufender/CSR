@@ -35,7 +35,7 @@ class FlatVM
         };
 
         FlatVM(FlatVM&& other) :
-            settings(other.settings),
+            settings(std::move(other.settings)),
             ram(std::move(other.ram)),
             rom(std::move(other.rom)),
             cpu(std::move(other.cpu)),
@@ -118,7 +118,7 @@ class FlatVM
         System::ErrorCode SetUpCommon();
         System::Result<std::pair<std::unique_ptr<const char[]>, std::streamoff>> ReadBytecode(std::istream& bytecode);
 
-        const System::ErrorCode BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
+        const System::ErrorCode BitLogic(OpCodes opc, std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
 
         VM_INLINE void* GetRealAddress(const uint32_t addr) { return (&this->ram)+addr; }
         VM_INLINE uint32_t GetVMAddress(void* ptr) { return static_cast<uint32_t>((char*)ptr - &this->ram); }

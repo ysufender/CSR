@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <variant>
 
 #include "extensions/syntaxextensions.hpp"
@@ -56,6 +57,7 @@ class FlatROM : public BaseROM
                 return System::ErrorCode::ROMAccessError;
             }
 
+            [[likely]]
             return data.get()+index;
         }
 
@@ -71,7 +73,7 @@ class FlatROM : public BaseROM
             System::ErrorCode isOk { index >= this->size };
             if (isOk == System::ErrorCode::Ok)
             {
-                System::Result<uchar_t> result {  };
+                System::Result<uchar_t> result { (*this)[index] };
 
                 if (std::holds_alternative<uchar_t>(result))
                     data = std::get<uchar_t>(result);
@@ -84,7 +86,10 @@ class FlatROM : public BaseROM
         VM_INLINE System::Result<Slice> ReadSome(const sysbit_t index, const sysbit_t size) const override
         {
             if (index >= this->size || (index + size) > this->size) [[unlikely]]
-                CRASH(System::ErrorCode::ROMAccessError, "Index '", std::to_string(index), "' of FlatROM is invalid.");
+            {
+                LOGE(System::LogLevel::High, "Index '", std::to_string(index), "' of FlatROM is invalid.");
+                return System::ErrorCode::ROMAccessError;
+            }
 
             return Slice::New(this->data.get()+index, size);
         }

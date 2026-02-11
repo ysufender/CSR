@@ -1,13 +1,7 @@
 #include "CSRConfig.hpp"
 #include "csr.hpp"
 
-#ifdef BUILD_FLAT
 #include "bytemode/flat/flatvm.hpp"
-#endif
-#ifdef BUILD_STRUCTURED
-#include "bytemode/structured/vm.hpp"
-static_assert(false, "Structured VM is incomplete and not compatible with the current version of JASM. Use FlatVM instead.");
-#endif
 
 #ifndef TOOLCHAIN_MODE
 #include <csignal>
@@ -29,7 +23,7 @@ void sigHandler(int signum)
 
     if (pid == 0)
     {
-        LOGE(System::LogLevel::Medium, "Unexpected signal (", std::to_string(signum), "), aborting the program.");
+        LOGE(System::LogLevel::High, "Unexpected signal (", std::to_string(signum), "), aborting the program.");
         if (FastCout::Flush() != System::ErrorCode::Ok)
             std::cerr << "[ERROR] Couldn't flush the stoud, some messages may be missing.";
         _exit(0);
@@ -56,29 +50,36 @@ int csrmain(int argc, char** args)
             PrintHelp(flags);
         else if (flags.GetFlag<CLIParser::FlagType::Bool>("version"))
             PrintHeader();
+        else
+        {
+            std::filesystem::path exec { flags.GetFlag<CLIParser::FlagType::String>("exe") };
 
-        std::filesystem::path exec { flags.GetFlag<CLIParser::FlagType::String>("exe") };
+            if (exec.empty())
+                CRASH(System::ErrorCode::NoSourceFile, "CSR must have at least one file to execute.");
 
-        if (exec.empty())
-            CRASH(System::ErrorCode::NoSourceFile, "CSR must have at least one file to execute.");
-
-        FlatVM vm {FlatVM::VMSettings {
-            .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
-            .path = exec,
+            System::Result<FlatVM> vmRes { FlatVM::New(FlatVM::VMSettings {
+                .unsafe = flags.GetFlag<CLIParser::FlagType::Bool>("unsafe"),
+                .path = exec,
 #ifdef ENABLE_JIT
-            .jit = flags.GetFlag<CLIParser::FlagType::Bool>("jit"),
+                .jit = flags.GetFlag<CLIParser::FlagType::Bool>("jit"),
 #endif
-        }};
+            })};
 
-        errc = vm.Run();
+            if (System::None(vmRes))
+                CRASH(System::GetErr(vmRes), "Failed to initialize the VM.");
+
+            errc = System::Get(std::move(vmRes)).Run();
+        }
     }
     catch (const CSRException& exc)
     {
+        [[unlikely]]
         std::cerr << exc.Stringify();
         return static_cast<int>(exc.GetCode());
     }
     catch (const std::exception& exc)
     {
+        [[unlikely]]
         std::cerr << "An unexpected exception occured during process.\n\tProvided information: " 
                   << exc.what() 
                   << '\n';
@@ -86,6 +87,7 @@ int csrmain(int argc, char** args)
         return 1;
     }
 
+    [[likely]]
     if (errc != System::ErrorCode::Ok)
         std::cout << 
             "\nExited With " << static_cast<int>(errc) << " (" <<

@@ -19,7 +19,12 @@
 #define LOG(...) System::LogInternal(Extensions::String::Concat({__VA_ARGS__}), __FILE__, __LINE__)
 #define LOGW(...) System::LogWarning(Extensions::String::Concat({__VA_ARGS__}), __FILE__, __LINE__)
 #define LOGE(level, ...) System::LogError(Extensions::String::Concat({__VA_ARGS__}), level, __FILE__, __LINE__, System::ErrorCode::Bad)
-#define CRASH(code, ...) System::LogError(Extensions::String::Concat({__VA_ARGS__}), System::LogLevel::High, __FILE__, __LINE__, code)
+#define CRASH(code, ...) \
+    { \
+        std::string msg { Extensions::String::Concat({__VA_ARGS__}) }; \
+        System::LogError(std::string_view{msg}, System::LogLevel::High, __FILE__, __LINE__, code); \
+        throw CSRException(msg, __FILE__, __LINE__, code); \
+    }
 
 #define CSR_ERR(code, message) CSRException { message, __FILE__, __LINE__, code };
 
