@@ -22,6 +22,11 @@ class FlatROM : public BaseROM
             size(size)
         { }
 
+        VM_INLINE FlatROM(FlatROM&& other) :
+            data(std::move(other.data)),
+            size(other.size)
+        { }
+
         FlatROM(FlatROM&) = delete;
         void operator=(FlatROM const&) = delete;
 

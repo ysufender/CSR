@@ -34,6 +34,19 @@ class FlatVM
 #endif
         };
 
+        FlatVM(FlatVM&& other) :
+            settings(other.settings),
+            ram(std::move(other.ram)),
+            rom(std::move(other.rom)),
+            cpu(std::move(other.cpu)),
+            handler(std::move(other.handler)),
+#ifdef ENABLE_JIT
+            blocks(std::move(other.blocks)),
+            jitContext(std::move(other.jitContext)),
+#endif
+            assembly(std::move(other.assembly))
+        { }
+
         static System::Result<FlatVM> New(VMSettings settings);
 
 #ifdef TOOLCHAIN_MODE 
@@ -69,9 +82,18 @@ class FlatVM
         const System::ErrorCode Cycle();
 
     private:
-        // to create from filepath
-        // file must be in proper bytecode format, including assemblyinfo at the end.
-        FlatVM(VMSettings settings, std::istream& bytecode);
+        FlatVM() :
+            settings(),
+            ram(),
+            rom(),
+            cpu(ram),
+            handler(),
+#ifdef ENABLE_JIT
+            blocks(),
+            jitContext(),
+#endif
+            assembly()
+        { };
 
         AssemblyInfo assembly;
         FlatROM rom;
