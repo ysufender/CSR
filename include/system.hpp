@@ -68,16 +68,16 @@ MAKE_ENUM(ErrorCode, Ok, 0, ERER, IN_CLASS)
     using Result = std::variant<T, System::ErrorCode>;
 
     template<typename T>
-    static constexpr bool Some(Result<T> res) { return std::holds_alternative<T>(res); }
+    static constexpr bool Some(const Result<T>& res) noexcept { return std::holds_alternative<T>(res); }
 
     template<typename T>
-    static constexpr T Get(Result<T> res) { return std::get<T>(res); }
+    static constexpr T&& Get(Result<T>&& res) { return std::move(std::get<T>(res)); }
 
     template<typename T>
-    static constexpr bool None(Result<T> res) { return std::holds_alternative<System::ErrorCode>(res); }
+    static constexpr bool None(const Result<T>& res) noexcept { return std::holds_alternative<System::ErrorCode>(res); }
 
     template<typename T>
-    static constexpr System::ErrorCode GetErr(Result<T> res) { return std::get<System::ErrorCode>(res); }
+    static constexpr System::ErrorCode GetErr(Result<T>& res) { return std::get<System::ErrorCode>(res); }
 
     enum class LogLevel
     {

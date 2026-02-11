@@ -8,6 +8,7 @@
 #include <ffi.h>
 #include <fstream>
 #include <functional>
+#include <ios>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -23,7 +24,18 @@
 #include "bytemode/instructions.hpp"
 #include "bytemode/jit.hpp"
 #include "CSRConfig.hpp"
+#include "slice.hpp"
 #include "system.hpp"
+
+template<typename T>
+using Res = System::Result<T>;
+
+#define None(res) \
+    if (System::None(res)) [[unlikely]] \
+        return System::GetErr(res)
+
+#define Get(res) \
+    System::Get(std::move(res))
 
 #define OPR const System::ErrorCode
 #define NOT_IMP(name) \
@@ -33,7 +45,7 @@
 #define Enumc(regn) static_cast<char>(regn)
 #define Is8BitReg(reg) (Enumc(reg) >= Enumc(RegisterModeFlags::al)) && (Enumc(reg) <= Enumc(RegisterModeFlags::flg))
 #define RomSafetyCheck(addr) \
-        if (address < 12 || address > rom.Size()) \
+        if (address < 12 || address > rom.Size()) [[unlikely]] \
             return System::ErrorCode::ROMAccessError;
 
 #define block(expr) \
@@ -44,7 +56,7 @@
 
 using Numo = NumericModeFlags;
 
-static System::Result<sysbit_t*> GetRegister32Bit(RegisterModeFlags reg, FlatCPU::State& state)
+static Res<sysbit_t*> GetRegister32Bit(RegisterModeFlags reg, FlatCPU::State& state)
 {
     static sysbit_t dummy { 0 };
     switch (reg)
@@ -64,7 +76,7 @@ static System::Result<sysbit_t*> GetRegister32Bit(RegisterModeFlags reg, FlatCPU
     }
 }
 
-static System::Result<uchar_t*> GetRegister8Bit(RegisterModeFlags reg, FlatCPU::State& state)
+static Res<uchar_t*> GetRegister8Bit(RegisterModeFlags reg, FlatCPU::State& state)
 {
     static uchar_t dummy { 0 };
     switch (reg)
@@ -116,12 +128,11 @@ System::ErrorCode FlatVM::SetUpCommon()
     {
         for (const auto& [symbol, addr] : assembly.Symbols())
         {
-            System::Result<uchar_t> res { rom[addr] };
+            Res<uchar_t> res { rom[addr] };
 
-            if (System::None(res))
-                return System::GetErr(res);
+            None(res);
 
-            if (System::Get(res) <= OpCodesMax)
+            if (Get(res) <= OpCodesMax)
                 blocks.Add(addr);
         }
 
@@ -152,7 +163,7 @@ System::ErrorCode FlatVM::SetUpCommon()
     }
 #endif
 
-    if (InitStandardLibrary(handler) != System::ErrorCode::Ok)
+    if (InitStandardLibrary(handler) != System::ErrorCode::Ok) [[unlikely]]
     {
         LOGE(System::LogLevel::High, "Failed to initialize standard library functions.");
         return System::ErrorCode::VMError;
@@ -162,7 +173,7 @@ System::ErrorCode FlatVM::SetUpCommon()
 }
 
 using BytecodePair = std::pair<std::unique_ptr<const char[]>, std::streamoff>;
-System::Result<BytecodePair> FlatVM::ReadBytecode(std::istream& bytecode)
+Res<BytecodePair> FlatVM::ReadBytecode(std::istream& bytecode)
 {
     // TODO: All bytecodes must include AssemblyInfo
 #ifndef TOOLCHAIN_MODE
@@ -183,7 +194,7 @@ System::Result<BytecodePair> FlatVM::ReadBytecode(std::istream& bytecode)
 #endif
 
     //if (settings.path.extension() != ".jef")
-    if (!(assembly.Flags() & AssemblyFlags::Executable))
+    if (!(assembly.Flags() & AssemblyFlags::Executable)) [[unlikely]]
     {
         LOGE(System::LogLevel::High, "FlatVM does not support given filetype ", settings.path.c_str(), ". It is not marked as an executable.");
         return System::ErrorCode::UnsupportedFileType;
@@ -198,53 +209,77 @@ System::Result<BytecodePair> FlatVM::ReadBytecode(std::istream& bytecode)
     std::unique_ptr<char[]> data { std::make_unique_for_overwrite<char[]>(bytecodeEnd) };
     bytecode.read(data.get(), bytecodeEnd);
 
-    return System::Result<BytecodePair>{
+    return Res<BytecodePair>{
         std::in_place_type<BytecodePair>,
             rval(data),
             bytecodeEnd
     };
 }
 
-System::Result<FlatVM> FlatVM::New(VMSettings settings)
+Res<FlatVM> FlatVM::New(VMSettings settings)
 {
-    if (!std::filesystem::exists(settings.path))
+    if (!std::filesystem::exists(settings.path)) [[unlikely]]
     {
         LOGE(System::LogLevel::High, "Couldn't find executable ", settings.path.string());
         return System::ErrorCode::SourceFileNotFound;
     }
 
-    System::Result<std::ifstream> bytecodeRes { System::OpenInFile(settings.path) };
+    Res<std::ifstream> streamRes { System::OpenInFile(settings.path) };
+    None(streamRes);
 
+    // Create ROM
+    std::ifstream bytecode { Get(streamRes) };
 
-}
+    FlatVM vm;
+    vm.settings = settings;
 
-FlatVM::FlatVM(FlatVM::VMSettings settings, std::istream& bytecode) :
-    settings(settings),
-    ram(),
-    rom(),
-    cpu(ram),
-    handler(),
-#ifdef ENABLE_JIT
-    blocks(),
-    jitContext(),
-#endif
-    assembly()
-{
-    System::Result<BytecodePair> bytecodeRes { ReadBytecode(bytecode) };
-    // TODO: Continue
+    Res<BytecodePair> bytecodeRes { vm.ReadBytecode(bytecode) };
     bytecode.close();
 
-    rom = FlatROM { rval(data), static_cast<sysbit_t>(size) };
-    cpu.state.pc = IntegerFromBytes<sysbit_t>(rom.ReadSome(0, 4).data);
-    ram = FlatRAM {
-        IntegerFromBytes<sysbit_t>(rom.ReadSome(4, 4).data),
-        IntegerFromBytes<sysbit_t>(rom.ReadSome(8, 4).data)
-    };
+    None(bytecodeRes);
 
-    SetUpCommon();
+    auto [data, size] = Get(bytecodeRes);
+
+    Res<FlatROM> romRes { FlatROM { std::move(data), static_cast<sysbit_t>(size) } };
+
+    None(romRes);
+
+    vm.rom = Get(romRes);
+
+    // Create RAM
+    Res<Slice> stackSizeRes { vm.rom.ReadSome(4, 4) };
+    None(stackSizeRes);
+
+    Res<Slice> heapSizeRes { vm.rom.ReadSome(8, 4) };
+    None(heapSizeRes);
+
+    Res<FlatRAM> ramRes { FlatRAM::New(
+        IntegerFromBytes<sysbit_t>(Get(stackSizeRes).data),
+        IntegerFromBytes<sysbit_t>(Get(heapSizeRes).data)
+    )};
+
+    None(ramRes);
+
+    vm.ram = Get(ramRes);
+
+    // Create CPU
+    Res<Slice> pcRes { vm.rom.ReadSome(0, 4) };
+    None(pcRes);
+
+    FlatCPU cpu { vm.ram };
+
+    cpu.state.pc = IntegerFromBytes<sysbit_t>(Get(pcRes).data);
+
+    vm.SetUpCommon();
+
+    return Res<FlatVM>{
+        std::in_place_type<FlatVM>,
+        std::move(vm)
+    }; 
 }
 
 #ifdef TOOLCHAIN_MODE
+#error "This section of code is not adapted to the result typed structure of the codebase YET"
 FlatVM::FlatVM(FlatVM::VMSettings settings, AssemblyInfo info, std::istream& bytecode) :
     settings(settings),
     ram(),
@@ -303,17 +338,19 @@ const System::ErrorCode FlatVM::Run() noexcept
 
     try
     {
-        while (cpu.state.pc < rom.Size() && errcx == System::ErrorCode::Ok)
+        while (cpu.state.pc < rom.Size() && errcx == System::ErrorCode::Ok) [[likely]]
             errcx = Cycle();
     }
     catch (const CSRException& e)
     {
+        [[unlikely]]
         std::cout << e;
         return e.GetCode();
     }
     catch (const std::exception& e)
     {
-        LOGE(System::LogLevel::Medium, "Unhandled exception.\n\t", e.what());
+        [[unlikely]]
+        LOGE(System::LogLevel::High, "Unhandled exception.\n\t", e.what());
         return System::ErrorCode::UnhandledException;
     }
 
@@ -387,12 +424,12 @@ const System::ErrorCode FlatVM::Cycle()
         uchar_t op;
         System::ErrorCode code = rom.TryRead(cpu.state.pc, op);
         if (code != System::ErrorCode::Ok) [[unlikely]] {
-            LOGE(System::LogLevel::Medium, "ROM read error: ", System::ErrorCodeString(code));
+            LOGE(System::LogLevel::High, "ROM read error: ", System::ErrorCodeString(code));
             return code;
         }
 
         if (op >= std::size(jumpTable)) [[unlikely]] {
-            LOGE(System::LogLevel::Medium, "Invalid opcode '", std::to_string(op), "' at PC=", std::to_string(cpu.state.pc));
+            LOGE(System::LogLevel::High, "Invalid opcode '", std::to_string(op), "' at PC=", std::to_string(cpu.state.pc));
             return System::ErrorCode::InvalidInstruction;
         }
 
@@ -402,82 +439,121 @@ const System::ErrorCode FlatVM::Cycle()
         op_NoOperation: block()
 
         op_StoreThirtyTwo: block(
-            const System::ErrorCode err { cpu.PushSome(rom.ReadSome(cpu.state.pc, 4)) };
-            if (err == System::ErrorCode::Ok)
+            Res<Slice> romRes { rom.ReadSome(cpu.state.pc, 4) };
+
+            None(romRes);
+
+            const System::ErrorCode err { cpu.PushSome(Get(romRes)) };
+
+            if (err == System::ErrorCode::Ok) [[likely]]
                 cpu.state.pc+=4;
+
             return err;
         )
 
         op_StoreEight: block(
-            const System::ErrorCode code { cpu.Push(rom.Read(cpu.state.pc)) };
-            if (code == System::ErrorCode::Ok)
+            Res<uchar_t> romRes { rom.Read(cpu.state.pc) };
+
+            None(romRes);
+
+            const System::ErrorCode code { cpu.Push(Get(romRes)) };
+
+            if (code == System::ErrorCode::Ok) [[likely]]
                 cpu.state.pc++;
+
             return code;
         )
 
         op_StoreFromSymbol: block(
+            Res<uchar_t> romRes { rom.Read(cpu.state.pc-1) };
+
+            None(romRes);
+
             sysbit_t size {
                 static_cast<sysbit_t>
-                (rom.Read(cpu.state.pc-1) == (char)OpCodes::stes ? 1 : 4)
+                (Get(romRes) == (char)OpCodes::stes ? 1 : 4)
             };
 
-            const Slice symbolData { rom.ReadSome(cpu.state.pc, 4) };
-            const sysbit_t symbol { IntegerFromBytes<sysbit_t>(symbolData.data) };
-            const Slice valueData { rom.ReadSome(symbol, size) };
+            Res<Slice> symbolDataRes { rom.ReadSome(cpu.state.pc, 4) };
+            None(symbolDataRes);
 
-            const System::ErrorCode err { cpu.PushSome(valueData) };
-            if (err == System::ErrorCode::Ok)
+            sysbit_t symbol { IntegerFromBytes<sysbit_t>(Get(symbolDataRes).data) };
+
+            Res<Slice> valueDataRes { rom.ReadSome(symbol, size) };
+            None(valueDataRes);
+
+            const System::ErrorCode err { cpu.PushSome(Get(valueDataRes)) };
+
+            if (err == System::ErrorCode::Ok) [[likely]]
                 cpu.state.pc+=4;
+
             return err;
         )
 
         op_LoadFromStack: block(
+            Res<uchar_t> romRes { rom.Read(cpu.state.pc-1) };
+            None(romRes);
+
             sysbit_t size {
                 static_cast<sysbit_t>
-                (rom.Read(cpu.state.pc-1) == (char)OpCodes::ldt ? 4 : 1)
+                (Get(romRes) == (char)OpCodes::ldt ? 4 : 1)
             };
 
-            const Slice values { ram.ReadSome(cpu.state.sp-size, size) };
-            // ldc no longer allocates memory itself.
-            // it should be allocated and address must be put on &ebx beforehand
-            //const sysbit_t alloc { ram.Allocate(size) };
+            Res<Slice> valuesRes { ram.ReadSome(cpu.state.sp-size, size) };
+            None(valuesRes);
 
-            const System::ErrorCode errc { ram.WriteSome(cpu.state.ebx, values) };
-            if (errc != System::ErrorCode::Ok)
-                // even though we didn't allocate here, we free in case of an error.
+            const System::ErrorCode errc { ram.WriteSome(cpu.state.ebx, Get(valuesRes)) };
+
+            if (errc != System::ErrorCode::Ok) [[likely]]
                 return ram.Deallocate(cpu.state.ebx, size);
+
             return errc;
 
         )
 
         op_ReadFromHeap: block(
+            Res<uchar_t> romRes { rom.Read(cpu.state.pc-1) };
+            None(romRes);
+
             sysbit_t size {
                 static_cast<sysbit_t>
-                (rom.Read(cpu.state.pc-1) == (char)OpCodes::rdt ? 4 : 1)
+                (Get(romRes) == (char)OpCodes::rdt ? 4 : 1)
             };
 
-            const Slice values { ram.ReadSome(cpu.state.ebx, size) };
+            Res<Slice> valuesRes { ram.ReadSome(cpu.state.ebx, size) };
+            None(valuesRes);
 
-            const System::ErrorCode errc { cpu.PushSome(values) };
+            const System::ErrorCode errc { cpu.PushSome(Get(valuesRes)) };
             return errc;
         )
 
         op_ReadFromRegister: block(
-            RegisterModeFlags reg { rom.Read(cpu.state.pc) };
+            Res<uchar_t> regRes { rom.Read(cpu.state.pc) };
+            None(regRes);
+
+            RegisterModeFlags reg { Get(regRes) };
             sysbit_t size { Is8BitReg(reg) ? sysbit_t{1} : sysbit_t{4} };
             System::ErrorCode err;
 
             if (Is8BitReg(reg))
             {
                 char data[1];
-                BytesFromInteger<uchar_t>(GetRegister8Bit(reg, cpu.state), data);
-                err = cpu.PushSome({ data, size });
+                Res<uchar_t*> regRes { GetRegister8Bit(reg, cpu.state) };
+                None(regRes);
+
+                BytesFromInteger<uchar_t>(*Get(regRes), data);
+
+                err = cpu.PushSome(Get(Slice::New(data, size)));
             }
             else
             {
                 char data[4];
-                BytesFromInteger<sysbit_t>(GetRegister32Bit(reg, cpu.state), data);
-                err = cpu.PushSome({ data, size });
+                Res<sysbit_t*> regRes { GetRegister32Bit(reg, cpu.state) };
+                None(regRes);
+
+                BytesFromInteger<sysbit_t>(*Get(regRes), data);
+                
+                err = cpu.PushSome(Get(Slice::New(data, size)));
             }
 
             if (err == System::ErrorCode::Ok)
@@ -487,23 +563,38 @@ const System::ErrorCode FlatVM::Cycle()
 
         op_Move: block(
             System::ErrorCode err;
-            RegisterModeFlags regFlag { rom.Read(cpu.state.pc) };
+
+            Res<uchar_t> regRes { rom.Read(cpu.state.pc) };
+            None(regRes);
+
+            RegisterModeFlags regFlag { Get(regRes) };
             sysbit_t size { Is8BitReg(regFlag) ? sysbit_t{1} : sysbit_t{4} };
 
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::movc:
                 {
                     if (size == 1)
                     {
-                        GetRegister8Bit(regFlag, cpu.state) = rom.Read(cpu.state.pc+1);
+                        Res<uchar_t*> lhsRes { GetRegister8Bit(regFlag, cpu.state) };
+                        None(lhsRes);
+
+                        Res<uchar_t> rhsRes { rom.Read(cpu.state.pc+1) };
+                        None(rhsRes);
+
+                        *Get(lhsRes) = Get(rhsRes);
+
                         cpu.state.pc+=2;
                     }
                     else
                     {
-                        GetRegister32Bit(regFlag, cpu.state) = IntegerFromBytes<sysbit_t>(
-                            rom.ReadSome(cpu.state.pc+1, 4).data
-                        );
+                        Res<sysbit_t*> lhsRes { GetRegister32Bit(regFlag, cpu.state) };
+                        None(lhsRes);
+
+                        Res<Slice> rhsRes { rom.ReadSome(cpu.state.pc+1, 4) };
+                        None(rhsRes);
+
+                        *Get(lhsRes) = IntegerFromBytes<sysbit_t>(Get(rhsRes).data);
                         cpu.state.pc+=5;
                     }
                     return System::ErrorCode::Ok;
@@ -512,13 +603,29 @@ const System::ErrorCode FlatVM::Cycle()
                 case OpCodes::movs:
                 {
                     if (size == 1)
-                        GetRegister8Bit(regFlag, cpu.state) = IntegerFromBytes<uchar_t>(
-                            ram.ReadSome(cpu.state.sp-1, 1).data
+                    {
+                        Res<uchar_t*> lhsRes { GetRegister8Bit(regFlag, cpu.state) };
+                        None(lhsRes);
+
+                        Res<Slice> rhsRes { ram.ReadSome(cpu.state.sp-1, 1) };
+                        None(rhsRes);
+
+                        *Get(lhsRes) = IntegerFromBytes<uchar_t>(
+                            Get(rhsRes).data
                         );
+                    }
                     else
-                        GetRegister32Bit(regFlag, cpu.state) = IntegerFromBytes<sysbit_t>(
-                            ram.ReadSome(cpu.state.sp-4, 4).data
+                    {
+                        Res<sysbit_t*> lhsRes { GetRegister32Bit(regFlag, cpu.state) };
+                        None(lhsRes);
+
+                        Res<Slice> rhsRes { ram.ReadSome(cpu.state.sp-4, 4) };
+                        None(rhsRes);
+
+                        *Get(lhsRes) = IntegerFromBytes<sysbit_t>(
+                            Get(rhsRes).data
                         );
+                    }
 
                     cpu.state.pc++;
                     return System::ErrorCode::Ok;
@@ -526,71 +633,125 @@ const System::ErrorCode FlatVM::Cycle()
 
                 case OpCodes::movr:
                 {
-                    RegisterModeFlags reg2Flag { rom.Read(cpu.state.pc+1)};
+                    regRes = rom.Read(cpu.state.pc+1);
+                    None(regRes);
+
+                    RegisterModeFlags reg2Flag { Get(regRes) };
                     sysbit_t size2 { Is8BitReg(reg2Flag) ? sysbit_t{1} : sysbit_t{4} };
                     sysbit_t val;
 
                     if (size == 1)
-                        val = static_cast<sysbit_t>(GetRegister8Bit(regFlag, cpu.state));
+                    {
+                        Res<uchar_t*> rhsRes { GetRegister8Bit(regFlag, cpu.state) };
+                        None(rhsRes);
+
+                        val = static_cast<sysbit_t>(*Get(rhsRes));
+                    }
                     else
-                        val = GetRegister32Bit(regFlag, cpu.state);
+                    {
+                        Res<sysbit_t*> rhsRes { GetRegister32Bit(regFlag, cpu.state) };
+                        None(rhsRes);
+
+                        val = *Get(rhsRes);
+                    }
 
                     if (size2 == 1)
-                        GetRegister8Bit(reg2Flag, cpu.state) = val;
+                    {
+                        Res<uchar_t*> lhsRes { GetRegister8Bit(reg2Flag, cpu.state) };
+                        None(lhsRes);
+
+                        *Get(lhsRes) = val;
+                    }
                     else
-                        GetRegister32Bit(reg2Flag, cpu.state) = val;
+                    {
+                        Res<sysbit_t*> lhsRes { GetRegister32Bit(reg2Flag, cpu.state) };
+                        None(lhsRes);
+
+                        *Get(lhsRes) = val;
+                    }
+
                     cpu.state.pc+=2;
                     return System::ErrorCode::Ok;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
-
-
         )
 
         op_Add32: block(
             sysbit_t int1;
             sysbit_t int2;
-            int1 = IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data);
+
+            Res<Slice> sliceRes { ram.ReadSome(cpu.state.sp-4, 4) };
+            None(sliceRes);
+
+            int1 = IntegerFromBytes<sysbit_t>(Get(sliceRes).data);
             cpu.PopSome(4);
-            int2 = IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data);
+
+            Res<Slice> sliceRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+            None(sliceRes2);
+
+            int2 = IntegerFromBytes<sysbit_t>(Get(sliceRes2).data);
             cpu.PopSome(4);
 
             char data[4];
             BytesFromInteger(int1+int2, data);
-            return cpu.PushSome({ data, 4 });
+
+            return cpu.PushSome(Get(Slice::New(data, 4)));
         )
 
         op_AddFloat: block(
             float float1;
             float float2;
-            float1 = FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data);
+
+            Res<Slice> sliceRes { ram.ReadSome(cpu.state.sp-4, 4) };
+            None(sliceRes);
+
+            float1 = FloatFromBytes(Get(sliceRes).data);
             cpu.PopSome(4);
-            float2 = FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data);
+
+            Res<Slice> sliceRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+            None(sliceRes2);
+
+            float2 = FloatFromBytes(Get(sliceRes2).data);
             cpu.PopSome(4);
 
             char data[4];
             BytesFromFloat<char>(float1+float2, data);
-            return cpu.PushSome({ data, 4 });
+
+            return cpu.PushSome(Get(Slice::New(data, 4)));
     )
 
         op_Add8: block(
             uchar_t byte1;
             uchar_t byte2;
-            byte1 = ram.Read(cpu.state.sp-1);
+
+            Res<char> res { ram.Read(cpu.state.sp-1) };
+            None(res);
+            byte1 = Get(res);
             cpu.Pop();
-            byte2 = ram.Read(cpu.state.sp-1);
+
+            res = ram.Read(cpu.state.sp-1);
+            None(res);
+            byte2 = Get(res);
             cpu.Pop();
 
             return cpu.Push(byte1+byte2);
         )
 
         op_AddReg: block(
-            OpCodes op { rom.Read(cpu.state.pc-1) };
-            RegisterModeFlags reg1 { rom.Read(cpu.state.pc) };
-            RegisterModeFlags reg2 { rom.Read(cpu.state.pc+1) };
+            Res<uchar_t> res { rom.Read(cpu.state.pc-1) };
+            None(res);
+            OpCodes op { Get(res) };
+
+            res = rom.Read(cpu.state.pc);
+            None(res);
+            RegisterModeFlags reg1 { Get(res) };
+
+            res = rom.Read(cpu.state.pc+1);
+            None(res);
+            RegisterModeFlags reg2 { Get(res) };
 
             if (
                 /*case 1*/
@@ -603,30 +764,44 @@ const System::ErrorCode FlatVM::Cycle()
                 ((op != OpCodes::addrb)
                 &&
                 (Is8BitReg(reg1) || Is8BitReg(reg2)))
-            )
-                CRASH(System::ErrorCode::InvalidSpecifier,
-                    "PC: ", std::to_string(cpu.state.pc-1),
+            ) [[unlikely]]
+            {
+                LOGE(System::LogLevel::High,
+                    "PC: ",std::to_string(cpu.state.pc-1),
                     " ", OpCodesString(op),
                     " ", std::to_string((int)reg1),
                     " ", std::to_string((int)reg2),
                     " Given registers are not compatible with given numeric type."
                 );
+                return System::ErrorCode::InvalidSpecifier;
+            }
 
             cpu.state.pc+=2;
 
             if (Is8BitReg(reg1))
             {
-                uchar_t reg1ref { GetRegister8Bit(reg1, cpu.state) };
-                uchar_t& reg2ref { GetRegister8Bit(reg2, cpu.state) };
-                reg2ref += reg1ref;
+                Res<uchar_t*> regRes { GetRegister8Bit(reg1, cpu.state) };
+                None(regRes);
+                uchar_t reg1 { *Get(regRes) };
+
+                regRes = GetRegister8Bit(reg2, cpu.state);
+                None(regRes);
+                uchar_t& reg2ref { *Get(regRes) };
+
+                reg2ref += reg1;
             }
             else if (op == OpCodes::addrf)
             {
-                sysbit_t reg1ref { GetRegister32Bit(reg1, cpu.state) };
-                sysbit_t& reg2ref { GetRegister32Bit(reg2, cpu.state) };
+                Res<sysbit_t*> regRes { GetRegister32Bit(reg1, cpu.state) };
+                None(regRes);
+                sysbit_t reg1 { *Get(regRes) };
+
+                regRes = GetRegister32Bit(reg2, cpu.state);
+                None(regRes);
+                sysbit_t& reg2ref { *Get(regRes) };
 
                 char data[4];
-                BytesFromInteger(reg1ref, data);
+                BytesFromInteger(reg1, data);
                 float float1 { FloatFromBytes( data)};
 
                 BytesFromInteger(reg2ref, data);
@@ -637,9 +812,15 @@ const System::ErrorCode FlatVM::Cycle()
             }
             else
             {
-                sysbit_t reg1ref { GetRegister32Bit(reg1, cpu.state) };
-                sysbit_t& reg2ref { GetRegister32Bit(reg2, cpu.state) };
-                reg2ref += reg1ref;
+                Res<sysbit_t*> regRes { GetRegister32Bit(reg1, cpu.state) };
+                None(regRes);
+                sysbit_t reg1 { *Get(regRes) };
+
+                regRes = GetRegister32Bit(reg2, cpu.state);
+                None(regRes);
+                sysbit_t& reg2ref { *Get(regRes) };
+
+                reg2ref += reg1;
             }
             return System::ErrorCode::Ok;
         )
@@ -647,159 +828,199 @@ const System::ErrorCode FlatVM::Cycle()
         op_AddSafe32: block(
             sysbit_t int1;
             sysbit_t int2;
-            int1 = IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data);
-            int2 = IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-8, 4).data);
+
+            Res<Slice> sliceRes { ram.ReadSome(cpu.state.sp-4, 4) };
+            None(sliceRes);
+            int1 = IntegerFromBytes<sysbit_t>(Get(sliceRes).data);
+
+            Res<Slice> sliceRes2 { ram.ReadSome(cpu.state.sp-8, 4) };
+            None(sliceRes2);
+            int2 = IntegerFromBytes<sysbit_t>(Get(sliceRes2).data);
 
             char data[4];
             BytesFromInteger(int1+int2, data);
-            return cpu.PushSome({ data, 4 });
+
+            return cpu.PushSome(Get(Slice::New(data, 4)));
         )
 
         op_AddSafeFloat: block(
             float float1;
             float float2;
-            float1 = FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data);
-            float2 = FloatFromBytes(ram.ReadSome(cpu.state.sp-8, 4).data);
+
+            Res<Slice> sliceRes { ram.ReadSome(cpu.state.sp-4, 4) };
+            None(sliceRes);
+            float1 = FloatFromBytes(Get(sliceRes).data);
+
+            Res<Slice> sliceRes2 { ram.ReadSome(cpu.state.sp-8, 4) };
+            None(sliceRes2);
+            float2 = FloatFromBytes(Get(sliceRes2).data);
 
             char data[4];
             BytesFromFloat<char>(float1+float2, data);
-            return cpu.PushSome({ data, 4 });
+
+            return cpu.PushSome(Get(Slice::New(data, 4)));
         )
 
         op_AddSafe8: block(
             uchar_t byte1;
             uchar_t byte2;
-            byte1 = ram.Read(cpu.state.sp-1);
-            byte2 = ram.Read(cpu.state.sp-2);
+
+            Res<char> resRes { ram.Read(cpu.state.sp-1) };
+            None(resRes);
+            byte1 = Get(resRes);
+
+            resRes = ram.Read(cpu.state.sp-2);
+            None(resRes);
+            byte2 = Get(resRes);
 
             return cpu.Push(byte1+byte2);
         )
 
         op_MemCopy: block(
-            uchar_t compressedModes { static_cast<uchar_t>(rom.Read(cpu.state.pc)) };
-            MemoryModeFlags from { MemoryModeFlags(compressedModes & 0xF0) };
-            MemoryModeFlags to { MemoryModeFlags(compressedModes & 0x0F) };
+            sysbit_t fromAddr { *Get(GetRegister32Bit(RegisterModeFlags::eax, cpu.state)) };
+            sysbit_t toAddr { *Get(GetRegister32Bit(RegisterModeFlags::ebx, cpu.state)) };
+            sysbit_t size { *Get(GetRegister32Bit(RegisterModeFlags::ecx, cpu.state)) };
 
-            sysbit_t fromAddr { GetRegister32Bit(RegisterModeFlags::eax, cpu.state) };
-            sysbit_t toAddr { GetRegister32Bit(RegisterModeFlags::ebx, cpu.state) };
-            sysbit_t size { GetRegister32Bit(RegisterModeFlags::ecx, cpu.state) };
-
-            if ((toAddr + size) > ram.Size())
-                CRASH(
-                    System::ErrorCode::MemoryOverflow,
+            if ((toAddr + size) > ram.Size()) [[unlikely]]
+            {
+                LOGE(
+                    System::LogLevel::High,
                     "In ", nameof(MemCopy), " instruction will cause memory overflow.",
                     "\nTo Address: ", std::to_string(toAddr), " Size: ", std::to_string(size),
                     "\nMemory Size: ", std::to_string(ram.Size())
                 );
+                return System::ErrorCode::MemoryOverflow;
+            }
 
-            Slice dataToCopy { ram.ReadSome(fromAddr, size) };
-            const System::ErrorCode code { ram.WriteSome(toAddr, dataToCopy) };
+            Res<Slice> dataToCopy { ram.ReadSome(fromAddr, size) };
+            None(dataToCopy);
+            const System::ErrorCode code { ram.WriteSome(toAddr, Get(dataToCopy)) };
 
-            if (code == System::ErrorCode::Ok)
+            if (code == System::ErrorCode::Ok) [[likely]]
                 cpu.state.pc++;
+
             return code;
         )
 
         op_Increment: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::inci:
                 {
-                    if (cpu.state.sp < 4)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 4) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Increment),
                             "can't increment (u)int from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
-                    sysbit_t amount { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
-                    )};
+                    Res<Slice> sliceRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sliceRes);
+                    sysbit_t amount { IntegerFromBytes<sysbit_t>(Get(sliceRes).data) };
 
-                    sysbit_t stack { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
-                    )};
+                    Res<Slice> sliceRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sliceRes2);
+                    sysbit_t stack { IntegerFromBytes<sysbit_t>(Get(sliceRes2).data) };
 
                     char data[4];
                     BytesFromInteger(stack+amount, data);
-                    const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
+                    const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, Get(Slice::New(data, 4)))};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc+=4;
+
                     return code;
                 }
 
                 case OpCodes::incf:
                 {
-                    if (cpu.state.sp < 4)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 4) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Increment),
                             "can't increment (u)int from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
+                    Res<Slice> sliceRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sliceRes);
                     float amount { FloatFromBytes(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sliceRes).data
                     )};
 
+                    Res<Slice> sliceRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sliceRes);
                     float stack { FloatFromBytes(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sliceRes2).data
                     )};
 
                     char data[4];
                     BytesFromFloat(amount+stack, data);
-                    const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
+                    const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, Get(Slice::New(data, 4)))};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc+=4;
+
                     return code;
                 }
 
                 case OpCodes::incb:
                 {
-                    if (cpu.state.sp < 1)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 1) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Increment),
                             "can't increment (u)int from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
-                    uchar_t amount { static_cast<uchar_t>(
-                        rom.Read(cpu.state.pc)
-                    )};
-                    uchar_t stack { static_cast<uchar_t>(
-                        ram.Read(cpu.state.sp-1)
-                    )};
+                    Res<uchar_t> res { rom.Read(cpu.state.pc) };
+                    None(res);
+                    uchar_t amount { static_cast<uchar_t>(Get(res)) };
+
+                    Res<char> cRes = ram.Read(cpu.state.sp-1);
+                    None(cRes);
+                    uchar_t stack { static_cast<uchar_t>(Get(cRes)) };
 
                     const System::ErrorCode code { ram.Write(
                         cpu.state.sp-1,
                         amount + stack
                     )};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc++;
+
                     return code;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
-
-
         )
 
         op_IncrementReg: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::incri:
                 {
-                    sysbit_t& reg { GetRegister32Bit(
-                        RegisterModeFlags(rom.Read(cpu.state.pc)),
-                        cpu.state
-                    )};
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+                    None(modeRes);
 
+                    Res<sysbit_t*> regRes { GetRegister32Bit(RegisterModeFlags(Get(modeRes)), cpu.state) };
+                    None(regRes);
+                    sysbit_t& reg { *Get(regRes) };
+
+                    Res<Slice> sliceRes { rom.ReadSome(cpu.state.pc+1, 4) };
+                    None(sliceRes);
                     sysbit_t amount { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc+1, 4).data
+                        Get(sliceRes).data
                     )};
 
                     reg += amount;
@@ -810,18 +1031,20 @@ const System::ErrorCode FlatVM::Cycle()
 
                 case OpCodes::incrf:
                 {
-                    sysbit_t& reg { GetRegister32Bit(
-                        RegisterModeFlags(rom.Read(cpu.state.pc)),
-                        cpu.state
-                    )};
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+                    None(modeRes);
+
+                    Res<sysbit_t*> regRes { GetRegister32Bit( RegisterModeFlags(Get(modeRes)), cpu.state) };
+                    None(regRes);
+                    sysbit_t& reg { *Get(regRes) };
 
                     char data[4];
                     BytesFromInteger(reg, data);
                     float regVal { FloatFromBytes(data)};
 
-                    float amount { FloatFromBytes(
-                        rom.ReadSome(cpu.state.pc+1, 4).data
-                    )};
+                    Res<Slice> sliceRes { rom.ReadSome(cpu.state.pc+1, 4) };
+                    None(sliceRes);
+                    float amount { FloatFromBytes( Get(sliceRes).data) };
 
                     BytesFromFloat(regVal+amount, data);
                     reg = IntegerFromBytes<sysbit_t>(data);
@@ -832,14 +1055,16 @@ const System::ErrorCode FlatVM::Cycle()
 
                 case OpCodes::incrb:
                 {
-                    uchar_t& reg { GetRegister8Bit(
-                        RegisterModeFlags(rom.Read(cpu.state.pc)),
-                        cpu.state
-                    )};
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+                    None(modeRes);
 
-                    uchar_t amount { static_cast<uchar_t>(
-                        rom.Read(cpu.state.pc+1)
-                    )};
+                    Res<uchar_t*> regRes { GetRegister8Bit( RegisterModeFlags(Get(modeRes)), cpu.state) };
+                    None(regRes);
+                    uchar_t& reg { *Get(regRes) };
+
+                    modeRes = rom.Read(cpu.state.pc+1);
+                    None(modeRes);
+                    uchar_t amount { static_cast<uchar_t>(Get(modeRes)) };
 
                     reg += amount;
 
@@ -847,217 +1072,263 @@ const System::ErrorCode FlatVM::Cycle()
                     return System::ErrorCode::Ok;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
-
-
         )
 
         op_IncrementSafe: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::incsi:
                 {
-                    if (cpu.state.sp < 4)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 4) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Increment),
                             "can't increment (u)int from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
+                    Res<Slice> sliceRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sliceRes);
                     sysbit_t amount { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sliceRes).data
                     )};
 
+                    Res<Slice> sliceRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sliceRes2);
                     sysbit_t stack { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sliceRes2).data
                     )};
 
                     char data[4];
                     BytesFromInteger(stack+amount, data);
-                    const System::ErrorCode code { cpu.PushSome({ data, 4 })};
+                    const System::ErrorCode code { cpu.PushSome(Get(Slice::New(data, 4)))};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc+=4;
+
                     return code;
                 }
 
                 case OpCodes::incsf:
                 {
-                    if (cpu.state.sp < 4)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 4) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Increment),
                             "can't increment (u)int from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
+                    Res<Slice> sliceRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sliceRes);
                     float amount { FloatFromBytes(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sliceRes).data
                     )};
 
+                    Res<Slice> sliceRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sliceRes2);
                     float stack { FloatFromBytes(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sliceRes2).data
                     )};
 
                     char data[4];
                     BytesFromFloat(amount+stack, data);
-                    const System::ErrorCode code { cpu.PushSome({ data, 4 })};
+                    const System::ErrorCode code { cpu.PushSome(Get(Slice::New(data, 4)))};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc+=4;
+
                     return code;
                 }
 
                 case OpCodes::incsb:
                 {
-                    if (cpu.state.sp < 1)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 1) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Increment),
                             "can't increment (u)int from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
-                    uchar_t amount { static_cast<uchar_t>(
-                        rom.Read(cpu.state.pc)
-                    )};
-                    uchar_t stack { static_cast<uchar_t>(
-                        ram.Read(cpu.state.sp-1)
-                    )};
+                    Res<uchar_t> res { rom.Read(cpu.state.pc) };
+                    None(res);
+                    uchar_t amount { Get(res) };
 
-                    const System::ErrorCode code { cpu.Push(
-                        amount + stack
-                    )};
+                    Res<char> cRes { ram.Read(cpu.state.sp-1) };
+                    None(cRes);
+                    uchar_t stack { static_cast<uchar_t>(Get(cRes)) };
 
-                    if (code == System::ErrorCode::Ok)
+                    const System::ErrorCode code { cpu.Push( amount + stack) };
+
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc++;
+
                     return code;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_Decrement: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::dcri:
                 {
-                    if (cpu.state.sp < 4)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 4) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Decrement),
                             "can't decrement (u)int from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
                     sysbit_t amount { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes).data
                     )};
 
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
                     sysbit_t stack { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes2).data
                     )};
 
                     char data[4];
                     BytesFromInteger(stack - amount, data);
-                    const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
+                    const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, Get(Slice::New(data, 4)))};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc+=4;
+
                     return code;
                 }
 
                 case OpCodes::dcrf:
                 {
-                    if (cpu.state.sp < 4)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 4) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Decrement),
                             "can't decrement float from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
                     float amount { FloatFromBytes(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes).data
                     )};
 
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
                     float stack { FloatFromBytes(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes2).data
                     )};
 
                     char data[4];
                     BytesFromFloat(stack - amount, data);
-                    const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, {data, 4})};
+                    const System::ErrorCode code { ram.WriteSome( cpu.state.sp-4, Get(Slice::New(data, 4)))};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc+=4;
+
                     return code;
                 }
 
                 case OpCodes::dcrb:
                 {
-                    if (cpu.state.sp < 1)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 1) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Decrement),
                             "can't decrement (u)byte from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
-                    uchar_t amount { static_cast<uchar_t>(
-                        rom.Read(cpu.state.pc)
-                    )};
-                    uchar_t stack { static_cast<uchar_t>(
-                        ram.Read(cpu.state.sp-1)
-                    )};
+                    Res<uchar_t> res { rom.Read(cpu.state.pc) };
+                    None(res);
+                    uchar_t amount { Get(res) };
+
+                    Res<char> cRes { ram.Read(cpu.state.sp-1) };
+                    None(cRes);
+                    uchar_t stack { static_cast<uchar_t>(Get(cRes)) };
 
                     const System::ErrorCode code { ram.Write(
                         cpu.state.sp-1,
                         stack - amount
                     )};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc++;
+
                     return code;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_DecrementReg: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::dcrri:
                 {
-                    sysbit_t& reg { GetRegister32Bit(
-                        RegisterModeFlags(rom.Read(cpu.state.pc)),
-                        cpu.state
-                    )};
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+                    None(modeRes);
+                    Res<sysbit_t*> regRes { GetRegister32Bit( RegisterModeFlags(Get(modeRes)), cpu.state) };
+                    None(regRes);
+                    sysbit_t& reg { *Get(regRes) };
 
+                    Res<Slice> sliceRes { rom.ReadSome(cpu.state.pc+1, 4) };
+                    None(sliceRes);
                     sysbit_t amount { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc+1, 4).data
+                        Get(sliceRes).data
                     )};
 
                     reg -= amount;
 
                     cpu.state.pc+=5;
+
                     return System::ErrorCode::Ok;
                 }
 
                 case OpCodes::dcrrf:
                 {
-                    sysbit_t& reg { GetRegister32Bit(
-                        RegisterModeFlags(rom.Read(cpu.state.pc)),
-                        cpu.state
-                    )};
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+                    None(modeRes);
+
+                    Res<sysbit_t*> regRes { GetRegister32Bit( RegisterModeFlags(Get(modeRes)), cpu.state) };
+                    None(regRes);
+                    sysbit_t& reg { *Get(regRes) };
 
                     char data[4];
                     BytesFromInteger(reg, data);
                     float regVal { FloatFromBytes(data)};
 
+                    Res<Slice> sliceRes { rom.ReadSome(cpu.state.pc+1, 4) };
+                    None(sliceRes);
                     float amount { FloatFromBytes(
-                        rom.ReadSome(cpu.state.pc+1, 4).data
+                        Get(sliceRes).data
                     )};
 
                     BytesFromFloat(regVal - amount, data);
@@ -1069,109 +1340,129 @@ const System::ErrorCode FlatVM::Cycle()
 
                 case OpCodes::dcrrb:
                 {
-                    uchar_t& reg { GetRegister8Bit(
-                        RegisterModeFlags(rom.Read(cpu.state.pc)),
-                        cpu.state
-                    )};
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+                    None(modeRes);
 
-                    uchar_t amount { static_cast<uchar_t>(
-                        rom.Read(cpu.state.pc+1)
-                    )};
+                    Res<uchar_t*> regRes { GetRegister8Bit( RegisterModeFlags(Get(modeRes)), cpu.state) };
+                    None(regRes);
+                    uchar_t& reg { *Get(regRes) };
 
+                    modeRes = rom.Read(cpu.state.pc+1);
+                    None(modeRes);
+                    uchar_t amount { Get(modeRes) };
                     reg -= amount;
 
                     cpu.state.pc+=2;
                     return System::ErrorCode::Ok;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
-
-
         )
 
         op_DecrementSafe: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::dcrsi:
                 {
-                    if (cpu.state.sp < 4)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 4) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Decrement),
                             "can't decrement (u)int from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
                     sysbit_t amount { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes).data
                     )};
 
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
                     sysbit_t stack { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes2).data
                     )} ;
 
                     char data[4];
                     BytesFromInteger(stack - amount, data);
-                    const System::ErrorCode code { cpu.PushSome({ data, 4 })};
+                    const System::ErrorCode code { cpu.PushSome(Get(Slice::New(data, 4)))};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc+=4;
+
                     return code;
                 }
 
                 case OpCodes::dcrsf:
                 {
-                    if (cpu.state.sp < 4)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 4) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Decrement),
-                            "can't decrement (u)int from stack, SP < 4."
+                            "can't decrement float from stack, SP < 4."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
                     float amount { FloatFromBytes(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes).data
                     )};
 
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
                     float stack { FloatFromBytes(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes2).data
                     )};
 
                     char data[4];
                     BytesFromFloat(stack - amount, data);
-                    const System::ErrorCode code { cpu.PushSome({ data, 4 })};
+                    const System::ErrorCode code { cpu.PushSome(Get(Slice::New(data, 4)))};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc+=4;
+
                     return code;
                 }
 
                 case OpCodes::dcrsb:
                 {
-                    if (cpu.state.sp < 1)
-                        CRASH(
-                            System::ErrorCode::Bad,
+                    if (cpu.state.sp < 1) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "In ", nameof(Decrement),
-                            "can't decrement (u)int from stack, SP < 4."
+                            "can't decrement (u)byte from stack, SP < 1."
                         );
+                        return System::ErrorCode::Bad;
+                    }
 
-                    uchar_t amount { static_cast<uchar_t>(
-                        rom.Read(cpu.state.pc)
-                    )};
-                    uchar_t stack { static_cast<uchar_t>(
-                        ram.Read(cpu.state.sp-1)
-                    )};
+                    Res<uchar_t> res { rom.Read(cpu.state.pc) };
+                    None(res);
+                    uchar_t amount { Get(res) };
+
+                    Res<char> cRes { ram.Read(cpu.state.sp-1) };
+                    None(cRes);
+                    uchar_t stack { static_cast<uchar_t>(Get(cRes)) };
 
                     const System::ErrorCode code { cpu.Push(
                         stack - amount
                     )};
 
-                    if (code == System::ErrorCode::Ok)
+                    if (code == System::ErrorCode::Ok) [[likely]]
                         cpu.state.pc++;
+
                     return code;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
 
@@ -1201,58 +1492,66 @@ const System::ErrorCode FlatVM::Cycle()
         )
 
         op_SwapTop: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::swpt:
                 {
-                    if (cpu.state.sp < 8)
-                        CRASH(
-                            System::ErrorCode::RAMAccessError,
+                    if (cpu.state.sp < 8) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "Can't swap 32-bits on stack, SP < 8"
                         );
+                        return System::ErrorCode::RAMAccessError;
+                    }
 
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
                     sysbit_t bottom { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-8, 4).data
+                        Get(sRes).data
                     )};
 
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
                     sysbit_t top { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes2).data
                     )};
 
                     {
                         char data[4];
                         BytesFromInteger(top, data);
-                        const System::ErrorCode err { ram.WriteSome( cpu.state.sp-8, {data, 4} )};
+                        const System::ErrorCode err { ram.WriteSome( cpu.state.sp-8, Get(Slice::New(data, 4)))};
 
-                        if (err != System::ErrorCode::Ok)
+                        if (err != System::ErrorCode::Ok) [[unlikely]]
                             return err;
                     }
 
                     char data[4];
                     BytesFromInteger(bottom, data);
-                    return ram.WriteSome( cpu.state.sp-4, {data, 4});
+                    return ram.WriteSome( cpu.state.sp-4, Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::swpe:
                 {
-                    if (cpu.state.sp < 2)
-                        CRASH(
-                            System::ErrorCode::RAMAccessError,
+                    if (cpu.state.sp < 2) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "Can't swap 8-bits on stack, SP < 2"
                         );
+                        return System::ErrorCode::RAMAccessError;
+                    }
 
-                    char bottom {
-                        ram.Read(cpu.state.sp-2)
-                    };
+                    Res<char> bottom { ram.Read(cpu.state.sp-2) };
+                    None(bottom);
 
-                    char top {
-                        ram.Read(cpu.state.sp-1)
-                    };
+                    Res<char> top { ram.Read(cpu.state.sp-1) };
+                    None(top);
 
                     {
                         const System::ErrorCode err { ram.Write(
                             cpu.state.sp-2,
-                            top
+                            Get(top)
                         )};
 
                         if (err != System::ErrorCode::Ok)
@@ -1261,153 +1560,204 @@ const System::ErrorCode FlatVM::Cycle()
 
                     return ram.Write(
                         cpu.state.sp-1,
-                        bottom
+                        Get(bottom)
                     );
                 }
 
                 case OpCodes::swpr:
                 {
-                    RegisterModeFlags reg1flag {
-                        rom.Read(cpu.state.pc)
-                    };
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+                    None(modeRes);
+                    RegisterModeFlags reg1flag { Get(modeRes) };
 
-                    RegisterModeFlags reg2flag {
-                        rom.Read(cpu.state.pc+1)
-                    };
+                    modeRes = rom.Read(cpu.state.pc+1);
+                    None(modeRes);
+                    RegisterModeFlags reg2flag { Get(modeRes) };
 
                     sysbit_t reg1;
                     sysbit_t reg2;
-                    if (Is8BitReg(reg1flag))
-                        reg1 = static_cast<sysbit_t>(GetRegister8Bit(reg1flag, cpu.state));
-                    else
-                        reg1 = GetRegister32Bit(reg1flag, cpu.state);
-                    if (Is8BitReg(reg2flag))
-                        reg2 = static_cast<sysbit_t>(GetRegister8Bit(reg2flag, cpu.state));
-                    else
-                        reg2 = GetRegister32Bit(reg2flag, cpu.state);
 
                     if (Is8BitReg(reg1flag))
-                        GetRegister8Bit(reg1flag, cpu.state) = static_cast<uchar_t>(reg2);
+                    {
+                        Res<uchar_t*> regRes { GetRegister8Bit(reg1flag, cpu.state) };
+                        None(regRes);
+                        reg1 = static_cast<sysbit_t>(*Get(regRes));
+                    }
                     else
-                        GetRegister32Bit(reg1flag, cpu.state) = reg2;
+                    {
+                        Res<sysbit_t*> regRes { GetRegister32Bit(reg1flag, cpu.state) };
+                        None(regRes);
+                        reg1 = *Get(regRes);
+                    }
+
                     if (Is8BitReg(reg2flag))
-                        GetRegister8Bit(reg2flag, cpu.state) = static_cast<uchar_t>(reg1);
+                    {
+                        Res<uchar_t*> regRes { GetRegister8Bit(reg2flag, cpu.state) };
+                        None(regRes);
+                        reg2 = static_cast<sysbit_t>(*Get(regRes));
+                    }
                     else
-                        GetRegister32Bit(reg2flag, cpu.state) = reg1;
+                    {
+                        Res<sysbit_t*> regRes { GetRegister32Bit(reg2flag, cpu.state) };
+                        None(regRes);
+                        reg2 = *Get(regRes);
+                    }
+
+                    if (Is8BitReg(reg1flag))
+                    {
+                        Res<uchar_t*> lhsRes { GetRegister8Bit(reg1flag, cpu.state) };
+                        None(lhsRes);
+                        *Get(lhsRes) = static_cast<uchar_t>(reg2);
+                    }
+                    else
+                    {
+                        Res<sysbit_t*> lhsRes { GetRegister32Bit(reg1flag, cpu.state) };
+                        None(lhsRes);
+                        *Get(lhsRes) = reg2;
+                    }
+
+                    if (Is8BitReg(reg2flag))
+                    {
+                        Res<uchar_t*> lhsRes { GetRegister8Bit(reg2flag, cpu.state) };
+                        None(lhsRes);
+                        *Get(lhsRes) = static_cast<uchar_t>(reg1);
+                    }
+                    else
+                    {
+                        Res<sysbit_t*> lhsRes { GetRegister32Bit(reg2flag, cpu.state) };
+                        None(lhsRes);
+                        *Get(lhsRes) = reg1;
+                    }
 
                     return System::ErrorCode::Ok;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_DuplicateTop: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::dupt:
                 {
-                    if (cpu.state.sp < 4)
-                        CRASH(
-                            System::ErrorCode::RAMAccessError,
+                    if (cpu.state.sp < 4) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "Can't duplicate 32-bits on stack. SP < 4"
                         );
+                        return System::ErrorCode::RAMAccessError;
+                    }
 
-                    Slice data { ram.ReadSome(cpu.state.sp-4, 4) };
-                    return cpu.PushSome(data);
+                    Res<Slice> data { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(data);
+                    return cpu.PushSome(Get(data));
                 }
 
                 case OpCodes::dupe:
                 {
-                    if (cpu.state.sp < 1)
-                        CRASH(
-                            System::ErrorCode::RAMAccessError,
+                    if (cpu.state.sp < 1) [[unlikely]]
+                    {
+                        LOGE(
+                            System::LogLevel::High,
                             "Can't duplicate 8-bits on stack. SP < 1"
                         );
+                        return System::ErrorCode::RAMAccessError;
+                    }
 
-                    const char data { ram.Read(cpu.state.sp-1) };
-                    return cpu.Push(data);
+                    Res<char> data { ram.Read(cpu.state.sp-1) };
+                    None(data);
+                    return cpu.Push(Get(data));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_RawDataStack: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::raw:
                 {
                     // raw <size> <..data..>
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
                     sysbit_t size { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes).data
                     )};
                     cpu.state.pc += 4;
 
-                    System::ErrorCode err;
-                    for (; size > 0; size--)
+                    System::ErrorCode err { System::ErrorCode::Ok };
+                    for (; err == System::ErrorCode::Ok && size > 0; size--)
                     {
-                        err = cpu.Push(
-                            rom.Read(cpu.state.pc++)
-                        );
-
-                        if (err != System::ErrorCode::Ok)
-                            break;
+                        Res<uchar_t> res { rom.Read(cpu.state.pc++) };
+                        None(res);
+                        err = cpu.Push(Get(res));
                     }
+
                     return err;
                 }
 
                 case OpCodes::raws:
                 {
                     // raw <address> <size>
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
                     sysbit_t addr { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes).data
                     )};
                     cpu.state.pc += 4;
 
+                    Res<Slice> sRes2 { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes2);
                     sysbit_t size { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes2).data
                     )};
                     cpu.state.pc += 4;
 
-                    return cpu.PushSome(
-                        rom.ReadSome(addr, size)
-                    );
+                    Res<Slice> res { rom.ReadSome(addr, size) };
+                    None(res);
+                    return cpu.PushSome(Get(res));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_Invert: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::invt:
                 {
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes);
                     sysbit_t top32 { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes).data
                     )};
                     System::ErrorCode err { cpu.PopSome(4) };
 
-                    if (err != System::ErrorCode::Ok)
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     top32 = ~top32;
 
                     char data[4];
                     BytesFromInteger(top32, data);
-                    return cpu.PushSome({ data, 4 });
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::inve:
                 {
-                    uchar_t byte { static_cast<uchar_t>(ram.Read(cpu.state.sp-1)) };
+                    Res<char> res { ram.Read(cpu.state.sp-1) };
+                    None(res);
+                    uchar_t byte { static_cast<uchar_t>(Get(res)) };
                     System::ErrorCode err { cpu.Pop() };
 
-                    if (err != System::ErrorCode::Ok)
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     byte = ~byte;
@@ -1416,64 +1766,71 @@ const System::ErrorCode FlatVM::Cycle()
 
                 case OpCodes::invr:
                 {
-                    RegisterModeFlags regMode {
-                        rom.Read(cpu.state.pc)
-                    };
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+                    None(modeRes);
+                    RegisterModeFlags regMode { Get(modeRes) };
 
                     if (Is8BitReg(regMode))
                     {
-                        uchar_t& reg { GetRegister8Bit(regMode, cpu.state) };
+                        Res<uchar_t*> regRes { GetRegister8Bit(regMode, cpu.state) };
+                        None(regRes);
+                        uchar_t& reg { *Get(regRes) };
                         reg = ~reg;
                     }
                     else
                     {
-                        sysbit_t& reg { GetRegister32Bit(regMode, cpu.state) };
+                        Res<sysbit_t*> regRes { GetRegister32Bit(regMode, cpu.state) };
+                        None(regRes);
+                        sysbit_t& reg { *Get(regRes) };
                         reg = ~reg;
                     }
 
                     return System::ErrorCode::Ok;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
-
-
         )
 
         op_InvertSafe: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::invst:
                 {
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes);
                     sysbit_t top32 { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes).data
                     )};
 
                     top32 = ~top32;
 
                     char data[4];
                     BytesFromInteger(top32, data);
-                    return cpu.PushSome({ data, 4 });
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::invse:
                 {
-                    uchar_t byte { static_cast<uchar_t>(ram.Read(cpu.state.sp-1)) };
+                    Res<char> res { ram.Read(cpu.state.sp-1) };
+                    None(res);
+                    uchar_t byte { static_cast<uchar_t>(Get(res)) };
 
                     byte = ~byte;
                     return cpu.Push(byte);
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_Compare: block(
-            const uchar_t compressedModes { static_cast<const uchar_t>(
-                rom.Read(cpu.state.pc)
-            )};
+            Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+            None(modeRes);
+            const uchar_t compressedModes { Get(modeRes) };
+
             cpu.state.pc++;
 
             Numo numMode {
@@ -1483,28 +1840,39 @@ const System::ErrorCode FlatVM::Cycle()
                 static_cast<const uchar_t>(compressedModes & 0x1F)
             };
 
-            switch (OpCodes(rom.Read(cpu.state.pc-2)))
+            switch (OpCodes(op))
             {
                 case OpCodes::cmp:
                 {
                     if (numMode == Numo::UInt)
                     {
+                        Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                        None(sRes);
                         sysbit_t int1 { IntegerFromBytes<sysbit_t>(
-                            ram.ReadSome(cpu.state.sp-8, 4).data
+                            Get(sRes).data
                         )};
+
+                        Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                        None(sRes2);
                         sysbit_t int2 { IntegerFromBytes<sysbit_t>(
-                            ram.ReadSome(cpu.state.sp-4, 4).data
+                            Get(sRes2).data
                         )};
+
                         cpu.state.sp -= 8;
                         cpu.state.bl = CompareVarious(int1, int2, compareMode);
                     }
                     else if (numMode == Numo::Float)
                     {
+                        Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                        None(sRes);
                         float float1 { FloatFromBytes(
-                            ram.ReadSome(cpu.state.sp-8, 4).data
+                            Get(sRes).data
                         )};
+
+                        Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                        None(sRes2);
                         float float2 { FloatFromBytes(
-                            ram.ReadSome(cpu.state.sp-4, 4).data
+                            Get(sRes2).data
                         )};
 
                         cpu.state.sp -= 8;
@@ -1512,11 +1880,16 @@ const System::ErrorCode FlatVM::Cycle()
                     }
                     else if (numMode == Numo::Int)
                     {
+                        Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                        None(sRes);
                         int int1 { IntegerFromBytes<int32_t>(
-                            ram.ReadSome(cpu.state.sp-8, 4).data
+                            Get(sRes).data
                         )};
+
+                        Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                        None(sRes2);
                         int int2 { IntegerFromBytes<int32_t>(
-                            ram.ReadSome(cpu.state.sp-4, 4).data
+                            Get(sRes2).data
                         )};
 
                         cpu.state.sp -= 8;
@@ -1524,44 +1897,68 @@ const System::ErrorCode FlatVM::Cycle()
                     }
                     else if (numMode == Numo::UByte)
                     {
-                        uchar_t byte1 { static_cast<uchar_t>(
-                            ram.Read(cpu.state.sp-2)
-                        )};
-                        uchar_t byte2 { static_cast<uchar_t>(
-                            ram.Read(cpu.state.sp-1)
-                        )};
+                        Res<char> res { ram.Read(cpu.state.sp-2) };
+                        None(res);
+                        uchar_t byte1 { static_cast<uchar_t>(Get(res)) };
+
+                        res = ram.Read(cpu.state.sp-1);
+                        None(res);
+                        uchar_t byte2 { static_cast<uchar_t>(Get(res)) };
 
                         cpu.state.sp -= 2;
                         cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
                     }
                     else
                     {
-                        char byte1 { ram.Read(cpu.state.sp-2) };
-                        char byte2 { ram.Read(cpu.state.sp-1) };
+                        Res<char> byte1 { ram.Read(cpu.state.sp-2) };
+                        None(byte1);
+
+                        Res<char> byte2 { ram.Read(cpu.state.sp-1) };
+                        None(byte2);
 
                         cpu.state.sp -= 2;
-                        cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
+                        cpu.state.bl = CompareVarious(Get(byte1), Get(byte2), compareMode);
                     }
                     return System::ErrorCode::Ok;
                 }
 
                 case OpCodes::cmpr:
                 {
-                    RegisterModeFlags reg1mode {
-                        rom.Read(cpu.state.pc++)
-                    };
-                    RegisterModeFlags reg2mode {
-                        rom.Read(cpu.state.pc++)
-                    };
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc++) };
+                    None(modeRes);
+                    RegisterModeFlags reg1mode { Get(modeRes) };
 
-                    sysbit_t reg1 { Is8BitReg(reg1mode) ?
-                        GetRegister8Bit(reg1mode, cpu.state) :
-                        GetRegister32Bit(reg1mode, cpu.state)
-                    };
-                    sysbit_t reg2 { Is8BitReg(reg2mode) ?
-                        GetRegister8Bit(reg2mode, cpu.state) :
-                        GetRegister32Bit(reg2mode, cpu.state)
-                    };
+                    modeRes = rom.Read(cpu.state.pc++);
+                    None(modeRes);
+                    RegisterModeFlags reg2mode { Get(modeRes) };
+
+                    sysbit_t reg1;
+                    if (Is8BitReg(reg1mode))
+                    {
+                        Res<uchar_t*> regRes { GetRegister8Bit(reg1mode, cpu.state) }; 
+                        None(regRes);
+                        reg1 = static_cast<sysbit_t>(*Get(regRes));
+                    }
+                    else
+                    {
+                        Res<sysbit_t*> regRes { GetRegister32Bit(reg1mode, cpu.state) }; 
+                        None(regRes);
+                        reg1 = *Get(regRes);
+                    }
+
+                    sysbit_t reg2;
+                    if (Is8BitReg(reg2mode))
+                    {
+                        Res<uchar_t*> regRes { GetRegister8Bit(reg2mode, cpu.state) }; 
+                        None(regRes);
+                        reg1 = static_cast<sysbit_t>(*Get(regRes));
+                    }
+                    else
+                    {
+                        Res<sysbit_t*> regRes { GetRegister32Bit(reg2mode, cpu.state) }; 
+                        None(regRes);
+                        reg1 = *Get(regRes);
+                    }
 
                     if (numMode == Numo::UInt)
                         cpu.state.bl = CompareVarious(reg1, reg2, compareMode);
@@ -1592,32 +1989,34 @@ const System::ErrorCode FlatVM::Cycle()
                     return System::ErrorCode::Ok;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_PopInstruction: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::pope:
                     return cpu.Pop();
                 case OpCodes::popt:
                     return cpu.PopSome(4);
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_Jump: block(
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::jmpr:
                 {
-                    sysbit_t address { GetRegister32Bit(
-                        RegisterModeFlags(rom.Read(cpu.state.pc)),
-                        cpu.state
-                    )};
+                    Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+                    None(modeRes);
+
+                    Res<sysbit_t*> regRes { GetRegister32Bit( RegisterModeFlags(Get(modeRes)), cpu.state) };
+                    None(regRes);
+                    sysbit_t address { *Get(regRes) };
 
 
 #ifdef ENABLE_JIT
@@ -1639,10 +2038,11 @@ const System::ErrorCode FlatVM::Cycle()
 
                 case OpCodes::jmp:
                 {
+                    Res<Slice> addressRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(addressRes);
                     sysbit_t address { IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(addressRes).data
                     )};
-
 
 #ifdef ENABLE_JIT
                     JITError err { BranchIncrease(blocks, address, &jitContext, rom, settings.jit) };
@@ -1661,46 +2061,57 @@ const System::ErrorCode FlatVM::Cycle()
 #endif
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_SwapRange: block(
             // swr <size: sysbit>
+            Res<Slice> sizeRes { rom.ReadSome(cpu.state.pc, 4) };
+            None(sizeRes);
             sysbit_t size { IntegerFromBytes<sysbit_t>(
-                rom.ReadSome(cpu.state.pc, 4).data
+                Get(sizeRes).data
             )};
 
             System::ErrorCode err { System::ErrorCode::Ok };
-            for (sysbit_t midpoint = cpu.state.sp-size; size > 0; size--)
+            for (
+                sysbit_t midpoint = cpu.state.sp-size;
+                err == System::ErrorCode::Ok && size > 0;
+                size--
+            )
             {
-                char tmp { ram.Read(cpu.state.sp-size) };
+                Res<char> tmp { ram.Read(cpu.state.sp-size) };
+                None(tmp);
+
+                Res<char> res { ram.Read(midpoint-size) };
+                None(res);
+
                 err = err == System::ErrorCode::Ok ? ram.Write(
                     cpu.state.sp-size,
-                    ram.Read(midpoint-size)
+                    Get(res)
                 ) : err;
-                err = err == System::ErrorCode::Ok ?
-                    ram.Write(midpoint-size, tmp)
-                    : err;
 
-                if (err != System::ErrorCode::Ok)
-                    return err;
+                err = err == System::ErrorCode::Ok ?
+                    ram.Write(midpoint-size, Get(tmp))
+                    : err;
             }
 
             cpu.state.pc += 4;
         )
 
-    op_DuplicateRange: block(
+        op_DuplicateRange: block(
             // dur <size: sysbit>
+            Res<Slice> res { rom.ReadSome(cpu.state.pc, 4) };
+            None(res);
             sysbit_t size { IntegerFromBytes<sysbit_t>(
-                rom.ReadSome(cpu.state.pc, 4).data
+                Get(res).data
             )};
 
             System::ErrorCode err { System::ErrorCode::Ok };
-            cpu.PushSome(
-                ram.ReadSome(cpu.state.sp-size, size)
-            );
+            Res<Slice> sRes { ram.ReadSome(cpu.state.sp-size, size) };
+            None(sRes);
+            cpu.PushSome(Get(sRes));
 
             cpu.state.pc += 4;
         )
@@ -1709,22 +2120,26 @@ const System::ErrorCode FlatVM::Cycle()
             // rep <compressed(mem/num)> <count> <val>
             MemoryModeFlags memMode;
             NumericModeFlags numMode;
-            const uchar_t compressed { static_cast<uchar_t>(
-                rom.Read(cpu.state.pc)
-            )};
+
+            Res<uchar_t> modeRes { rom.Read(cpu.state.pc) };
+            None(modeRes);
+            const uchar_t compressed { Get(modeRes) };
 
             memMode = MemoryModeFlags(compressed >> 4);
             numMode = NumericModeFlags(compressed & 0b00001111);
 
             cpu.state.pc++;
+            Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+            None(sRes);
             const sysbit_t count { IntegerFromBytes<sysbit_t>(
-                rom.ReadSome(cpu.state.pc, 4).data
+                Get(sRes).data
             )};
             cpu.state.pc += 4;
 
-            const Slice valueData {
+            Res<Slice> valueDataRes {
                 rom.ReadSome(cpu.state.pc, ByteSize(numMode))
             };
+            None(valueDataRes);
             cpu.state.pc += ByteSize(numMode);
 
             sysbit_t address;
@@ -1732,71 +2147,110 @@ const System::ErrorCode FlatVM::Cycle()
                 address = cpu.state.ebx;
             else
             {
-                if (cpu.state.sp + count*ByteSize(numMode) > ram.StackSize())
-                    CRASH(
-                        System::ErrorCode::StackOverflow,
+                if (cpu.state.sp + count*ByteSize(numMode) > ram.StackSize()) [[unlikely]]
+                {
+                    LOGE(
+                        System::LogLevel::High,
                         "In "" instruction rep. Can't push onto stack, it's full"
                     );
+                    return System::ErrorCode::StackOverflow;
+                }
+
                 address = cpu.state.sp;
                 cpu.state.sp += count*ByteSize(numMode);
             }
 
             System::ErrorCode err { System::ErrorCode::Ok };
+            Slice valueData { Get(valueDataRes) };
             for (sysbit_t i = 0; (i < count) && (err == System::ErrorCode::Ok); i++, address += ByteSize(numMode))
                 err = err == System::ErrorCode::Ok ?
                     ram.WriteSome(address, valueData) :
                     err;
+
             return err;
         )
 
         op_Allocate: block(
-            const sysbit_t address { ram.Allocate(cpu.state.ecx) };
-            cpu.state.ebx = address;
+            Res<sysbit_t> address { ram.Allocate(cpu.state.ecx) };
+            None(address);
+            cpu.state.ebx = Get(address);
         )
 
         op_PowRegister: block(
             float base;
             float power;
-            OpCodes op { rom.Read(cpu.state.pc-1) };
-            RegisterModeFlags reg1 { rom.Read(cpu.state.pc++)};
-            RegisterModeFlags reg2 { rom.Read(cpu.state.pc++)};
+            OpCodes op { op };
+
+            Res<uchar_t> modeRes { rom.Read(cpu.state.pc++) };
+            None(modeRes);
+            RegisterModeFlags reg1 { Get(modeRes) };
+
+            modeRes = rom.Read(cpu.state.pc++);
+            None(modeRes);
+            RegisterModeFlags reg2 { Get(modeRes) };
 
             switch (op)
             {
                 case OpCodes::powri:
                 {
-                    base = static_cast<float>(GetRegister32Bit(reg1, cpu.state));
-                    power = static_cast<float>(GetRegister32Bit(reg2, cpu.state));
+                    Res<sysbit_t*> regRes { GetRegister32Bit(reg1, cpu.state) };
+                    None(regRes);
+                    base = static_cast<float>(*Get(regRes));
+
+                    regRes = GetRegister32Bit(reg2, cpu.state);
+                    None(regRes);
+                    power = static_cast<float>(*Get(regRes));
+
                     sysbit_t res { static_cast<sysbit_t>(std::pow(base, power)) };
-                    GetRegister32Bit(reg2, cpu.state) = res;
+
+                    regRes = GetRegister32Bit(reg2, cpu.state);
+                    None(regRes);
+                    *Get(regRes) = res;
                     break;
                 }
 
                 case OpCodes::powrf:
                 {
                     char data[4];
-                    BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state), data);
+
+                    Res<sysbit_t*> regRes { GetRegister32Bit(reg1, cpu.state) };
+                    None(regRes);
+                    BytesFromInteger<sysbit_t>(*Get(regRes), data);
                     base = FloatFromBytes(data);
 
-                    BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state), data);
+                    regRes = GetRegister32Bit(reg2, cpu.state);
+                    None(regRes);
+                    BytesFromInteger<sysbit_t>(*Get(regRes), data);
                     power = FloatFromBytes(data);
 
                     float res { std::pow(base, power) };
                     BytesFromFloat(res, data);
-                    GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(data);
+
+                    regRes = GetRegister32Bit(reg2, cpu.state);
+                    None(regRes);
+                    *Get(regRes) = IntegerFromBytes<sysbit_t>(data);
                     break;
                 }
 
                 case OpCodes::powrb:
                 {
-                    base = static_cast<float>(GetRegister8Bit(reg1, cpu.state));
-                    power = static_cast<float>(GetRegister8Bit(reg2, cpu.state));
+                    Res<uchar_t*> regRes { GetRegister8Bit(reg1, cpu.state) };
+                    None(regRes);
+                    base = static_cast<float>(*Get(regRes));
+
+                    regRes = GetRegister8Bit(reg2, cpu.state);
+                    None(regRes);
+                    power = static_cast<float>(*Get(regRes));
+
                     uchar_t res { static_cast<uchar_t>(std::pow(base, power)) };
-                    GetRegister8Bit(reg2, cpu.state) = res;
+
+                    regRes = GetRegister8Bit(reg2, cpu.state);
+                    None(regRes);
+                    *Get(regRes) = res;
                     break;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
@@ -1806,57 +2260,75 @@ const System::ErrorCode FlatVM::Cycle()
             float power;
             System::ErrorCode err;
 
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::powsi:
                 {
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
                     base = static_cast<float>(IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-8, 4).data
+                        Get(sRes).data
                     ));
+
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
                     power = static_cast<float>(IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes2).data
                     ));
 
                     err = cpu.PopSome(8);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     sysbit_t res { static_cast<sysbit_t>(std::pow(base, power)) };
                     char data[4];
                     BytesFromInteger<sysbit_t>(res, data);
-                    return cpu.PushSome({data, 4});
-                    break;
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::powsf:
                 {
-                    base = FloatFromBytes(ram.ReadSome(cpu.state.sp-8, 4).data);
-                    power = FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data);
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
+                    base = FloatFromBytes(Get(sRes).data);
+
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
+                    power = FloatFromBytes(Get(sRes2).data);
 
                     err = cpu.PopSome(8);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     float res { std::pow(base, power) };
                     char data[4];
                     BytesFromFloat(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::powsb:
                 {
-                    base = static_cast<float>(ram.Read(cpu.state.sp-2));
-                    power = static_cast<float>(ram.Read(cpu.state.sp-1));
+                    Res<char> res { ram.Read(cpu.state.sp-2) };
+                    None(res);
+                    base = static_cast<float>(Get(res));
+
+                    res = ram.Read(cpu.state.sp-1);
+                    None(res);
+                    power = static_cast<float>(Get(res));
 
                     err = cpu.PopSome(2);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
-                    uchar_t res { static_cast<uchar_t>(std::pow(base, power)) };
-                    return cpu.Push(res);
+                    return cpu.Push(static_cast<uchar_t>(std::pow(base, power)));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
@@ -1866,47 +2338,64 @@ const System::ErrorCode FlatVM::Cycle()
             float power;
             System::ErrorCode err;
 
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::powi:
                 {
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
                     base = static_cast<float>(IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes).data
                     ));
+
+                    Res<Slice> sRes2 { rom.ReadSome(cpu.state.pc+4, 4) };
+                    None(sRes2);
                     power = static_cast<float>(IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc+4, 4).data
+                        Get(sRes2).data
                     ));
                     cpu.state.pc += 8;
 
                     sysbit_t res { static_cast<sysbit_t>(std::pow(base, power)) };
                     char data[4];
                     BytesFromInteger<sysbit_t>(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::powf:
                 {
-                    base = FloatFromBytes(rom.ReadSome(cpu.state.pc, 4).data);
-                    power = FloatFromBytes(rom.ReadSome(cpu.state.pc+4, 4).data);
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
+                    base = FloatFromBytes(Get(sRes).data);
+
+                    Res<Slice> sRes2 { rom.ReadSome(cpu.state.pc+4, 4) };
+                    None(sRes2);
+                    power = FloatFromBytes(Get(sRes2).data);
+
                     cpu.state.pc += 8;
 
                     float res { std::pow(base, power) };
                     char data[4];
                     BytesFromFloat(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::powb:
                 {
-                    base = static_cast<float>(rom.Read(cpu.state.pc));
-                    power = static_cast<float>(rom.Read(cpu.state.pc+1));
+                    Res<uchar_t> res { rom.Read(cpu.state.pc) };
+                    None(res);
+                    base = static_cast<float>(Get(res));
+
+                    res = rom.Read(cpu.state.pc+1);
+                    None(res);
+                    power = static_cast<float>(Get(res));
                     cpu.state.pc += 2;
 
-                    uchar_t res { static_cast<uchar_t>(std::pow(base, power)) };
-                    return cpu.Push(res);
+                    return cpu.Push(static_cast<uchar_t>(std::pow(base, power)));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
@@ -1915,60 +2404,71 @@ const System::ErrorCode FlatVM::Cycle()
             float num;
             System::ErrorCode err;
 
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::sqri:
                 {
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
                     num = static_cast<float>(IntegerFromBytes<sysbit_t>(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes).data
                     ));
                     cpu.state.pc += 4;
 
                     sysbit_t res { static_cast<sysbit_t>(std::sqrt(num)) };
                     char data[4];
                     BytesFromInteger(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::sqrf:
                 {
+                    Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
+                    None(sRes);
                     num = FloatFromBytes(
-                        rom.ReadSome(cpu.state.pc, 4).data
+                        Get(sRes).data
                     );
                     cpu.state.pc += 4;
 
                     float res { std::sqrt(num) };
                     char data[4];
                     BytesFromFloat(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::sqrb:
                 {
-                    num = static_cast<float>(rom.Read(cpu.state.pc));
+                    Res<uchar_t> res { rom.Read(cpu.state.pc) };
+                    None(res);
+                    num = static_cast<float>(Get(res));
                     cpu.state.pc++;
 
-                    uchar_t res { static_cast<uchar_t>(std::sqrt(num)) };
-                    return cpu.Push(res);
+                    return cpu.Push(static_cast<uchar_t>(std::sqrt(num)));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_SqrtRegister: block(
             float num;
-            OpCodes op { rom.Read(cpu.state.pc-1) };
-            RegisterModeFlags reg { rom.Read(cpu.state.pc++)};
+            OpCodes op { op };
+
+            Res<uchar_t> modeRes { rom.Read(cpu.state.pc++) };
+            None(modeRes);
+            RegisterModeFlags reg { Get(modeRes) };
 
             switch (op)
             {
                 case OpCodes::sqrri:
                 {
-                    num = static_cast<float>(GetRegister32Bit(reg, cpu.state));
-                    sysbit_t res { static_cast<sysbit_t>(std::sqrt(num)) };
-                    cpu.state.eax = res;
+                    Res<sysbit_t*> regRes { GetRegister32Bit(reg, cpu.state) };
+                    None(regRes);
+                    num = static_cast<float>(*Get(regRes));
+                    cpu.state.eax = static_cast<sysbit_t>(std::sqrt(num));
                     break;
                 }
 
@@ -1976,7 +2476,9 @@ const System::ErrorCode FlatVM::Cycle()
                 {
                     char data[4];
 
-                    BytesFromInteger<sysbit_t>(GetRegister32Bit(reg, cpu.state), data);
+                    Res<sysbit_t*> regRes { GetRegister32Bit(reg, cpu.state) };
+                    None(regRes);
+                    BytesFromInteger<sysbit_t>(*Get(regRes), data);
                     num = FloatFromBytes(data);
 
                     float res { std::sqrt(num) };
@@ -1987,13 +2489,14 @@ const System::ErrorCode FlatVM::Cycle()
 
                 case OpCodes::sqrrb:
                 {
-                    num = static_cast<float>(GetRegister8Bit(reg, cpu.state));
-                    uchar_t res { static_cast<uchar_t>(std::sqrt(num)) };
-                    cpu.state.al = res;
+                    Res<uchar_t*> regRes { GetRegister8Bit(reg, cpu.state) };
+                    None(regRes);
+                    num = static_cast<float>(*Get(regRes));
+                    cpu.state.al = static_cast<uchar_t>(std::sqrt(num));
                     break;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
@@ -2002,71 +2505,89 @@ const System::ErrorCode FlatVM::Cycle()
             float num;
             System::ErrorCode err;
 
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::sqrsi:
                 {
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes);
                     num = static_cast<float>(IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes).data
                     ));
 
                     err = cpu.PopSome(4);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     sysbit_t res { static_cast<sysbit_t>(std::sqrt(num)) };
                     char data[4];
                     BytesFromInteger<sysbit_t>(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::sqrsf:
                 {
-                    num = FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data);
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes);
+                    num = FloatFromBytes(Get(sRes).data);
 
                     err = cpu.PopSome(4);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     float res { std::sqrt(num) };
                     char data[4];
                     BytesFromFloat(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::sqrsb:
                 {
-                    num = static_cast<float>(ram.Read(cpu.state.sp-1));
+                    Res<char> res { ram.Read(cpu.state.sp-1) };
+                    None(res);
+                    num = static_cast<float>(Get(res));
 
-                    err = cpu.PopSome(1);
-                    if (err != System::ErrorCode::Ok)
+                    err = cpu.Pop();
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
-                    uchar_t res { static_cast<uchar_t>(std::sqrt(num)) };
-                    return cpu.Push(res);
+                    return cpu.Push(static_cast<uchar_t>(std::sqrt(num)));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_ConditionalJump: block(
-            OpCodes op { OpCodes(rom.Read(cpu.state.pc-1)) };
+            OpCodes op { op };
             sysbit_t address;
 
             if (cpu.state.bl == 0)
                 address = cpu.state.pc + ((op == OpCodes::cnd) ? 4 : 1);
             else if (op == OpCodes::cnd)
+            {
+                Res<Slice> res { rom.ReadSome(cpu.state.pc, 4) };
+                None(res);
                 address = IntegerFromBytes<sysbit_t>(
-                    rom.ReadSome(cpu.state.pc, 4).data
+                    Get(res).data
                 );
+            }
             else if (op == OpCodes::cndr)
-                address = GetRegister32Bit(
-                    RegisterModeFlags(rom.Read(cpu.state.pc)),
-                    cpu.state
-                );
-            else
+            {
+                Res<uchar_t> res { rom.Read(cpu.state.pc) };
+                None(res);
+                
+                Res<sysbit_t*> regRes { GetRegister32Bit(RegisterModeFlags(Get(res)), cpu.state) };
+                None(regRes);
+                address = *Get(regRes);
+            }
+            else [[unlikely]]
                 return System::ErrorCode::InvalidInstruction;
 
 
@@ -2090,22 +2611,28 @@ const System::ErrorCode FlatVM::Cycle()
 
 
         op_CallFunc: block(
-            if (cpu.state.sp < cpu.state.bl)
+            if (cpu.state.sp < cpu.state.bl) [[unlikely]]
                 return System::ErrorCode::RAMAccessError;
 
-            OpCodes op { OpCodes(rom.Read(cpu.state.pc-1)) };
+            OpCodes op { op };
             sysbit_t address;
             if (op == OpCodes::cal)
+            {
+                Res<Slice> res { rom.ReadSome(cpu.state.pc, 4) };
+                None(res);
                 address = IntegerFromBytes<sysbit_t>(
-                    rom.ReadSome(cpu.state.pc, 4).data
+                    Get(res).data
                 );
+            }
             if (op == OpCodes::calr)
-                address = GetRegister32Bit(
-                    RegisterModeFlags(
-                        rom.Read(cpu.state.pc)
-                    ),
-                    cpu.state
-                );
+            {
+                Res<uchar_t> res { rom.Read(cpu.state.pc) };
+                None(res);
+
+                Res<sysbit_t*> regRes { GetRegister32Bit( RegisterModeFlags(Get(res)), cpu.state) };
+                None(regRes);
+                address = *Get(regRes);
+            }
 
             // normal call
             // Copy params beforehand
@@ -2121,8 +2648,11 @@ const System::ErrorCode FlatVM::Cycle()
                 return System::ErrorCode::Ok;
 #endif
 
-            if (cpu.state.sp+8+cpu.state.bl > ram.StackSize())
-                CRASH(System::ErrorCode::StackOverflow, "Can't push parameters.");
+            if (cpu.state.sp+8+cpu.state.bl > ram.StackSize()) [[unlikely]]
+            {
+                LOGE( System::LogLevel::High, "Can't push parameters.");
+                return System::ErrorCode::StackOverflow;
+            }
 
             //const Slice params { ram.ReadSome(cpu.state.sp-cpu.state.bl, cpu.state.bl) };
             //Slice params (&ram+cpu.state.sp-cpu.state.bl, cpu.state.bl);
@@ -2135,16 +2665,16 @@ const System::ErrorCode FlatVM::Cycle()
             // Store bp
             char data[4];
             BytesFromInteger(cpu.state.bp, data);
-            System::ErrorCode err = cpu.PushSome({data, 4});
+            System::ErrorCode err = cpu.PushSome(Get(Slice::New(data, 4)));
 
-            if (err != System::ErrorCode::Ok)
+            if (err != System::ErrorCode::Ok) [[unlikely]]
                 return err;
 
             // Store pc
             BytesFromInteger(cpu.state.pc + (op == OpCodes::cal ? 4 : 1), data);
-            err = cpu.PushSome({data, 4});
+            err = cpu.PushSome(Get(Slice::New(data, 4)));
 
-            if (err != System::ErrorCode::Ok)
+            if (err != System::ErrorCode::Ok) [[unlikely]]
                 return err;
 
             // Change pc and bp
@@ -2157,105 +2687,148 @@ const System::ErrorCode FlatVM::Cycle()
         op_MulStack: block(
             System::ErrorCode err;
 
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::muli:
                 {
-                    if (cpu.state.sp < 4)
+                    if (cpu.state.sp < 4) [[unlikely]]
                         return System::ErrorCode::RAMAccessError;
 
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
                     sysbit_t lhs { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-8, 4).data
+                        Get(sRes).data
                     )};
+
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
                     sysbit_t rhs { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes2).data
                     )};
 
                     err = cpu.PopSome(8);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     sysbit_t res { lhs * rhs };
                     char data[4];
                     BytesFromInteger<sysbit_t>(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::mulf:
                 {
-                    if (cpu.state.sp < 4)
+                    if (cpu.state.sp < 4) [[unlikely]]
                         return System::ErrorCode::RAMAccessError;
 
-                    float lhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-8, 4).data) };
-                    float rhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data) };
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
+                    float lhs { FloatFromBytes(Get(sRes).data) };
+
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
+                    float rhs { FloatFromBytes(Get(sRes2).data) };
 
                     err = cpu.PopSome(8);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     float res { lhs * rhs };
                     char data[4];
                     BytesFromFloat(res, data);
-                    return cpu.PushSome({data, 4});
+                    
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::mulb:
                 {
-                    uchar_t lhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-2)) };
-                    uchar_t rhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-1)) };
+                    Res<char> res { ram.Read(cpu.state.sp-2) };
+                    None(res);
+                    uchar_t lhs { static_cast<uchar_t>(Get(res)) };
+
+                    res = ram.Read(cpu.state.sp-1);
+                    None(res);
+                    uchar_t rhs { static_cast<uchar_t>(Get(res)) };
 
                     err = cpu.PopSome(2);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
-                    uchar_t res { static_cast<uchar_t>(lhs * rhs) };
-                    return cpu.Push(res);
+                    return cpu.Push(static_cast<uchar_t>(lhs * rhs));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_MulRegister: block(
-            OpCodes op { rom.Read(cpu.state.pc-1) };
-            RegisterModeFlags reg1 { rom.Read(cpu.state.pc++)};
-            RegisterModeFlags reg2 { rom.Read(cpu.state.pc++)};
+            OpCodes op { op };
+
+            Res<uchar_t> modeRes { rom.Read(cpu.state.pc++) };
+            None(modeRes);
+            RegisterModeFlags reg1 { Get(modeRes) };
+
+            modeRes = rom.Read(cpu.state.pc++);
+            None(modeRes);
+            RegisterModeFlags reg2 { Get(modeRes) };
 
             switch (op)
             {
                 case OpCodes::mulri:
                 {
-                    sysbit_t lhs { GetRegister32Bit(reg1, cpu.state) };
-                    sysbit_t& rhs { GetRegister32Bit(reg2, cpu.state) };
-                    rhs *= lhs;
+                    Res<sysbit_t*> regRes { GetRegister32Bit(reg1, cpu.state) };
+                    None(regRes);
+                    sysbit_t lhs { *Get(regRes) };
+
+                    regRes = GetRegister32Bit(reg2, cpu.state);
+                    None(regRes);
+                    *Get(regRes) *= lhs;
+
                     break;
                 }
 
                 case OpCodes::mulrf:
                 {
                     char data[4];
-                    BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state), data);
+
+                    Res<sysbit_t*> regRes { GetRegister32Bit(reg1, cpu.state) };
+                    None(regRes);
+                    BytesFromInteger<sysbit_t>(*Get(regRes), data);
                     float lhs { FloatFromBytes(data) };
 
-                    BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state), data);
+                    regRes = GetRegister32Bit(reg2, cpu.state);
+                    None(regRes);
+                    BytesFromInteger<sysbit_t>(*Get(regRes), data);
                     float rhs { FloatFromBytes(data) };
 
                     BytesFromFloat(lhs * rhs, data);
-                    GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(data);
+                    
+                    regRes = GetRegister32Bit(reg2, cpu.state);
+                    None(regRes);
+                    *Get(regRes) = IntegerFromBytes<sysbit_t>(data);
 
                     break;
                 }
 
                 case OpCodes::mulrb:
                 {
-                    uchar_t lhs { GetRegister8Bit(reg1, cpu.state) };
-                    uchar_t& rhs { GetRegister8Bit(reg2, cpu.state) };
-                    rhs *= lhs;
+                    Res<uchar_t*> regRes { GetRegister8Bit(reg1, cpu.state) };
+                    None(regRes);
+                    uchar_t lhs { *Get(regRes) };
+
+                    regRes = GetRegister8Bit(reg2, cpu.state);
+                    None(regRes);
+                    *Get(regRes) *= lhs;
+
                     break;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
@@ -2263,50 +2836,66 @@ const System::ErrorCode FlatVM::Cycle()
         op_MulSafe: block(
             System::ErrorCode err;
 
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::mulsi:
                 {
-                    if (cpu.state.sp < 4)
+                    if (cpu.state.sp < 4) [[unlikely]]
                         return System::ErrorCode::RAMAccessError;
 
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
                     sysbit_t lhs { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-8, 4).data
+                        Get(sRes).data
                     )};
+
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
                     sysbit_t rhs { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes2).data
                     )};
 
                     sysbit_t res { lhs * rhs };
                     char data[4];
                     BytesFromInteger<sysbit_t>(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::mulsf:
                 {
-                    if (cpu.state.sp < 4)
+                    if (cpu.state.sp < 4) [[unlikely]]
                         return System::ErrorCode::RAMAccessError;
 
-                    float lhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-8, 4).data) };
-                    float rhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data) };
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
+                    float lhs { FloatFromBytes(Get(sRes).data) };
+
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
+                    float rhs { FloatFromBytes(Get(sRes2).data) };
 
                     float res { lhs * rhs };
                     char data[4];
                     BytesFromFloat(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::mulsb:
                 {
-                    uchar_t lhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-2)) };
-                    uchar_t rhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-1)) };
+                    Res<char> res { ram.Read(cpu.state.sp-2) };
+                    None(res);
+                    uchar_t lhs { static_cast<uchar_t>(Get(res)) };
 
-                    uchar_t res { static_cast<uchar_t>(lhs * rhs) };
-                    return cpu.Push(res);
+                    res = ram.Read(cpu.state.sp-1);
+                    None(res);
+                    uchar_t rhs { static_cast<uchar_t>(Get(res)) };
+
+                    return cpu.Push(static_cast<uchar_t>(lhs * rhs));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
@@ -2314,88 +2903,120 @@ const System::ErrorCode FlatVM::Cycle()
         op_DivStack: block(
             System::ErrorCode err;
 
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::divi:
                 {
-                    if (cpu.state.sp < 4)
+                    if (cpu.state.sp < 4) [[unlikely]]
                         return System::ErrorCode::RAMAccessError;
 
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
                     sysbit_t lhs { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-8, 4).data
-                    )};
-                    sysbit_t rhs { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes).data
                     )};
 
-                    if (rhs == 0)
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
+                    sysbit_t rhs { IntegerFromBytes<sysbit_t>(
+                        Get(sRes2).data
+                    )};
+
+                    if (rhs == 0) [[unlikely]]
                         return System::ErrorCode::DivideByZero;
 
                     err = cpu.PopSome(8);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     sysbit_t res { lhs / rhs };
                     char data[4];
                     BytesFromInteger<sysbit_t>(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::divf:
                 {
-                    if (cpu.state.sp < 4)
+                    if (cpu.state.sp < 4) [[unlikely]]
                         return System::ErrorCode::RAMAccessError;
 
-                    float lhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-8, 4).data) };
-                    float rhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data) };
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
+                    float lhs { FloatFromBytes(Get(sRes).data) };
 
-                    if (rhs == 0)
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
+                    float rhs { FloatFromBytes(Get(sRes2).data) };
+
+                    if (rhs == 0) [[unlikely]]
                         return System::ErrorCode::DivideByZero;
 
                     err = cpu.PopSome(8);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
                     float res { lhs / rhs };
                     char data[4];
                     BytesFromFloat(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::divb:
                 {
-                    uchar_t lhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-2)) };
-                    uchar_t rhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-1)) };
+                    Res<char> res { ram.Read(cpu.state.sp-2) };
+                    None(res);
+                    uchar_t lhs { static_cast<uchar_t>(Get(res)) };
 
-                    if (rhs == 0)
+                    res = ram.Read(cpu.state.sp-1);
+                    None(res);
+                    uchar_t rhs { static_cast<uchar_t>(Get(res)) };
+
+                    if (rhs == 0) [[unlikely]]
                         return System::ErrorCode::DivideByZero;
 
                     err = cpu.PopSome(2);
-                    if (err != System::ErrorCode::Ok)
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
                         return err;
 
-                    uchar_t res { static_cast<uchar_t>(lhs / rhs) };
-                    return cpu.Push(res);
+                    return cpu.Push(static_cast<uchar_t>(lhs / rhs));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
 
         op_DivRegister: block(
-            OpCodes op { rom.Read(cpu.state.pc-1) };
-            RegisterModeFlags reg1 { rom.Read(cpu.state.pc++)};
-            RegisterModeFlags reg2 { rom.Read(cpu.state.pc++)};
+            OpCodes op { op };
+
+            Res<uchar_t> modeRes { rom.Read(cpu.state.pc++) };
+            None(modeRes);
+            RegisterModeFlags reg1 { Get(modeRes) };
+
+            modeRes = rom.Read(cpu.state.pc++);
+            None(modeRes);
+            RegisterModeFlags reg2 { Get(modeRes) };
 
             switch (op)
             {
                 case OpCodes::divri:
                 {
-                    sysbit_t lhs { GetRegister32Bit(reg1, cpu.state) };
-                    sysbit_t& rhs { GetRegister32Bit(reg2, cpu.state) };
-                    if (rhs == 0)
+                    Res<sysbit_t*> res { GetRegister32Bit(reg1, cpu.state) };
+                    None(res);
+                    sysbit_t lhs { *Get(res) };
+
+                    res = GetRegister32Bit(reg2, cpu.state) ;
+                    None(res);
+                    sysbit_t& rhs { *Get(res) };
+
+                    if (rhs == 0) [[unlikely]]
                         return System::ErrorCode::DivideByZero;
+
                     rhs = lhs / rhs;
                     break;
                 }
@@ -2403,34 +3024,47 @@ const System::ErrorCode FlatVM::Cycle()
                 case OpCodes::divrf:
                 {
                     char data[4];
-                    BytesFromInteger<sysbit_t>(GetRegister32Bit(reg1, cpu.state), data);
+
+                    Res<sysbit_t*> res { GetRegister32Bit(reg1, cpu.state) };
+                    None(res);
+                    BytesFromInteger<sysbit_t>(*Get(res), data);
                     float lhs { FloatFromBytes(data) };
 
-                    BytesFromInteger<sysbit_t>(GetRegister32Bit(reg2, cpu.state), data);
+                    res = GetRegister32Bit(reg2, cpu.state);
+                    None(res);
+                    BytesFromInteger<sysbit_t>(*Get(res), data);
                     float rhs { FloatFromBytes(data) };
 
-                    if (rhs == 0)
+                    if (rhs == 0) [[unlikely]]
                         return System::ErrorCode::DivideByZero;
 
                     BytesFromFloat(lhs / rhs, data);
-                    GetRegister32Bit(reg2, cpu.state) = IntegerFromBytes<sysbit_t>(data);
+
+                    res = GetRegister32Bit(reg2, cpu.state);
+                    None(res);
+                    *Get(res) = IntegerFromBytes<sysbit_t>(data);
 
                     break;
                 }
 
                 case OpCodes::divrb:
                 {
-                    uchar_t lhs { GetRegister8Bit(reg1, cpu.state) };
-                    uchar_t& rhs { GetRegister8Bit(reg2, cpu.state) };
+                    Res<uchar_t*> res { GetRegister8Bit(reg1, cpu.state) };
+                    None(res);
+                    uchar_t lhs { *Get(res) };
 
-                    if (rhs == 0)
+                    res = GetRegister8Bit(reg2, cpu.state);
+                    None(res);
+                    uchar_t& rhs { *Get(res) };
+
+                    if (rhs == 0) [[unlikely]]
                         return System::ErrorCode::DivideByZero;
 
                     rhs = lhs / rhs;
                     break;
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
@@ -2438,59 +3072,75 @@ const System::ErrorCode FlatVM::Cycle()
         op_DivSafe: block(
             System::ErrorCode err;
 
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::divsi:
                 {
-                    if (cpu.state.sp < 4)
+                    if (cpu.state.sp < 4) [[unlikely]]
                         return System::ErrorCode::RAMAccessError;
 
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
                     sysbit_t lhs { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-8, 4).data
-                    )};
-                    sysbit_t rhs { IntegerFromBytes<sysbit_t>(
-                        ram.ReadSome(cpu.state.sp-4, 4).data
+                        Get(sRes).data
                     )};
 
-                    if (rhs == 0)
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
+                    sysbit_t rhs { IntegerFromBytes<sysbit_t>(
+                        Get(sRes2).data
+                    )};
+
+                    if (rhs == 0) [[unlikely]]
                         return System::ErrorCode::DivideByZero;
 
                     sysbit_t res { lhs / rhs };
                     char data[4];
                     BytesFromInteger<sysbit_t>(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::divsf:
                 {
-                    if (cpu.state.sp < 4)
+                    if (cpu.state.sp < 4) [[unlikely]]
                         return System::ErrorCode::RAMAccessError;
 
-                    float lhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-8, 4).data) };
-                    float rhs { FloatFromBytes(ram.ReadSome(cpu.state.sp-4, 4).data) };
+                    Res<Slice> sRes { ram.ReadSome(cpu.state.sp-8, 4) };
+                    None(sRes);
+                    float lhs { FloatFromBytes(Get(sRes).data) };
 
-                    if (rhs == 0)
+                    Res<Slice> sRes2 { ram.ReadSome(cpu.state.sp-4, 4) };
+                    None(sRes2);
+                    float rhs { FloatFromBytes(Get(sRes2).data) };
+
+                    if (rhs == 0) [[unlikely]]
                         return System::ErrorCode::DivideByZero;
 
                     float res { lhs / rhs };
                     char data[4];
                     BytesFromFloat(res, data);
-                    return cpu.PushSome({data, 4});
+
+                    return cpu.PushSome(Get(Slice::New(data, 4)));
                 }
 
                 case OpCodes::divsb:
                 {
-                    uchar_t lhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-2)) };
-                    uchar_t rhs { static_cast<uchar_t>(ram.Read(cpu.state.sp-1)) };
+                    Res<char> res { ram.Read(cpu.state.sp-2) };
+                    None(res);
+                    uchar_t lhs { static_cast<uchar_t>(Get(res)) };
 
-                    if (rhs == 0)
+                    res = ram.Read(cpu.state.sp-1);
+                    None(res);
+                    uchar_t rhs { static_cast<uchar_t>(Get(res)) };
+
+                    if (rhs == 0) [[unlikely]]
                         return System::ErrorCode::DivideByZero;
 
-                    uchar_t res { static_cast<uchar_t>(lhs / rhs) };
-                    return cpu.Push(res);
+                    return cpu.Push(static_cast<uchar_t>(lhs / rhs));
                 }
 
-                default:
+                default: [[unlikely]]
                     return System::ErrorCode::InvalidInstruction;
             }
         )
@@ -2501,14 +3151,21 @@ const System::ErrorCode FlatVM::Cycle()
             //  pc 4bytes
             // current bp is AFTER the callstack
 
-            if (cpu.state.sp - cpu.state.bp < cpu.state.bl)
+            if (cpu.state.sp - cpu.state.bp < cpu.state.bl) [[unlikely]]
                 return System::ErrorCode::StackUnderflow;
 
+            Res<Slice> sRes { ram.ReadSome(cpu.state.bp - 8, 4) };
+            None(sRes);
             sysbit_t bpToReturnTo { IntegerFromBytes<sysbit_t>(
-                ram.ReadSome(cpu.state.bp - 8, 4).data
+                Get(sRes).data
             )};
+
+            Res<Slice> sRes2 { ram.ReadSome(cpu.state.bp - 4, 4) };
+
+            // TODO: Continue from here
+            None(sRes2:)
             sysbit_t pcToReturnTo { IntegerFromBytes<sysbit_t>(
-                ram.ReadSome(cpu.state.bp - 4, 4).data
+                .data
             )};
 
 
@@ -2669,7 +3326,7 @@ const System::ErrorCode FlatVM::Cycle()
             const sysbit_t index { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
             if (index < 0)
                 CRASH(System::ErrorCode::IndexOutOfBounds, "Index can't be negative in ", OpCodesString(rom.Read(cpu.state.pc-1)));
-            switch (OpCodes(rom.Read(cpu.state.pc-1)))
+            switch (OpCodes(op))
             {
                 case OpCodes::incli:
                 {
@@ -3175,5 +3832,3 @@ OPR FlatVM::BitLogic(arr<OpCodes, 3> op, fn bitwise) noexcept
 }
 #undef arr
 #undef fn
-
-

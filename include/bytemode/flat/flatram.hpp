@@ -17,13 +17,12 @@ class FlatRAM
         { }
 
     public:
-        VM_INLINE FlatRAM(FlatRAM&& other)
-        {
-            this->stackSize = other.stackSize;
-            this->heapSize = other.heapSize;
-            this->data = rval(other.data);
-            this->allocationMap = rval(other.allocationMap);
-        }
+        VM_INLINE FlatRAM(FlatRAM&& other) :
+            stackSize(other.stackSize),
+            heapSize(other.heapSize),
+            data(std::move(other.data)),
+            allocationMap(std::move(other.allocationMap))
+        { }
 
         FlatRAM() :
             allocationMap(nullptr),
