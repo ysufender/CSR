@@ -89,12 +89,13 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, 
     };
 
     System::Result<uchar_t> opRes { rom[pc] };
-    if (System::None(opRes) || System::Get(opRes) >= std::size(instructions))
+    uchar_t op;
+    if (System::None(opRes) || (op = System::Get(std::move(opRes))) >= std::size(instructions))
         return JITError::CompilationError;
 
     try {
         pc++;
-        goto *instructions[System::Get(opRes)];
+        goto *instructions[op];
 
         op_NoOperation: { return JITError::UnsupportedInstruction; }
         op_StoreThirtyTwo: { return JITError::UnsupportedInstruction; }

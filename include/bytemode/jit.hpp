@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CSRConfig.hpp"
+#include "system.hpp"
 
 #ifdef ENABLE_JIT
 #include <cstdint>
@@ -22,14 +23,16 @@
 #include "asmjit/core/globals.h"
 #ifdef DUMP_ASM
 #include "asmjit/core/logger.h"
-
-#include "fastcout.hpp"
 #endif
 
 #include "platform.hpp"
 
-#if !defined(NDEBUG) && defined(CSR_UNIX)
-#include "execinfo.h"
+#ifndef NDEBUG
+#if defined(CSR_UNIX)
+#include <execinfo.h>
+#endif
+
+#include "fastcout.hpp"
 #endif
 
 #if ASMJIT_ARCH_X86 != 64
@@ -45,7 +48,7 @@
     E(CompilationError) \
     E(UnsupportedInstruction) \
     E(VMLevelError) \
-    E(ExecutionErrorSegv) \
+    E(ExecutionError) \
     E(Finish)
 MAKE_ENUM(JITError, Ok, 0, ERJIT, OUT_CLASS)
 #undef ERJIT
@@ -274,11 +277,12 @@ class BlockCounter
             asml.mov(rram, qword_ptr(firstParamReg, offsetof(JITContext, ram)));
 
             const uint32_t start { pc };
-            while (pc < rom.Size() && !is_branching(rom[pc]))
+            uchar_t op;
+            while (pc < rom.Size() && rom.TryRead(pc, op) == System::ErrorCode::Ok && !is_branching(op))
             {
-                LOGD(OpCodesString(rom[pc]));
-                const char* lbln { std::to_string(pc).c_str() };
-                Label lbl { asml.newNamedLabel(lbln) };
+                LOGD(OpCodesString(op));
+                std::string lbln { std::to_string(pc).data() };
+                Label lbl { asml.newNamedLabel(lbln.c_str()) };
                 asml.bind(lbl);
                 error = JITInstruction(rom, pc, asml, *context, start);
                 if (error == JITError::Ok) [[likely]]
@@ -286,7 +290,7 @@ class BlockCounter
                 else if (error == JITError::Finish || error == JITError::UnsupportedInstruction)
                     break;
                 code.reset(ResetPolicy::kHard); 
-                LOGD("Error attempting JIT compilation ", JITErrorString(error), " ", OpCodesString(rom[pc]));
+                LOGD("Error attempting JIT compilation ", JITErrorString(error), " ", OpCodesString(op));
                 return error;
             }
 
@@ -323,7 +327,7 @@ class BlockCounter
             {
                 Dump();
                 signal(SIGSEGV, SIG_DFL);
-                return JITError::ExecutionErrorSegv;
+                return JITError::ExecutionError;
             }
         }
 
@@ -404,7 +408,8 @@ VM_INLINE JITError BranchIncrease(BlockCounterCollection& blocks, const uint32_t
             block.Dump();
             LOGD("For some reason, PC is ", std::to_string(*context->reg32[rpc/8]));
             FastCout::Flush();
-            CRASH(System::ErrorCode::JITError);
+            LOGE(System::LogLevel::High);
+            return JITError::ExecutionError;
         }
 #endif
         return JITError::Ok;

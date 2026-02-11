@@ -49,7 +49,7 @@ void System::LogError(std::string_view message, LogLevel level, std::string_view
         case System::LogLevel::Low:
             break;
         case System::LogLevel::High:
-            std::cerr << "ALERT";
+            std::cerr << "ALERT ";
             break;
     }
 

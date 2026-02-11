@@ -36,6 +36,14 @@ class FlatCPU
 
         FlatCPU() = delete;
         VM_INLINE FlatCPU(FlatRAM& ram) : ram(ram) { }
+        VM_INLINE FlatCPU(FlatCPU&& other) : ram(other.ram), state(other.state) { }
+
+        FlatCPU& operator=(FlatCPU&& other)
+        {
+            ram = std::move(other.ram);
+            state = other.state;
+            return *this;
+        }
         
         VM_INLINE const State& DumpState() const noexcept
         { return this->state; }
