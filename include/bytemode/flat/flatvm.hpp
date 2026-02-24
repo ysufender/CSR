@@ -38,7 +38,7 @@ class FlatVM
             settings(std::move(other.settings)),
             ram(std::move(other.ram)),
             rom(std::move(other.rom)),
-            cpu(std::move(other.cpu)),
+            cpu(ram, other.cpu.state),
             handler(std::move(other.handler)),
 #ifdef ENABLE_JIT
             blocks(std::move(other.blocks)),
@@ -48,6 +48,11 @@ class FlatVM
         { }
 
         static System::Result<FlatVM> New(VMSettings settings);
+
+        bool Validate() noexcept
+        {
+            return ram.Validate();
+        }
 
 #ifdef TOOLCHAIN_MODE 
         // to create from an already read buffer.

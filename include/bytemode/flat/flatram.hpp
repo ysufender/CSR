@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstring>
+#include <ios>
+#include <string>
 #include <utility>
 
 #include "slice.hpp"
@@ -31,7 +33,7 @@ class FlatRAM
             heapSize(0)
         { }
 
-        static VM_INLINE System::Result<FlatRAM> New(sysbit_t stackSize, sysbit_t heapSize)
+        static VM_INLINE System::Result<FlatRAM> New(sysbit_t stackSize, sysbit_t heapSize) noexcept
         {
             // allocation map will hold 1 bit for each cell. 
             // so each byte refers to 8 cells. heap size must
@@ -45,14 +47,20 @@ class FlatRAM
             return FlatRAM { stackSize, heapSize };
         }
 
+        bool Validate() noexcept
+        {
+            std::cout << std::boolalpha << this << ' ' << (data == nullptr) << '\n';
+            return this->data != nullptr;
+        }
+
         VM_INLINE System::Result<Slice> Dump() const { return Slice::New(this->data.get(), this->Size()); }
 
         VM_INLINE FlatRAM& operator=(FlatRAM&& other)
         {
             this->stackSize = other.stackSize;
             this->heapSize = other.heapSize;
-            this->data = rval(other.data);
-            this->allocationMap = rval(other.allocationMap);
+            this->data = std::move(other.data);
+            this->allocationMap = std::move(other.allocationMap);
             return *this;
         }
 
@@ -76,6 +84,7 @@ class FlatRAM
             if (address >= (stackSize+heapSize)) [[unlikely]]
                 return System::ErrorCode::RAMAccessError;
 
+            // FIX: This segfaults. data is nullptr for some reason.
             [[likely]]
             this->data[address] = value; 
             return System::ErrorCode::Ok;

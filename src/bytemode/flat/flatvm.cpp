@@ -31,11 +31,11 @@ template<typename T>
 using Res = System::Result<T>;
 
 #define None(res) \
-    if (System::None(res)) [[unlikely]] \
+    if (System::NoneCheck(res)) [[unlikely]] \
         return System::GetErr(res)
 
 #define Get(res) \
-    System::Get(std::move(res))
+    System::GetValue(std::move(res))
 
 #define OPR const System::ErrorCode
 #define NOT_IMP(name) \
@@ -434,7 +434,6 @@ const System::ErrorCode FlatVM::Cycle()
         }
 
         cpu.state.pc++;
-        LOGD("TEST");
         goto *jumpTable[op];
 
         op_NoOperation: block()
@@ -1673,27 +1672,21 @@ const System::ErrorCode FlatVM::Cycle()
         )
 
         op_RawDataStack: block(
-            LOGD("TEST");
             switch (OpCodes(op))
             {
                 case OpCodes::raw:
                 {
                     // raw <size> <..data..>
-                    LOGD("TEST");
                     Res<Slice> sRes { rom.ReadSome(cpu.state.pc, 4) };
                     None(sRes);
-                    // TODO: size is 19 for some reason, fix it
                     sysbit_t size { IntegerFromBytes<sysbit_t>(
                         Get(sRes).data
                     )};
                     cpu.state.pc += 4;
 
-                    LOGD("TEST");
-                    LOGD("Size ", std::to_string(size));
                     System::ErrorCode err { System::ErrorCode::Ok };
                     for (; err == System::ErrorCode::Ok && size > 0; size--)
                     {
-                        LOGD("TEST", std::to_string(size));
                         Res<uchar_t> res { rom.Read(cpu.state.pc++) };
                         None(res);
                         err = cpu.Push(Get(res));

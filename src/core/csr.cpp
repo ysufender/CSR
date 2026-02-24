@@ -2,6 +2,7 @@
 #include "csr.hpp"
 
 #include "bytemode/flat/flatvm.hpp"
+#include <execinfo.h>
 
 #ifndef TOOLCHAIN_MODE
 #include <csignal>
@@ -17,15 +18,33 @@
 #include "fastcout.hpp"
 #include "system.hpp"
 
+constexpr std::string SigToStr(int sign)
+{
+    switch (sign)
+    {
+        case SIGABRT: return "SIGABRT";
+        case SIGSEGV: return "SIGSEGV";
+        default: return "Unknown";
+    }
+}
+
 void sigHandler(int signum)
 {
+    // TODO: Make cross platform
     pid_t pid { fork() };
 
     if (pid == 0)
     {
-        LOGE(System::LogLevel::High, "Unexpected signal (", std::to_string(signum), "), aborting the program.");
+        LOGE(System::LogLevel::High, "Unexpected signal (", SigToStr(signum), "), aborting the program. Trace:");
+
+        constexpr int traceMax { 1024 };
+        void* array[traceMax];
+        int size { backtrace(array, traceMax) };
+        backtrace_symbols_fd(array, size, STDERR_FILENO);
+
         if (FastCout::Flush() != System::ErrorCode::Ok)
             std::cerr << "[ERROR] Couldn't flush the stoud, some messages may be missing.";
+
         _exit(0);
     }
     else
@@ -37,6 +56,9 @@ void sigHandler(int signum)
 int csrmain(int argc, char** args)
 {
     FastCout::Init();
+
+    void* dummy[1];
+    backtrace(dummy, 1);
     std::signal(SIGABRT, sigHandler);
     std::signal(SIGSEGV, sigHandler);
 
@@ -65,10 +87,12 @@ int csrmain(int argc, char** args)
 #endif
             })};
 
-            if (System::None(vmRes))
+            if (System::NoneCheck(vmRes))
                 CRASH(System::GetErr(vmRes), "Failed to initialize the VM.");
 
-            errc = System::Get(std::move(vmRes)).Run();
+            FlatVM vm { System::GetValue(std::move(vmRes)) };
+
+            errc = vm.Run();
         }
     }
     catch (const CSRException& exc)
