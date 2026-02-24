@@ -39,7 +39,7 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "OUTPUT_PATH": "Debug",
-                "CMAKE_CXX_FLAGS": "-O0 -g"
+                "CMAKE_CXX_FLAGS": "-O0 -g -rdynamic"
             }
         }
     ],

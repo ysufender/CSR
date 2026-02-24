@@ -90,7 +90,7 @@ JITError JITInstruction(const BaseROM& rom, uint32_t& pc, x86::Assembler& asml, 
 
     System::Result<uchar_t> opRes { rom[pc] };
     uchar_t op;
-    if (System::None(opRes) || (op = System::Get(std::move(opRes))) >= std::size(instructions))
+    if (System::NoneCheck(opRes) || (op = System::GetValue(std::move(opRes))) >= std::size(instructions))
         return JITError::CompilationError;
 
     try {

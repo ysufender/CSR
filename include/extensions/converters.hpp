@@ -4,6 +4,7 @@
 #include <concepts>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <type_traits>
 
 template<typename T>

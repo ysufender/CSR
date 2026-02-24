@@ -36,7 +36,8 @@ class FlatCPU
 
         FlatCPU() = delete;
         VM_INLINE FlatCPU(FlatRAM& ram) : ram(ram) { }
-        VM_INLINE FlatCPU(FlatCPU&& other) : ram(other.ram), state(other.state) { }
+        VM_INLINE FlatCPU(FlatRAM& ram, State state) : ram(ram), state(state) { }
+        // VM_INLINE FlatCPU(FlatCPU&& other) : ram(other.ram), state(other.state) { }
 
         FlatCPU& operator=(FlatCPU&& other)
         {

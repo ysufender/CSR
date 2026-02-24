@@ -44,16 +44,12 @@ void System::LogError(std::string_view message, LogLevel level, std::string_view
 
     size_t idx { file.find_first_of("CSR") };
 
-    switch (level)
-    {
-        case System::LogLevel::Low:
-            break;
-        case System::LogLevel::High:
-            std::cerr << "ALERT ";
-            break;
-    }
-
-    std::cerr << "[CSR::Error](" << file.substr(idx, file.size() - idx) << ':' << line << ") >>> " << message << '\n';
+    std::cerr
+        << "[CSR::Error"
+        << (level == System::LogLevel::Low ? "" : "::High")
+        << "]("
+        << file.substr(idx, file.size() - idx)
+        << ':' << line << ") >>> " << message << '\n';
 }
 
 System::Result<std::ifstream> System::OpenInFile(const std::filesystem::path& path, const std::ios::openmode mode)
