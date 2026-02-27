@@ -18,10 +18,8 @@
 #include "bytemode/flat/flatvm.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/instructions.hpp"
-#include "bytemode/nativecalls.hpp"
 #include "bytemode/jit.hpp"
 #include "CSRConfig.hpp"
-#include "fastcout.hpp"
 #include "system.hpp"
 
 #define OPR const System::ErrorCode
@@ -2930,6 +2928,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     std::cout.put('\n');
                     cpu.state.sp -= cpu.state.bl;
                     cpu.state.bl = 0;
+                    return System::ErrorCode::Ok;
                 }
                 case Extensions::String::ConstHash("CSR_Print"):
                 {
@@ -2942,6 +2941,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     std::cout.write(strptr, size);
                     cpu.state.sp -= cpu.state.bl;
                     cpu.state.bl = 0;
+                    return System::ErrorCode::Ok;
                 }
                 case Extensions::String::ConstHash("CSR_U32ToFloat"):
                 {
@@ -2955,6 +2955,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     cpu.PushSome({ data, 4 });
 
                     cpu.state.bl = 4;
+                    return System::ErrorCode::Ok;
                 }
                 case Extensions::String::ConstHash("CSR_I32ToFloat"):
                 {
@@ -2968,6 +2969,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     cpu.PushSome({ data, 4 });
 
                     cpu.state.bl = 4;
+                    return System::ErrorCode::Ok;
                 }
                 case Extensions::String::ConstHash("CSR_FloatToU32"):
                 {
@@ -2981,6 +2983,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     cpu.PushSome({ data, 4 });
 
                     cpu.state.bl = 4;
+                    return System::ErrorCode::Ok;
                 }
                 case Extensions::String::ConstHash("CSR_FloatToI32"):
                 {
@@ -2994,6 +2997,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     cpu.PushSome({ data, 4 });
 
                     cpu.state.bl = 4;
+                    return System::ErrorCode::Ok;
                 }
                 case Extensions::String::ConstHash("CSR_PrintU32"):
                 {
@@ -3006,6 +3010,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     std::cout.write(str.data(), str.size());
                     std::cout.put('\n');
                     cpu.state.bl = 0;
+                    return System::ErrorCode::Ok;
                 }
                 case Extensions::String::ConstHash("CSR_Clock"):
                 {
@@ -3014,6 +3019,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     BytesFromInteger<sysbit_t>((std::chrono::steady_clock::now() - startT).count(), bytes);
                     cpu.PushSome({ bytes, 4 });
                     cpu.state.bl = 4;
+                    return System::ErrorCode::Ok;
                 }
 
                 case 0:
