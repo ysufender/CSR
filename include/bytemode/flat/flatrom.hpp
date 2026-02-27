@@ -43,7 +43,7 @@ class FlatROM : public BaseROM
 
         VM_INLINE const char* operator&(sysbit_t index) const override
         {
-            if (index >= size) [[unlikely]]
+            if (index >= this->size) [[unlikely]]
                 CRASH(System::ErrorCode::ROMAccessError, "Index '", std::to_string(index), "' of FlatROM is invalid.");
 
             return data.get()+index;

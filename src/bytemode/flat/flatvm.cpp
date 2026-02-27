@@ -11,6 +11,7 @@
 
 #include "bytemode/syscall.hpp"
 #include "extensions/streamextensions.hpp"
+#include "extensions/stringextensions.hpp"
 #include "extensions/syntaxextensions.hpp"
 #include "bytemode/assemblyinfo.hpp"
 #include "bytemode/flat/flatram.hpp"
@@ -346,7 +347,8 @@ const System::ErrorCode FlatVM::Cycle() noexcept
         &&op_CompareLocal,
         // &&op_PushStackFrame,
         &&op_SetFlag,
-        &&op_SysCall
+        &&op_SysCall,
+        &&op_BitXor, &&op_BitXor, &&op_BitXor,
     };
 
     try
@@ -2082,68 +2084,6 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     cpu.state
                 );
 
-            // (cpu.state.flg & 1) is the syscall flag
-            // make syscall
-            // TODO: Removed this, create another instruction for syscalls which uses libffi,
-            //       or preferrably the wrappers of it provided by SysCallHandler
-            /*if (cpu.state.flg & 1)
-            {
-                std::memcpy(cpu.paramBuf.get(), &ram+cpu.state.sp-cpu.state.bl, cpu.state.bl);
-                cpu.state.sp -= cpu.state.bl;
-
-                if (op == OpCodes::cal)
-                    cpu.state.pc += 4;
-
-                // address is now the function id
-                System::ErrorCode err { System::ErrorCode::Ok };
-                try {
-                    err = this->handler(address, &context, cpu.paramBuf.get());
-                } catch (const std::exception& e) {
-                    LOGE(
-                        System::LogLevel::Medium,
-                        "Error in syscall ",
-                        std::to_string(address),
-                        " ", System::ErrorCodeString(System::ErrorCode::NativeCallError)
-                    );
-                    return System::ErrorCode::NativeCallError;
-                }
-
-                if (err != System::ErrorCode::Ok)
-                {
-                    LOGE(
-                        System::LogLevel::Medium,
-                        "Error in syscall ",
-                        std::to_string(address),
-                        " ", System::ErrorCodeString(err)
-                    );
-                    return err;
-                }
-
-                cpu.state.bl = cpu.paramBuf[0];
-
-                // function is void and returned without and error
-                if (cpu.state.bl == 0)
-                    return System::ErrorCode::Ok;
-
-                if (cpu.state.bl != 0)
-                {
-                    Slice retVal (&cpu.paramBuf[1], cpu.state.bl);
-                    err = cpu.PushSome(retVal);
-
-                    if (err != System::ErrorCode::Ok)
-                    {
-                        LOGE(
-                            System::LogLevel::Medium,
-                            "Error in syscall, ",
-                            std::to_string(address),
-                            " couldn't handle return values."
-                        );
-                        return err;
-                    }
-                }
-                return System::ErrorCode::Ok;
-            }*/
-
             // normal call
             // Copy params beforehand
             // Create callstack
@@ -2966,25 +2906,130 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 cpu.state.flg &= ~(1 << flagToSet);
         )
         
-        op_SysCall: block(
-            // TODO: Handle native ptr <-> VM ptr conversions
-            // &bl is not set, values are pushed to stack then syscall is made.
+        op_SysCall:
+        {
+            // &bl is still set,
+            // values are pushed to stack then syscall is made.
             // values are eaten.
-            // sys <ptr-to-signature-str>
-            sysbit_t vmPtr { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
-            const char* strptr { (&ram)+vmPtr };
-            const std::string_view str(strptr+4, IntegerFromBytes<sysbit_t>(strptr));
-            FunctionHandlerSignature sign { ParseFunctionSignature(str) };
-            int argSize; for (const auto& arg : sign.arguments) argSize += GetTypeSize(DetectType(arg, false));
-            int retSize { GetTypeSize(DetectType(sign.returnType, true)) };
-            char* retPtr { (&ram)+cpu.state.sp-argSize };
-            char* argPtr { retPtr+retSize };
+            // sys <size:string>
+            const char* strptr { rom&(cpu.state.pc+sizeof(sysbit_t)) };
+            sysbit_t size { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
+            std::string_view signatureStr(strptr, size);
 
+            switch (Extensions::String::ConstHash(signatureStr))
+            {
+                case Extensions::String::ConstHash("CSR_Println"):
+                {
+                    cpu.state.pc += size + sizeof(sysbit_t);
 
+                    sysbit_t vmAddr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data) };
+                    size = { IntegerFromBytes<sysbit_t>(ram.ReadSome(vmAddr, 4).data) };
 
-            handler(Extensions::String::Hash(sign.name), reinterpret_cast<void**>(argPtr), retPtr);
-            cpu.state.sp = GetVMAddress(retPtr)+retSize;
-            cpu.state.pc += 4;
+                    strptr = static_cast<const char*>(GetRealAddress(vmAddr+4));
+                    std::cout.write(strptr, size);
+                    std::cout.put('\n');
+                    cpu.state.sp -= cpu.state.bl;
+                    cpu.state.bl = 0;
+                }
+                case Extensions::String::ConstHash("CSR_Print"):
+                {
+                    cpu.state.pc += size + sizeof(sysbit_t);
+
+                    sysbit_t vmAddr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data) };
+                    size = { IntegerFromBytes<sysbit_t>(ram.ReadSome(vmAddr, 4).data) };
+
+                    strptr = static_cast<const char*>(GetRealAddress(vmAddr+4));
+                    std::cout.write(strptr, size);
+                    cpu.state.sp -= cpu.state.bl;
+                    cpu.state.bl = 0;
+                }
+                case Extensions::String::ConstHash("CSR_U32ToFloat"):
+                {
+                    cpu.state.pc += size + sizeof(sysbit_t);
+                    cpu.state.sp -= 4;
+
+                    sysbit_t u32 { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
+
+                    char data[4];
+                    BytesFromFloat(static_cast<float>(u32), data);
+                    cpu.PushSome({ data, 4 });
+
+                    cpu.state.bl = 4;
+                }
+                case Extensions::String::ConstHash("CSR_I32ToFloat"):
+                {
+                    cpu.state.pc += size + sizeof(sysbit_t);
+                    cpu.state.sp -= 4;
+
+                    int32_t i32 { IntegerFromBytes<int32_t>(ram.ReadSome(cpu.state.sp, 4).data) };
+
+                    char data[4];
+                    BytesFromFloat(static_cast<float>(i32), data);
+                    cpu.PushSome({ data, 4 });
+
+                    cpu.state.bl = 4;
+                }
+                case Extensions::String::ConstHash("CSR_FloatToU32"):
+                {
+                    cpu.state.pc += size + sizeof(sysbit_t);
+                    cpu.state.sp -= 4;
+
+                    float f { FloatFromBytes(ram.ReadSome(cpu.state.sp, 4).data) };
+
+                    char data[4];
+                    BytesFromInteger(static_cast<sysbit_t>(f), data);
+                    cpu.PushSome({ data, 4 });
+
+                    cpu.state.bl = 4;
+                }
+                case Extensions::String::ConstHash("CSR_FloatToI32"):
+                {
+                    cpu.state.pc += size + sizeof(sysbit_t);
+                    cpu.state.sp -= 4;
+
+                    float f { FloatFromBytes(ram.ReadSome(cpu.state.sp, 4).data) };
+
+                    char data[4];
+                    BytesFromInteger(static_cast<int32_t>(f), data);
+                    cpu.PushSome({ data, 4 });
+
+                    cpu.state.bl = 4;
+                }
+                case Extensions::String::ConstHash("CSR_PrintU32"):
+                {
+                    cpu.state.pc += size + sizeof(sysbit_t);
+                    cpu.state.sp -= 4;
+
+                    sysbit_t u32 { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
+
+                    std::string str { std::to_string(u32) };
+                    std::cout.write(str.data(), str.size());
+                    std::cout.put('\n');
+                    cpu.state.bl = 0;
+                }
+                case Extensions::String::ConstHash("CSR_Clock"):
+                {
+                    cpu.state.pc += size + sizeof(sysbit_t);
+                    char bytes[4];
+                    BytesFromInteger<sysbit_t>((std::chrono::steady_clock::now() - startT).count(), bytes);
+                    cpu.PushSome({ bytes, 4 });
+                    cpu.state.bl = 4;
+                }
+
+                case 0:
+                default: [[unlikely]]
+                {
+                    LOGE(System::LogLevel::High, "Due to problems with FFI implementation, FFI is not yet supported. Fn: ", signatureStr);
+                    return System::ErrorCode::NativeCallError;
+                }
+            }
+        }
+
+        op_BitXor: block(
+            return BitLogic(
+                {OpCodes::xorst, OpCodes::xorse, OpCodes::xorr},
+                [](sysbit_t a, sysbit_t b) -> sysbit_t { return a ^ b; }
+            );
         )
     }
     catch (const CSRException& e)

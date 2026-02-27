@@ -26,8 +26,5 @@ extern "C"
 Error InitStandardLibrary(SysCallHandler& handler)
 {
     using Extensions::String::Hash;
-
-    handler.BindFunction(Hash("CSR_Println"), handler.MakeFunctionHandler("void CSR_Println char*"));
-    handler.BindFunction(Hash("CSR_NativePtrSize"), handler.MakeFunctionHandler("uchar CSR_NativePtrSize"));
     return System::ErrorCode::Ok;
 }

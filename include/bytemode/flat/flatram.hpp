@@ -45,6 +45,14 @@ class FlatRAM
 
         VM_INLINE char* const operator&() { return this->data.get(); }
 
+        VM_INLINE char* const operator&(sysbit_t addr)
+        {
+            if (addr >= this->Size()) [[unlikely]]
+                CRASH(System::ErrorCode::RAMAccessError, "Address '", std::to_string(addr), "' of FlatRAM is invalid.");
+
+            return this->data.get()+addr;
+        }
+
         VM_INLINE char Read(const sysbit_t address) const
         {
             if (address >= (stackSize+heapSize)) [[unlikely]]
