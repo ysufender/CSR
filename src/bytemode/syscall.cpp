@@ -128,7 +128,30 @@ FunctionHandlerSignature ParseFunctionSignature(std::string_view signature)
 
 ffi_type* DetectType(const std::string_view type, bool isReturn)
 {
-    __builtin_unreachable();
+    // TODO: Sanity check
+    if (type.ends_with('*') || type == "ptr")
+        return &ffi_type_pointer;
+    else if (type == "int")
+        return &ffi_type_sint32;
+    else if (type == "uint")
+        return &ffi_type_uint32;
+    else if (type == "float")
+        return &ffi_type_float;
+    else if (type == "bool")
+        return &ffi_type_uint8;
+    else if (type == "char")
+        return &ffi_type_sint8;
+    else if (type == "uchar")
+        return &ffi_type_uint8;
+    else if (type == "void" && isReturn)
+        return &ffi_type_void;
+    else {
+        CRASH(
+            System::ErrorCode::NativeCallError,
+            "Given type ", type, " is not supported by CSR in native function calls."
+        );
+        return &ffi_type_void;
+    }
 }
 
 SysFunctionHandle MakeCifFromSignature(const FunctionHandlerSignature& signature, void (*fn)())
@@ -150,5 +173,28 @@ SysFunctionHandle MakeCifFromSignature(const FunctionHandlerSignature& signature
 
 int GetTypeSize(const ffi_type* type)
 {
-    __builtin_unreachable();
+    // TODO: Sanity check
+    if (type == &ffi_type_pointer)
+        return sizeof(void*);
+    else if (type == &ffi_type_sint32)
+        return 4;
+    else if (type == &ffi_type_uint32)
+        return 4;
+    else if (type == &ffi_type_float)
+        return 4;
+    else if (type == &ffi_type_uint8)
+        return 1;
+    else if (type == &ffi_type_sint8)
+        return 1;
+    else if (type == &ffi_type_uint8)
+        return 1;
+    else if (type == &ffi_type_void)
+        return 0;
+    else {
+        CRASH(
+            System::ErrorCode::NativeCallError,
+            "Given type is not supported by CSR in native function calls."
+        );
+        return 0;
+    }
 }

@@ -415,6 +415,4 @@ VM_INLINE JITError BranchIncrease(BlockCounterCollection& blocks, const uint32_t
     *context->reg32[6] = pcBackup;
     return err;
 }
-
-#else
 #endif

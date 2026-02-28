@@ -2912,6 +2912,18 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             SysFunctionHandle handle { handler.MakeFunctionHandler(signatureStr) };
             // TODO: ffi conversion via handle.cif
 
+            union GenericArgument
+            {
+                uint32_t u32val;
+                int32_t i32val;
+                uint8_t u8val;
+                int8_t i8val;
+                float fval;
+            };
+
+            GenericArgument args[handle.cif.nargs];
+            GenericArgument returnValue;
+
             switch (Extensions::String::ConstHash(signatureStr))
             {
                 case Extensions::String::ConstHash("CSR_Println"):
