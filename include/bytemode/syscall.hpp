@@ -12,46 +12,48 @@
 #include "system.hpp"
 #include "nativecalls.hpp"
 
-using SysFunctionMap = std::unordered_map<sysbit_t, SysFunctionHandler>;
+using SysFunctionMap = std::unordered_map<size_t, SysFunctionHandle>;
 using DLList = std::unordered_set<dlID_t>;
 
 class SysCallHandler
 {
     public:
-        SysCallHandler();
-        SysCallHandler(SysFunctionMap map);
+        VM_INLINE SysCallHandler() :
+            boundFuncs()
+        { }
 
-        ~SysCallHandler();
+        VM_INLINE SysCallHandler(SysFunctionMap map) :
+            boundFuncs(std::move(map))
+        { }
+
+        VM_INLINE ~SysCallHandler()
+        {
+            for (dlID_t id : dlList)
+                DLUnload(id);
+        }
 
         VM_INLINE const SysFunctionMap& BoundFunctions() const noexcept
         { return this->boundFuncs; }
 
-        System::ErrorCode BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept;
-
-        VM_INLINE const SysFunctionHandler& operator[](sysbit_t id) const
+        VM_INLINE System::ErrorCode BindFunction(size_t id, SysFunctionHandle handler) noexcept
         {
-            if (!boundFuncs.contains(id)) [[unlikely]]
-                CRASH(
-                    System::ErrorCode::InvalidKey,
-                    "Error while syscall, no handler with key ", std::to_string(id), "."
-                ); 
-            return boundFuncs.at(id);
+            if (boundFuncs.contains(id)) [[unlikely]]
+                return System::ErrorCode::DuplicateSysBind;
+
+            [[likely]]
+            boundFuncs[id] = handler;
+            return System::ErrorCode::Ok;
         }
 
-        /*
-        VM_INLINE const System::ErrorCode operator()(sysbit_t id, VMContext* context, char* params) const noexcept
-        { return static_cast<const System::ErrorCode>((*this)[id](context, params)); }
-        */
-        VM_INLINE void operator()(sysbit_t id, void** params, void* returns)
+        VM_INLINE void operator()(const SysFunctionHandle& handle, void** params, void* returns)
         {
-            const SysFunctionHandler& handler { (*this)[id] };
-            ffi_call(const_cast<ffi_cif*>(&handler.cif), handler.nativeFunc, returns, params);
+            ffi_call(const_cast<ffi_cif*>(&handle.cif), handle.nativeFunc, returns, params);
         }
 
         static SysCallHandler* currentHandler;
 
         dlID_t LoadDl(std::string_view dlPath);
-        SysFunctionHandler MakeFunctionHandler(std::string_view functionSignature) const;
+        SysFunctionHandle MakeFunctionHandler(std::string_view functionSignature);
 
     private:
         SysFunctionMap boundFuncs; 
@@ -59,7 +61,6 @@ class SysCallHandler
 };
 
 FunctionHandlerSignature ParseFunctionSignature(std::string_view signature);
-SysFunctionHandler MakeCifFromSignature(const FunctionHandlerSignature& signature, void (*fn)());
+SysFunctionHandle MakeCifFromSignature(const FunctionHandlerSignature& signature, void (*fn)());
 ffi_type* DetectType(const std::string_view type, bool isReturn);
 int GetTypeSize(const ffi_type* type);
-// System::ErrorCode InitExtender(VMContext& context, SysCallHandler& handler, const std::filesystem::path& path) noexcept;

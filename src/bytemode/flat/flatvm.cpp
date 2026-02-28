@@ -150,14 +150,10 @@ void FlatVM::SetUpCommon()
 
     if (InitStandardLibrary(handler) != System::ErrorCode::Ok)
         CRASH(System::ErrorCode::VMError, "Failed to initialize standard library functions.");
-
-    if (!settings.unsafe)
-        return;
 }
 
 std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(std::istream& bytecode)
 {
-    // TODO: All bytecodes must include AssemblyInfo
 #ifndef TOOLCHAIN_MODE
     bytecode.seekg(-sizeof(uint64_t), std::ios::end);
     uint64_t size { };
@@ -174,7 +170,6 @@ std::pair<std::unique_ptr<const char[]>, std::streamoff> FlatVM::ReadBytecode(st
     });
 #endif
 
-    //if (settings.path.extension() != ".jef")
     if (!(assembly.Flags() & AssemblyFlags::Executable))
         CRASH(System::ErrorCode::UnsupportedFileType,
             "FlatVM does not support given filetype ", settings.path.c_str(), ". It is not marked as an executable.");
@@ -2913,6 +2908,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             const char* strptr { rom&(cpu.state.pc+sizeof(sysbit_t)) };
             sysbit_t size { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
             std::string_view signatureStr(strptr, size);
+
+            SysFunctionHandle handle { handler.MakeFunctionHandler(signatureStr) };
+            // TODO: ffi conversion via handle.cif
 
             switch (Extensions::String::ConstHash(signatureStr))
             {

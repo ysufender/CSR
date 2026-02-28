@@ -5,7 +5,7 @@
 
 #include "ffi.h"
 
-struct SysFunctionHandler
+struct SysFunctionHandle
 {
     void (*nativeFunc)();
     ffi_cif cif;

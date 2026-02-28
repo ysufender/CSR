@@ -1,38 +1,13 @@
-#include <ffi.h>
 #include <string>
 #include <string_view>
 
+#include "ffi.h"
+
 #include "bytemode/nativecalls.hpp"
-#include "extensions/syntaxextensions.hpp"
 #include "extensions/stringextensions.hpp"
 #include "bytemode/syscall.hpp"
-#include "CSRConfig.hpp"
 #include "platform.hpp"
 #include "system.hpp"
-
-// TODO: Rewrite with libffi
-
-SysCallHandler::SysCallHandler() :
-    boundFuncs()
-{ }
-
-SysCallHandler::SysCallHandler(SysFunctionMap map) :
-    boundFuncs(rval(map))
-{ }
-
-SysCallHandler::~SysCallHandler()
-{
-    for (dlID_t id : dlList)
-        DLUnload(id);
-}
-
-System::ErrorCode SysCallHandler::BindFunction(sysbit_t id, SysFunctionHandler handler) noexcept
-{
-    if (boundFuncs.contains(id))
-        return System::ErrorCode::DuplicateSysBind;
-    boundFuncs[id] = handler;
-    return System::ErrorCode::Ok;
-}
 
 dlID_t SysCallHandler::LoadDl(std::string_view dllPath) 
 {
@@ -75,22 +50,33 @@ dlID_t SysCallHandler::LoadDl(std::string_view dllPath)
     return dll;
 }
 
-SysFunctionHandler SysCallHandler::MakeFunctionHandler(std::string_view functionSignature) const
+SysFunctionHandle SysCallHandler::MakeFunctionHandler(std::string_view functionSignature)
 {
-    void (*handler)();
+    const size_t hash { Extensions::String::Hash(functionSignature) };
+
+    if (this->boundFuncs.contains(hash))
+        return this->boundFuncs.at(hash);
+
+    void (*nativeFunc)();
 
     for (dlID_t dl : dlList)
     {
-        handler = DLSym<void(*)()>(dl, functionSignature);
-        if (handler)
+        nativeFunc = DLSym<void(*)()>(dl, functionSignature);
+        if (nativeFunc)
             break;
     }
 
-    if (handler)
-        return MakeCifFromSignature(
+    if (nativeFunc)
+    {
+        SysFunctionHandle handle { MakeCifFromSignature(
             ParseFunctionSignature(functionSignature),
-            handler
-        );
+            nativeFunc
+        )};
+
+        this->BindFunction(hash, handle);
+        return handle;
+    }
+
 
 #ifdef CSR_WIN
     DWORD errID { GetLastError() };
@@ -122,12 +108,12 @@ SysFunctionHandler SysCallHandler::MakeFunctionHandler(std::string_view function
 
 // Format must be "returnType fnName ..spaceSeperatedParamTypes..."
 // param types must be one of:
-//      - (u)int32
+//      - (u)int
 //      - bool
-//      - (u)int8
+//      - (u)byte
 //      - float
-//      - pointers to any of these
-//      - or native pointers
+//      - type* (VM ptr)
+//      - ptr (native ptr)
 // return types are the same but extra 'void'
 // 'const' keyword is not allowed.
 FunctionHandlerSignature ParseFunctionSignature(std::string_view signature)
@@ -142,32 +128,10 @@ FunctionHandlerSignature ParseFunctionSignature(std::string_view signature)
 
 ffi_type* DetectType(const std::string_view type, bool isReturn)
 {
-    if (type.ends_with('*') || type == "ptr")
-        return &ffi_type_pointer;
-    else if (type == "int")
-        return &ffi_type_sint32;
-    else if (type == "uint")
-        return &ffi_type_uint32;
-    else if (type == "float")
-        return &ffi_type_float;
-    else if (type == "bool")
-        return &ffi_type_uint8;
-    else if (type == "char")
-        return &ffi_type_sint8;
-    else if (type == "uchar")
-        return &ffi_type_uint8;
-    else if (type == "void" && isReturn)
-        return &ffi_type_void;
-    else {
-        CRASH(
-            System::ErrorCode::NativeCallError,
-            "Given type ", type, " is not supported by CSR in native function calls."
-        );
-        return &ffi_type_void;
-    }
+    __builtin_unreachable();
 }
 
-SysFunctionHandler MakeCifFromSignature(const FunctionHandlerSignature& signature, void (*fn)())
+SysFunctionHandle MakeCifFromSignature(const FunctionHandlerSignature& signature, void (*fn)())
 {
     ffi_cif cif;
     ffi_type* args[signature.arguments.size()];
@@ -186,27 +150,5 @@ SysFunctionHandler MakeCifFromSignature(const FunctionHandlerSignature& signatur
 
 int GetTypeSize(const ffi_type* type)
 {
-    if (type == &ffi_type_pointer)
-        return sizeof(void*);
-    else if (type == &ffi_type_sint32)
-        return 4;
-    else if (type == &ffi_type_uint32)
-        return 4;
-    else if (type == &ffi_type_float)
-        return 4;
-    else if (type == &ffi_type_uint8)
-        return 1;
-    else if (type == &ffi_type_sint8)
-        return 1;
-    else if (type == &ffi_type_uint8)
-        return 1;
-    else if (type == &ffi_type_void)
-        return 0;
-    else {
-        CRASH(
-            System::ErrorCode::NativeCallError,
-            "Given type is not supported by CSR in native function calls."
-        );
-        return 0;
-    }
+    __builtin_unreachable();
 }

@@ -26,5 +26,6 @@ extern "C"
 Error InitStandardLibrary(SysCallHandler& handler)
 {
     using Extensions::String::Hash;
+
     return System::ErrorCode::Ok;
 }

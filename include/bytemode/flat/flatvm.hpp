@@ -20,7 +20,6 @@ class FlatVM
     public:
         struct VMSettings
         {
-            bool unsafe;
 #ifndef NDEBUG
             bool step;
 #endif
