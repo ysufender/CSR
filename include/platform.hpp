@@ -1,6 +1,6 @@
 #pragma once
 
-#include "system.hpp"
+#include <cstddef>
 #include <filesystem>
 #include <string_view>
 
@@ -27,6 +27,8 @@
     using dlID_t = void*;
     using sym_t = void*;
 #endif
+
+constexpr dlID_t dlFalse = NULL;
 
 dlID_t DLLoad(std::string_view path);
 bool DLUnload(dlID_t dlID);

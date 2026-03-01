@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -8,8 +9,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-
-                        extern "C" void CSR_Println(const char* strToPrint);
 
 #include "bytemode/syscall.hpp"
 #include "extensions/streamextensions.hpp"
@@ -2891,39 +2890,51 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             // values are pushed to stack then syscall is made.
             // values are eaten.
             // sys <size:string>
+            // TODO: Pass pointer to signature instead of signature
             const char* strptr { rom&(cpu.state.pc+sizeof(sysbit_t)) };
             sysbit_t size { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
             std::string_view signatureStr(strptr, size);
 
+            cpu.state.pc += size + 4;
+
             SysFunctionHandle& handle { handler.MakeFunctionHandler(signatureStr) };
 
-            uintptr_t* args { static_cast<uintptr_t*>(alloca(sizeof(uintptr_t) * handle.ArgCount())) };
-            void** argptrs { static_cast<void**>(alloca(sizeof(void*) * handle.ArgCount())) };
+            std::vector<uintptr_t> args(handle.ArgCount());
+            std::vector<void*> argptrs(handle.ArgCount());
+
             uintptr_t returnValue;
 
             cpu.state.sp -= cpu.state.bl;
             for (size_t i = 0; i < handle.ArgCount(); i++)
             {
-                argptrs[i] = args + i;
-
-                switch (handle.argTypes.at(i))
+                argptrs.at(i) = &args.at(i);
+                switch (handle.argTypes[i])
                 {
                     case FFIType::Int:
                     case FFIType::UInt:
                     {
+                        sysbit_t val { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
+                        std::memcpy(&args.at(i), &val, 4);
+                        cpu.state.sp += 4;
                         continue;
                     }
 
                     case FFIType::VMPointer:
                     {
-                        sysbit_t vmptr = IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data);
-                        args[i] = reinterpret_cast<uintptr_t>(ram & vmptr);
+                        sysbit_t vmPtr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
+                        void* realPtr { GetRealAddress(vmPtr) };
+                        std::memcpy(&args.at(i), &realPtr, sizeof(realPtr));
                         cpu.state.sp += 4;
                         continue;
                     }
 
                     case FFIType::NativePointer:
                     {
+                        CRASH(System::ErrorCode::NativeCallError, "Native pointers are not yet supportedd.");
+                        sysbit_t vmptr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
+                        void* realPtr { reinterpret_cast<void*>(IntegerFromBytes<uintptr_t>(ram.ReadSome(vmptr, sizeof(uintptr_t)).data)) };
+                        std::memcpy(&args.at(i), &realPtr, sizeof(void*));
+                        cpu.state.sp += 4;
                         continue;
                     }
 
@@ -2931,141 +2942,76 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     case FFIType::UByte:
                     case FFIType::Bool:
                     {
+                        uchar_t val { static_cast<uchar_t>(ram.Read(cpu.state.sp)) };
+                        std::memcpy(&args.at(i), &val, sizeof(uchar_t));
+                        cpu.state.sp++;
                         continue;
                     }
 
                     case FFIType::Float:
                     {
+                        float vmptr { FloatFromBytes(ram.ReadSome(cpu.state.sp, 4).data) };
+                        std::memcpy(&args.at(i), &vmptr, sizeof(float));
+                        cpu.state.sp += 4;
                         continue;
                     }
 
                     case FFIType::Void:
-                    default:
                         __builtin_unreachable();
                 }
             }
 
-            handle(argptrs, static_cast<void*>(&returnValue));
+            cpu.state.sp -= cpu.state.bl;
+            handler(handle, argptrs.data(), static_cast<void*>(&returnValue));
+            cpu.state.bl = GetTypeSize(handle.returnType);
 
-            return System::ErrorCode::NativeCallError;
-
-            /*
-            switch (Extensions::String::ConstHash(signatureStr))
+            switch (handle.returnType)
             {
-                case Extensions::String::ConstHash("CSR_Println"):
+                case FFIType::Int:
+                case FFIType::UInt:
                 {
-                    cpu.state.pc += size + sizeof(sysbit_t);
+                    char buf[4];
+                    sysbit_t val;
+                    std::memcpy(&val, &returnValue, sizeof(sysbit_t));
+                    BytesFromInteger(val, buf);
+                    return cpu.PushSome({ buf, 4 });
+                }
 
-                    sysbit_t vmAddr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data) };
-                    size = { IntegerFromBytes<sysbit_t>(ram.ReadSome(vmAddr, 4).data) };
+                case FFIType::VMPointer:
+                {
+                    char buf[4];
+                    sysbit_t val;
+                    std::memcpy(&val, &returnValue, sizeof(sysbit_t));
+                    BytesFromInteger(val, buf);
+                    return cpu.PushSome({ buf, 4 });
+                }
 
-                    strptr = static_cast<const char*>(GetRealAddress(vmAddr+4));
-                    std::cout.write(strptr, size);
-                    std::cout.put('\n');
-                    cpu.state.sp -= cpu.state.bl;
-                    cpu.state.bl = 0;
+                case FFIType::NativePointer:
+                {
+                    CRASH(System::ErrorCode::NativeCallError, "Native pointers are not yet supportedd.");
+                }
+
+                case FFIType::Byte:
+                case FFIType::UByte:
+                case FFIType::Bool:
+                {
+                    uchar_t val;
+                    std::memcpy(&val, &returnValue, 1);
+                    return cpu.Push(val);
+                }
+
+                case FFIType::Float:
+                {
+                    char buf[4];
+                    float val;
+                    std::memcpy(&val, &returnValue, 4);
+                    BytesFromFloat(val, buf);
+                    return cpu.PushSome({ buf, 4 });
+                }
+
+                case FFIType::Void:
                     return System::ErrorCode::Ok;
-                }
-                case Extensions::String::ConstHash("CSR_Print"):
-                {
-                    cpu.state.pc += size + sizeof(sysbit_t);
-
-                    sysbit_t vmAddr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp-4, 4).data) };
-                    size = { IntegerFromBytes<sysbit_t>(ram.ReadSome(vmAddr, 4).data) };
-
-                    strptr = static_cast<const char*>(GetRealAddress(vmAddr+4));
-                    std::cout.write(strptr, size);
-                    cpu.state.sp -= cpu.state.bl;
-                    cpu.state.bl = 0;
-                    return System::ErrorCode::Ok;
-                }
-                case Extensions::String::ConstHash("CSR_U32ToFloat"):
-                {
-                    cpu.state.pc += size + sizeof(sysbit_t);
-                    cpu.state.sp -= 4;
-
-                    sysbit_t u32 { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
-
-                    char data[4];
-                    BytesFromFloat(static_cast<float>(u32), data);
-                    cpu.PushSome({ data, 4 });
-
-                    cpu.state.bl = 4;
-                    return System::ErrorCode::Ok;
-                }
-                case Extensions::String::ConstHash("CSR_I32ToFloat"):
-                {
-                    cpu.state.pc += size + sizeof(sysbit_t);
-                    cpu.state.sp -= 4;
-
-                    int32_t i32 { IntegerFromBytes<int32_t>(ram.ReadSome(cpu.state.sp, 4).data) };
-
-                    char data[4];
-                    BytesFromFloat(static_cast<float>(i32), data);
-                    cpu.PushSome({ data, 4 });
-
-                    cpu.state.bl = 4;
-                    return System::ErrorCode::Ok;
-                }
-                case Extensions::String::ConstHash("CSR_FloatToU32"):
-                {
-                    cpu.state.pc += size + sizeof(sysbit_t);
-                    cpu.state.sp -= 4;
-
-                    float f { FloatFromBytes(ram.ReadSome(cpu.state.sp, 4).data) };
-
-                    char data[4];
-                    BytesFromInteger(static_cast<sysbit_t>(f), data);
-                    cpu.PushSome({ data, 4 });
-
-                    cpu.state.bl = 4;
-                    return System::ErrorCode::Ok;
-                }
-                case Extensions::String::ConstHash("CSR_FloatToI32"):
-                {
-                    cpu.state.pc += size + sizeof(sysbit_t);
-                    cpu.state.sp -= 4;
-
-                    float f { FloatFromBytes(ram.ReadSome(cpu.state.sp, 4).data) };
-
-                    char data[4];
-                    BytesFromInteger(static_cast<int32_t>(f), data);
-                    cpu.PushSome({ data, 4 });
-
-                    cpu.state.bl = 4;
-                    return System::ErrorCode::Ok;
-                }
-                case Extensions::String::ConstHash("CSR_PrintU32"):
-                {
-                    cpu.state.pc += size + sizeof(sysbit_t);
-                    cpu.state.sp -= 4;
-
-                    sysbit_t u32 { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
-
-                    std::string str { std::to_string(u32) };
-                    std::cout.write(str.data(), str.size());
-                    std::cout.put('\n');
-                    cpu.state.bl = 0;
-                    return System::ErrorCode::Ok;
-                }
-                case Extensions::String::ConstHash("CSR_Clock"):
-                {
-                    cpu.state.pc += size + sizeof(sysbit_t);
-                    char bytes[4];
-                    BytesFromInteger<sysbit_t>((std::chrono::steady_clock::now() - startT).count(), bytes);
-                    cpu.PushSome({ bytes, 4 });
-                    cpu.state.bl = 4;
-                    return System::ErrorCode::Ok;
-                }
-
-                case 0:
-                default: [[unlikely]]
-                {
-                    LOGE(System::LogLevel::High, "Due to problems with FFI implementation, FFI is not yet supported. Fn: ", signatureStr);
-                    return System::ErrorCode::NativeCallError;
-                }
             }
-        */
         }
 
         op_BitXor: block(

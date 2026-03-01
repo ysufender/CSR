@@ -35,11 +35,13 @@ dlID_t SysCallHandler::LoadDl(std::string_view dllPath)
         std::string errMsg { dlerror() };
 #endif
 
-        CRASH(
-            System::ErrorCode::DLLoadError,
+        LOGE(
+            System::LogLevel::Medium,
             "Couldn't load DL ", dllPath,
             "\n\tInfo: ", errMsg
         );
+
+        return dll;
     }
 
 #if defined(CSR_UNIX) || defined(CSR_APPLE)
@@ -61,19 +63,14 @@ SysFunctionHandle& SysCallHandler::MakeFunctionHandler(std::string_view function
 
     for (dlID_t dl : dlList)
     {
-        nativeFunc = DLSym<void(*)()>(dl, functionSignature);
+        nativeFunc = DLSym<FFIFunc>(dl, functionSignature);
         if (nativeFunc)
             break;
     }
 
     if (nativeFunc)
     {
-        SysFunctionHandle handle { MakeCifFromSignature(
-            ParseFunctionSignature(functionSignature),
-            nativeFunc
-        )};
-
-        this->BindFunction(hash, std::move(handle));
+        this->BindFunction(hash, MakeCifFromSignature(functionSignature, nativeFunc));
         return this->boundFuncs.at(hash);
     }
 
@@ -141,9 +138,9 @@ std::pair<FFIType, ffi_type*> DetectType(std::string_view type, bool isReturn)
         return { FFIType::Float, &ffi_type_float };
     else if (type == "bool")
         return { FFIType::Bool, &ffi_type_uint8 };
-    else if (type == "char")
+    else if (type == "byte")
         return { FFIType::Byte, &ffi_type_sint8 };
-    else if (type == "uchar")
+    else if (type == "ubyte")
         return { FFIType::UByte, &ffi_type_uint8 };
     else if (type == "void" && isReturn)
         return { FFIType::Void, &ffi_type_void };
@@ -157,21 +154,22 @@ std::pair<FFIType, ffi_type*> DetectType(std::string_view type, bool isReturn)
     }
 }
 
-SysFunctionHandle MakeCifFromSignature(const FunctionSignature& signature, void (*fn)())
+SysFunctionHandle MakeCifFromSignature(std::string_view signatureStr, FFIFunc fn)
 {
     ffi_cif cif;
-    std::vector<FFIType> argsUnderlying { signature.arguments.size() };
-    std::vector<ffi_type*> argsNative { signature.arguments.size() };
+    FunctionSignature signature { ParseFunctionSignature(signatureStr) };
+    std::unique_ptr<FFIType[]> argsUnderlying { std::make_unique_for_overwrite<FFIType[]>(signature.arguments.size()) };
+    std::unique_ptr<ffi_type*[]> argsNative { std::make_unique_for_overwrite<ffi_type*[]>(signature.arguments.size()) };
     std::pair<FFIType, ffi_type*> returnType { DetectType(signature.returnType, true) };
 
     for (int i = 0; i < signature.arguments.size(); i++)
     {
         std::pair<FFIType, ffi_type*> pair { DetectType(signature.arguments.at(i), false) };
-        argsUnderlying.at(i) = pair.first;
-        argsNative.at(i) = pair.second;
+        argsUnderlying[i] = pair.first;
+        argsNative[i] = pair.second;
     }
 
-    if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, signature.arguments.size(), returnType.second, argsNative.data()) != FFI_OK)
+    if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, signature.arguments.size(), returnType.second, argsNative.get()) != FFI_OK)
         CRASH(
             System::ErrorCode::NativeCallError,
             "Couldn't create a handler for native function '", signature.name, "'."
@@ -186,29 +184,25 @@ SysFunctionHandle MakeCifFromSignature(const FunctionSignature& signature, void 
     };
 }
 
-int GetTypeSize(ffi_type* type)
+int GetTypeSize(FFIType type)
 {
-    if (
-        type == &ffi_type_pointer
-        || type == &ffi_type_sint32
-        || type == &ffi_type_uint32
-        || type == &ffi_type_float
-    )
-        return 4;
-    else if (
-        type == &ffi_type_uint8
-        || type == &ffi_type_sint8
-        || type == &ffi_type_uint8
-    )
-        return 1;
-    else if (type == &ffi_type_void)
-        return 0;
-    else
+    switch (type)
     {
-        CRASH(
-            System::ErrorCode::NativeCallError,
-            "Given type is not supported by CSR in native function calls."
-        );
-        return 0;
+        case FFIType::Int:
+        case FFIType::UInt:
+        case FFIType::VMPointer:
+        case FFIType::NativePointer:
+        case FFIType::Float:
+            return 4;
+
+        case FFIType::Byte:
+        case FFIType::UByte:
+        case FFIType::Bool:
+            return 1;
+
+        case FFIType::Void:
+            return 0;
     }
+
+    __builtin_unreachable();
 }

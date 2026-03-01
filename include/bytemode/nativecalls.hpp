@@ -6,6 +6,7 @@
 #include "ffi.h"
 
 #include "CSRConfig.hpp"
+#include "system.hpp"
 
 enum class FFIType
 {
@@ -22,22 +23,20 @@ enum class FFIType
 
 class SysFunctionHandle
 {
-    private:
-        ffi_cif cif;
-        void (*nativeFunc)();
-        std::vector<ffi_type*> args;
-
     public:
+        std::unique_ptr<ffi_type*[]> args;
+        void (*nativeFunc)();
+        ffi_cif cif;
         FFIType returnType;
-        std::vector<FFIType> argTypes;
+        std::unique_ptr<FFIType[]> argTypes;
 
         SysFunctionHandle() = delete;
 
         VM_INLINE SysFunctionHandle(
             ffi_cif&& cif,
             void (*func)(),
-            std::vector<FFIType>&& argTypes,
-            std::vector<ffi_type*>&& nativeArgs,
+            std::unique_ptr<FFIType[]>&& argTypes,
+            std::unique_ptr<ffi_type*[]>&& nativeArgs,
             FFIType returnType
         ) :
             returnType(returnType),
@@ -47,12 +46,18 @@ class SysFunctionHandle
             args(std::move(nativeArgs))
         { }
 
+        VM_INLINE SysFunctionHandle(SysFunctionHandle&& other) :
+            cif(std::move(other.cif)),
+            nativeFunc(other.nativeFunc),
+            args(std::move(other.args)),
+            returnType(other.returnType),
+            argTypes(std::move(other.argTypes))
+        {
+            cif.arg_types = args.get();
+        }
+
         VM_INLINE size_t ArgCount() const noexcept { return cif.nargs; }
 
-        VM_INLINE void operator()(void** params, void* returns)
-        {
-            ffi_call(&cif, nativeFunc, returns, params);
-        }
 };
 
 struct FunctionSignature
@@ -61,3 +66,5 @@ struct FunctionSignature
     std::string returnType;
     std::vector<std::string> arguments;
 };
+
+using FFIFunc = void(*)();

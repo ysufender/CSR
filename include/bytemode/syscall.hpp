@@ -39,8 +39,13 @@ class SysCallHandler
                 return System::ErrorCode::DuplicateSysBind;
 
             [[likely]]
-            boundFuncs.emplace(id, handler);
+            boundFuncs.emplace(id, std::move(handler));
             return System::ErrorCode::Ok;
+        }
+
+        VM_INLINE void operator()(SysFunctionHandle& handle, void** params, void* returns)
+        {
+            ffi_call(&handle.cif, handle.nativeFunc, returns, params);
         }
 
         dlID_t LoadDl(std::string_view dlPath);
@@ -51,7 +56,6 @@ class SysCallHandler
         DLList dlList;
 };
 
-FunctionSignature ParseFunctionSignature(std::string_view signature);
-SysFunctionHandle MakeCifFromSignature(const FunctionSignature& signature, void (*fn)());
+SysFunctionHandle MakeCifFromSignature(std::string_view signatureStr, FFIFunc fn);
 std::pair<FFIType, ffi_type*> DetectType(std::string_view type, bool isReturn);
-int GetTypeSize(ffi_type* type);
+int GetTypeSize(FFIType type);
