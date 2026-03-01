@@ -36,11 +36,8 @@ struct System
     E(NoSourceFile) \
     E(InvalidSpecifier) \
     E(FileIOError) \
-    E(MessageSendError) \
     E(IndexOutOfBounds) \
     E(InvalidInstruction) \
-    E(MessageReceiveError) \
-    E(MessageDispatchError) \
     E(MemoryOverflow) \
     E(NotImplemented) \
     E(FragmentedHeap) \

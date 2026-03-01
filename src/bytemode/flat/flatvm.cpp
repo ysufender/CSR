@@ -9,6 +9,8 @@
 #include <string>
 #include <string_view>
 
+                        extern "C" void CSR_Println(const char* strToPrint);
+
 #include "bytemode/syscall.hpp"
 #include "extensions/streamextensions.hpp"
 #include "extensions/stringextensions.hpp"
@@ -2871,22 +2873,6 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             return System::ErrorCode::Ok;
         )
 
-        /*op_PushStackFrame: block(
-            LOGD("Hello");
-            char data[4];
-
-            // bp
-            BytesFromInteger(cpu.state.bp, data);
-            System::ErrorCode err = cpu.PushSome({data, 4});
-
-            // pc
-            // BytesFromInteger(cpu.state.pc, data);
-            // System::ErrorCode err { cpu.PushSome({data, 4}) };
-
-            // TODO: Consider setting the new BP, or letting the user do it.
-            return err;
-        )*/
-
         op_SetFlag: block(
             uchar_t compressed { rom.Read(cpu.state.pc) };
             uchar_t flagToSet { static_cast<uchar_t>(compressed >> 4) };
@@ -2909,21 +2895,61 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             sysbit_t size { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
             std::string_view signatureStr(strptr, size);
 
-            SysFunctionHandle handle { handler.MakeFunctionHandler(signatureStr) };
-            // TODO: ffi conversion via handle.cif
+            SysFunctionHandle& handle { handler.MakeFunctionHandler(signatureStr) };
 
-            union GenericArgument
+            uintptr_t* args { static_cast<uintptr_t*>(alloca(sizeof(uintptr_t) * handle.ArgCount())) };
+            void** argptrs { static_cast<void**>(alloca(sizeof(void*) * handle.ArgCount())) };
+            uintptr_t returnValue;
+
+            cpu.state.sp -= cpu.state.bl;
+            for (size_t i = 0; i < handle.ArgCount(); i++)
             {
-                uint32_t u32val;
-                int32_t i32val;
-                uint8_t u8val;
-                int8_t i8val;
-                float fval;
-            };
+                argptrs[i] = args + i;
 
-            GenericArgument args[handle.cif.nargs];
-            GenericArgument returnValue;
+                switch (handle.argTypes.at(i))
+                {
+                    case FFIType::Int:
+                    case FFIType::UInt:
+                    {
+                        continue;
+                    }
 
+                    case FFIType::VMPointer:
+                    {
+                        sysbit_t vmptr = IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data);
+                        args[i] = reinterpret_cast<uintptr_t>(ram & vmptr);
+                        cpu.state.sp += 4;
+                        continue;
+                    }
+
+                    case FFIType::NativePointer:
+                    {
+                        continue;
+                    }
+
+                    case FFIType::Byte:
+                    case FFIType::UByte:
+                    case FFIType::Bool:
+                    {
+                        continue;
+                    }
+
+                    case FFIType::Float:
+                    {
+                        continue;
+                    }
+
+                    case FFIType::Void:
+                    default:
+                        __builtin_unreachable();
+                }
+            }
+
+            handle(argptrs, static_cast<void*>(&returnValue));
+
+            return System::ErrorCode::NativeCallError;
+
+            /*
             switch (Extensions::String::ConstHash(signatureStr))
             {
                 case Extensions::String::ConstHash("CSR_Println"):
@@ -3039,6 +3065,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     return System::ErrorCode::NativeCallError;
                 }
             }
+        */
         }
 
         op_BitXor: block(

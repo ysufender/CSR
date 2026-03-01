@@ -1,7 +1,5 @@
 #pragma once
 
-// TODO: Convert to libffi
-
 #include <unordered_set>
 #include <unordered_map>
 
@@ -35,32 +33,25 @@ class SysCallHandler
         VM_INLINE const SysFunctionMap& BoundFunctions() const noexcept
         { return this->boundFuncs; }
 
-        VM_INLINE System::ErrorCode BindFunction(size_t id, SysFunctionHandle handler) noexcept
+        VM_INLINE System::ErrorCode BindFunction(size_t id, SysFunctionHandle&& handler) noexcept
         {
             if (boundFuncs.contains(id)) [[unlikely]]
                 return System::ErrorCode::DuplicateSysBind;
 
             [[likely]]
-            boundFuncs[id] = handler;
+            boundFuncs.emplace(id, handler);
             return System::ErrorCode::Ok;
         }
 
-        VM_INLINE void operator()(const SysFunctionHandle& handle, void** params, void* returns)
-        {
-            ffi_call(const_cast<ffi_cif*>(&handle.cif), handle.nativeFunc, returns, params);
-        }
-
-        static SysCallHandler* currentHandler;
-
         dlID_t LoadDl(std::string_view dlPath);
-        SysFunctionHandle MakeFunctionHandler(std::string_view functionSignature);
+        SysFunctionHandle& MakeFunctionHandler(std::string_view functionSignature);
 
     private:
         SysFunctionMap boundFuncs; 
         DLList dlList;
 };
 
-FunctionHandlerSignature ParseFunctionSignature(std::string_view signature);
-SysFunctionHandle MakeCifFromSignature(const FunctionHandlerSignature& signature, void (*fn)());
-ffi_type* DetectType(const std::string_view type, bool isReturn);
-int GetTypeSize(const ffi_type* type);
+FunctionSignature ParseFunctionSignature(std::string_view signature);
+SysFunctionHandle MakeCifFromSignature(const FunctionSignature& signature, void (*fn)());
+std::pair<FFIType, ffi_type*> DetectType(std::string_view type, bool isReturn);
+int GetTypeSize(ffi_type* type);

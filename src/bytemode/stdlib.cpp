@@ -1,10 +1,9 @@
-#include <cstdint>
 #include <cstring>
-#include <system.hpp>
 
+#include "CSRConfig.hpp"
+#include "system.hpp"
 #include "extensions/converters.hpp"
 #include "bytemode/syscall.hpp"
-#include "CSRConfig.hpp"
 #include "extensions/stringextensions.hpp"
 
 extern "C"
@@ -13,19 +12,18 @@ extern "C"
     {
         sysbit_t size { IntegerFromBytes<sysbit_t>(strToPrint) };
         std::cout.write(strToPrint+4, size);
-    }
-
-    uint8_t CSR_NativePtrSize() { return sizeof(void*); }
-
-    void CSR_LoadDL(const char* dlPath)
-    {
-        std::string_view realPath { std::string_view(dlPath+4, IntegerFromBytes<sysbit_t>(dlPath)) };
+        std::cout.put('\n');
     }
 }
 
 Error InitStandardLibrary(SysCallHandler& handler)
 {
     using Extensions::String::Hash;
+
+    handler.BindFunction(
+        Hash("void CSR_Println char*"),
+        MakeCifFromSignature(ParseFunctionSignature("void CSR_Println char*"), (void(*)())CSR_Println)
+    );
 
     return System::ErrorCode::Ok;
 }

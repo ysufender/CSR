@@ -92,7 +92,7 @@ class FlatVM
 
         const System::ErrorCode BitLogic(std::array<OpCodes, 3> op, std::function<sysbit_t(sysbit_t, sysbit_t)> bitwise) noexcept;
 
-        void* GetRealAddress(const uint32_t addr) { return (&this->ram)+addr; }
+        VM_INLINE void* GetRealAddress(const uint32_t addr) { return (&this->ram)+addr; }
 
-        uint32_t GetVMAddress(void* ptr) { return static_cast<uint32_t>((char*)ptr - &this->ram); }
+        VM_INLINE uint32_t GetVMAddress(void* ptr) { return static_cast<uint32_t>((char*)ptr - &this->ram); }
 };

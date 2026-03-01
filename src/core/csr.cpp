@@ -1,16 +1,50 @@
 #include "CSRConfig.hpp"
-#include "extensions/stringextensions.hpp"
 
 #ifndef TOOLCHAIN_MODE
+#include <csignal>
+
+#include "platform.hpp"
+// TODO: Stack trace on unhandled signals
+#if defined(CSR_WIN)
+#elif defined(CSR_UNIX)
+#else
+#error "Uhh, what the hell?"
+#endif
+
 #include "bytemode/flat/flatvm.hpp"
+#include "extensions/stringextensions.hpp"
 #include "CLIParser.hpp"
 #include "fastcout.hpp"
 #include "system.hpp"
 #include "csr.hpp"
 
+constexpr std::string SigToStr(int sign)
+{
+#define SIGNAL(name) case name: return #name
+    switch (sign)
+    {
+        SIGNAL(SIGABRT);
+        SIGNAL(SIGSEGV);
+        default: return "UNKNOWN";
+    }
+#undef SIGNAL
+}
+
+extern "C" void UnhandledSignalHandler(int signum)
+{
+    LOGE(System::LogLevel::Medium, "Unexpected signal ", SigToStr(signum), ", aborting program.");
+
+    if (FastCout::Flush() != System::ErrorCode::Ok) 
+        std::cerr << "[ERROR] Couldn't flush the stdout, some messages may be missing.\n";
+
+    exit(static_cast<int>(System::ErrorCode::ProcessInterrupt));
+}
+
 int csrmain(int argc, char** args)
 {
     FastCout::Init();
+    signal(SIGSEGV, UnhandledSignalHandler);
+    signal(SIGABRT, UnhandledSignalHandler);
 
     System::ErrorCode errc { System::ErrorCode::Ok };
 
