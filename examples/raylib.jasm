@@ -1,0 +1,69 @@
+This file assumes that sizeof(int) == sizeof(int32_t)
+on the host platform. Otherwise this example may not work.
+
+Also, passing structs is not allowed (yet) in CSR so you
+won't  be able to call ClearColor(Color) for example.
+
+.prep
+    org main
+    sts 512
+    sth 512
+
+    mac lib_name 0
+    mac success_msg 43
+    mac raylib_handle 73
+
+    mac window_title 31
+    mac window_width 600
+    mac window_height 900
+.body
+    main:
+        raw
+            27 "/usr/local/lib/libraylib.so"
+            "Test Window" 0x0
+            26 "Successfully loaded raylib" ;
+
+    #RaylibHandle#
+        stc %ui lib_name
+        mov 4 &bl
+        sys "ptr CSR_LoadDL byte*"
+
+    #Check DL Load Status#
+        dup %ui
+        mov 4 &bl
+        sys "bool CSR_CheckLoadStatus ptr"
+        stc %ub 0
+        cnj %ub %equ ByteCodeEnd
+
+    #Success#
+        stc %ui success_msg
+        mov 4 &bl
+        sys "void CSR_Println byte*"
+
+    #Init Window#
+        stc %ui window_width
+        stc %ui window_height
+        stc %ui window_title
+        mov 12 &bl
+        sys "void InitWindow int int byte*"
+
+    #Set Target FPS#
+        stc %ui 60
+        mov 4 &bl
+        sys "void SetTargetFPS int"
+
+    #Window Loop#
+    WindowLoopStart:
+        #Draw Calls Here#
+
+        mov 0 &bl
+        sys "bool WindowShouldClose"
+        stc %ub 0
+        cnj %ub %equ WindowLoopStart
+
+    #Close Window#
+        mov 0 &bl
+        sys "void CloseWindow"
+
+    ByteCodeEnd:
+.end
