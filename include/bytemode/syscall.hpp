@@ -45,17 +45,31 @@ class SysCallHandler
 
         VM_INLINE void operator()(SysFunctionHandle& handle, void** params, void* returns)
         {
+            currentHandler = this;
             ffi_call(&handle.cif, handle.nativeFunc, returns, params);
         }
 
+        static VM_INLINE SysCallHandler& CurrentHandler()
+        {
+            if (currentHandler == nullptr) [[unlikely]]
+                CRASH(System::ErrorCode::Bad, "Attempt to get null handler SysCallHandler::CurrentHandler()");
+
+            [[likely]]
+            return *currentHandler;
+        } 
+
         dlID_t LoadDl(std::string_view dlPath);
-        SysFunctionHandle& MakeFunctionHandler(std::string_view functionSignature);
+        SysFunctionHandle& MakeFunctionHandle(std::string_view functionSignature);
 
     private:
+        static SysCallHandler* currentHandler;
+
         SysFunctionMap boundFuncs; 
         DLList dlList;
 };
 
 SysFunctionHandle MakeCifFromSignature(std::string_view signatureStr, FFIFunc fn);
+SysFunctionHandle MakeCifFromSignature(FunctionSignature signature, FFIFunc fn);
+FunctionSignature ParseFunctionSignature(std::string_view signature);
 std::pair<FFIType, ffi_type*> DetectType(std::string_view type, bool isReturn);
 int GetTypeSize(FFIType type);

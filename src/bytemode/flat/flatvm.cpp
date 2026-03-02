@@ -2718,6 +2718,8 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 static_cast<const uchar_t>(compressedModes & 0b00011111)
             };
 
+            bool status;
+
             if (numMode == Numo::UInt)
             {
                 sysbit_t int1 { IntegerFromBytes<sysbit_t>(
@@ -2727,7 +2729,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     ram.ReadSome(cpu.state.sp-4, 4).data
                 )};
                 cpu.state.sp -= 8;
-                cpu.state.bl = CompareVarious(int1, int2, compareMode);
+                status = CompareVarious(int1, int2, compareMode);
             }
             else if (numMode == Numo::Float)
             {
@@ -2739,7 +2741,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 )};
 
                 cpu.state.sp -= 8;
-                cpu.state.bl = CompareVarious(float1, float2, compareMode);
+                status = CompareVarious(float1, float2, compareMode);
             }
             else if (numMode == Numo::Int)
             {
@@ -2751,7 +2753,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 )};
 
                 cpu.state.sp -= 8;
-                cpu.state.bl = CompareVarious(int1, int2, compareMode);
+                status = CompareVarious(int1, int2, compareMode);
             }
             else if (numMode == Numo::UByte)
             {
@@ -2763,7 +2765,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 )};
 
                 cpu.state.sp -= 2;
-                cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
+                status = CompareVarious(byte1, byte2, compareMode);
             }
             else
             {
@@ -2771,17 +2773,17 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 char byte2 { ram.Read(cpu.state.sp-1) };
 
                 cpu.state.sp -= 2;
-                cpu.state.bl = CompareVarious(byte1, byte2, compareMode);
+                status = CompareVarious(byte1, byte2, compareMode);
             }
 
             sysbit_t address;
 
-            if (cpu.state.bl == 0)
-                address = cpu.state.pc + 5;
-            else
+            if (status)
                 address = IntegerFromBytes<sysbit_t>(
                     rom.ReadSome(cpu.state.pc+1, 4).data
                 );
+            else
+                address = cpu.state.pc + 5;
 
 #ifdef ENABLE_JIT
             JITError err { BranchIncrease(blocks, address, &jitContext, rom, settings.jit) };
@@ -2886,6 +2888,9 @@ const System::ErrorCode FlatVM::Cycle() noexcept
         
         op_SysCall:
         {
+            static_assert(sizeof(void*) == sizeof(uintptr_t), "Native calls assume that the sizeof(uintptr_t) == sizeof(void*), otherwise they are not supported.");
+            static_assert(sizeof(uintptr_t) >= sizeof(uint32_t), "Native calls assume that the sizeof(uintptr_t) >= sizeof(uint32_t), otherwise they are not supported.");
+
             // &bl is still set,
             // values are pushed to stack then syscall is made.
             // values are eaten.
@@ -2897,24 +2902,24 @@ const System::ErrorCode FlatVM::Cycle() noexcept
 
             cpu.state.pc += size + 4;
 
-            SysFunctionHandle& handle { handler.MakeFunctionHandler(signatureStr) };
+            SysFunctionHandle& handle { handler.MakeFunctionHandle(signatureStr) };
 
-            std::vector<uintptr_t> args(handle.ArgCount());
-            std::vector<void*> argptrs(handle.ArgCount());
+            uintptr_t* args { static_cast<uintptr_t*>(alloca(handle.ArgCount() * sizeof(uintptr_t))) };
+            void** argptrs { static_cast<void**>(alloca(handle.ArgCount() * sizeof(void**))) };
 
             uintptr_t returnValue;
 
             cpu.state.sp -= cpu.state.bl;
             for (size_t i = 0; i < handle.ArgCount(); i++)
             {
-                argptrs.at(i) = &args.at(i);
+                argptrs[i] = args + i;
                 switch (handle.argTypes[i])
                 {
                     case FFIType::Int:
                     case FFIType::UInt:
                     {
                         sysbit_t val { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
-                        std::memcpy(&args.at(i), &val, 4);
+                        std::memcpy(args + i, &val, 4);
                         cpu.state.sp += 4;
                         continue;
                     }
@@ -2923,17 +2928,16 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     {
                         sysbit_t vmPtr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
                         void* realPtr { GetRealAddress(vmPtr) };
-                        std::memcpy(&args.at(i), &realPtr, sizeof(realPtr));
+                        std::memcpy(args + i, &realPtr, sizeof(realPtr));
                         cpu.state.sp += 4;
                         continue;
                     }
 
                     case FFIType::NativePointer:
                     {
-                        CRASH(System::ErrorCode::NativeCallError, "Native pointers are not yet supportedd.");
                         sysbit_t vmptr { IntegerFromBytes<sysbit_t>(ram.ReadSome(cpu.state.sp, 4).data) };
                         void* realPtr { reinterpret_cast<void*>(IntegerFromBytes<uintptr_t>(ram.ReadSome(vmptr, sizeof(uintptr_t)).data)) };
-                        std::memcpy(&args.at(i), &realPtr, sizeof(void*));
+                        std::memcpy(args + i, &realPtr, sizeof(void*));
                         cpu.state.sp += 4;
                         continue;
                     }
@@ -2943,7 +2947,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     case FFIType::Bool:
                     {
                         uchar_t val { static_cast<uchar_t>(ram.Read(cpu.state.sp)) };
-                        std::memcpy(&args.at(i), &val, sizeof(uchar_t));
+                        std::memcpy(args + i, &val, sizeof(uchar_t));
                         cpu.state.sp++;
                         continue;
                     }
@@ -2951,7 +2955,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                     case FFIType::Float:
                     {
                         float vmptr { FloatFromBytes(ram.ReadSome(cpu.state.sp, 4).data) };
-                        std::memcpy(&args.at(i), &vmptr, sizeof(float));
+                        std::memcpy(args + i, &vmptr, sizeof(float));
                         cpu.state.sp += 4;
                         continue;
                     }
@@ -2962,7 +2966,7 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             }
 
             cpu.state.sp -= cpu.state.bl;
-            handler(handle, argptrs.data(), static_cast<void*>(&returnValue));
+            handler(handle, argptrs, static_cast<void*>(&returnValue));
             cpu.state.bl = GetTypeSize(handle.returnType);
 
             switch (handle.returnType)
@@ -2980,15 +2984,33 @@ const System::ErrorCode FlatVM::Cycle() noexcept
                 case FFIType::VMPointer:
                 {
                     char buf[4];
-                    sysbit_t val;
-                    std::memcpy(&val, &returnValue, sizeof(sysbit_t));
+                    sysbit_t val { GetVMAddress(reinterpret_cast<void*>(returnValue)) };
                     BytesFromInteger(val, buf);
                     return cpu.PushSome({ buf, 4 });
                 }
 
                 case FFIType::NativePointer:
                 {
-                    CRASH(System::ErrorCode::NativeCallError, "Native pointers are not yet supportedd.");
+                    sysbit_t vmAddr { ram.Allocate(sizeof(uintptr_t)) };
+
+                    char* addressBuf { static_cast<char*>(alloca(sizeof(uintptr_t))) };
+                    BytesFromInteger(returnValue, addressBuf);
+                    System::ErrorCode err { ram.WriteSome(vmAddr, { addressBuf, sizeof(uintptr_t) }) };
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
+                    {
+                        LOGE(System::LogLevel::Medium, "Error while returning native pointer from native call.");
+                        return err;
+                    }
+
+                    char returnBuf[4];
+                    BytesFromInteger(vmAddr, returnBuf);
+                    err = cpu.PushSome({ returnBuf, 4 });
+
+                    if (err != System::ErrorCode::Ok) [[unlikely]]
+                        LOGE(System::LogLevel::Medium, "Error while returning native pointer from native call.");
+
+                    return err;
                 }
 
                 case FFIType::Byte:

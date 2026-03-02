@@ -28,7 +28,7 @@
     using sym_t = void*;
 #endif
 
-constexpr dlID_t dlFalse = NULL;
+constexpr dlID_t dlFalse { NULL };
 
 dlID_t DLLoad(std::string_view path);
 bool DLUnload(dlID_t dlID);

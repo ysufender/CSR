@@ -24,7 +24,6 @@ std::filesystem::path GetExePath()
     wchar_t path[MAX_PATH];
     GetModuleFileNameW( NULL, path, MAX_PATH );
 #elif defined(CSR_UNIX)
-    // Linux specific
     char path[PATH_MAX];
     ssize_t count = readlink( "/proc/self/exe", path, PATH_MAX );
     if( count < 0 || count >= PATH_MAX )
@@ -34,8 +33,8 @@ std::filesystem::path GetExePath()
     char path[PATH_MAX];
     uint32_t bufsize = PATH_MAX;
     if (!_NSGetExecutablePath(path, &bufsize))
-        return std::filesystem::path{path}.parent_path() / ""; // to finish the folder path with (back)slash
-    return {};  // some error
+        return std::filesystem::path{path}.parent_path() / "";
+    return {};
 #endif
 
     return std::filesystem::path { path };

@@ -9,11 +9,13 @@
 #include "platform.hpp"
 #include "system.hpp"
 
+SysCallHandler* SysCallHandler::currentHandler { nullptr };
+
 dlID_t SysCallHandler::LoadDl(std::string_view dllPath) 
 {
     dlID_t dll { DLLoad(dllPath) };
 
-    if (!dll)
+    if (dll == dlFalse)
     {
 #ifdef CSR_WIN
         DWORD errID { GetLastError() };
@@ -52,25 +54,27 @@ dlID_t SysCallHandler::LoadDl(std::string_view dllPath)
     return dll;
 }
 
-SysFunctionHandle& SysCallHandler::MakeFunctionHandler(std::string_view functionSignature)
+SysFunctionHandle& SysCallHandler::MakeFunctionHandle(std::string_view functionSignature)
 {
     const size_t hash { Extensions::String::Hash(functionSignature) };
 
     if (this->boundFuncs.contains(hash))
         return this->boundFuncs.at(hash);
 
-    void (*nativeFunc)();
+    FFIFunc nativeFunc;
 
-    for (dlID_t dl : dlList)
+    FunctionSignature signature { ParseFunctionSignature(functionSignature) };
+
+    for (dlID_t dl : this->dlList)
     {
-        nativeFunc = DLSym<FFIFunc>(dl, functionSignature);
+        nativeFunc = DLSym<FFIFunc>(dl, signature.name);
         if (nativeFunc)
             break;
     }
 
     if (nativeFunc)
     {
-        this->BindFunction(hash, MakeCifFromSignature(functionSignature, nativeFunc));
+        this->BindFunction(hash, MakeCifFromSignature(signature, nativeFunc));
         return this->boundFuncs.at(hash);
     }
 
@@ -154,10 +158,9 @@ std::pair<FFIType, ffi_type*> DetectType(std::string_view type, bool isReturn)
     }
 }
 
-SysFunctionHandle MakeCifFromSignature(std::string_view signatureStr, FFIFunc fn)
+SysFunctionHandle MakeCifFromSignature(FunctionSignature signature, FFIFunc fn)
 {
     ffi_cif cif;
-    FunctionSignature signature { ParseFunctionSignature(signatureStr) };
     std::unique_ptr<FFIType[]> argsUnderlying { std::make_unique_for_overwrite<FFIType[]>(signature.arguments.size()) };
     std::unique_ptr<ffi_type*[]> argsNative { std::make_unique_for_overwrite<ffi_type*[]>(signature.arguments.size()) };
     std::pair<FFIType, ffi_type*> returnType { DetectType(signature.returnType, true) };
@@ -182,6 +185,11 @@ SysFunctionHandle MakeCifFromSignature(std::string_view signatureStr, FFIFunc fn
         std::move(argsNative),
         returnType.first
     };
+}
+
+SysFunctionHandle MakeCifFromSignature(std::string_view signatureStr, FFIFunc fn)
+{
+    return MakeCifFromSignature(ParseFunctionSignature(signatureStr), fn); 
 }
 
 int GetTypeSize(FFIType type)
