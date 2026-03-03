@@ -9,14 +9,31 @@ won't  be able to call ClearColor(Color) for example.
     sts 512
     sth 512
 
-    mac lib_name 0
-    mac success_msg 43
-    mac raylib_handle 73
+    #Constants#
+        mac key_esc 256
+        mac color_red 0xFF0000F0
+        mac window_width 900
+        mac window_height 600
 
-    mac window_title 31
-    mac window_width 600
-    mac window_height 900
+    #Variable Addresses#
+        mac lib_name 0
+        mac window_title 31
+        mac success_msg 43
+        mac raylib_handle 73
+        mac window_should_close 77
 .body
+    CSR_LoadDL: rom 20 "ptr CSR_LoadDL byte*" ;
+    CSR_CheckLoadStatus: rom 28 "bool CSR_CheckLoadStatus ptr" ;
+    CSR_Println: rom 22 "void CSR_Println byte*" ;
+
+    Raylib_InitWindow: rom 29 "void InitWindow int int byte*" ;
+    Raylib_SetTargetFPS: rom 21 "void SetTargetFPS int" ;
+    Raylib_WindowShouldClose: rom 22 "bool WindowShouldClose" ;
+    Raylib_CloseWindow: rom 16 "void CloseWindow" ;
+    Raylib_ClearBackground: rom 25 "void ClearBackground uint" ;
+    Raylib_BeginDrawing: rom 17 "void BeginDrawing" ;
+    Raylib_EndDrawing: rom 15 "void EndDrawing" ;
+
     main:
         raw
             27 "/usr/local/lib/libraylib.so"
@@ -26,44 +43,61 @@ won't  be able to call ClearColor(Color) for example.
     #RaylibHandle#
         stc %ui lib_name
         mov 4 &bl
-        sys "ptr CSR_LoadDL byte*"
+        sys CSR_LoadDL
+
+    #WindowShouldClose Flag#
+        stc %ub 0
 
     #Check DL Load Status#
-        dup %ui
+        rdl %ui raylib_handle
         mov 4 &bl
-        sys "bool CSR_CheckLoadStatus ptr"
+        sys CSR_CheckLoadStatus
         stc %ub 0
         cnj %ub %equ ByteCodeEnd
 
     #Success#
         stc %ui success_msg
         mov 4 &bl
-        sys "void CSR_Println byte*"
+        sys CSR_Println
 
     #Init Window#
         stc %ui window_width
         stc %ui window_height
         stc %ui window_title
         mov 12 &bl
-        sys "void InitWindow int int byte*"
+        sys Raylib_InitWindow
 
     #Set Target FPS#
         stc %ui 60
         mov 4 &bl
-        sys "void SetTargetFPS int"
+        sys Raylib_SetTargetFPS
 
     #Window Loop#
     WindowLoopStart:
-        #Draw Calls Here#
+        #Draw Calls#
+        mov 0 &bl
+        sys Raylib_BeginDrawing
+
+            stc %ui color_red
+            mov 4 &bl
+            sys Raylib_ClearBackground
 
         mov 0 &bl
-        sys "bool WindowShouldClose"
+        sys Raylib_EndDrawing
+
+        #Window Close Check#
+        mov 0 &bl
+        sys Raylib_WindowShouldClose
+        mov window_should_close &ebx
+        ldc %ub
+
+        rdl %ub window_should_close
         stc %ub 0
         cnj %ub %equ WindowLoopStart
-
+    
     #Close Window#
         mov 0 &bl
-        sys "void CloseWindow"
+        sys Raylib_CloseWindow
 
     ByteCodeEnd:
 .end

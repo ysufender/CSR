@@ -8,11 +8,6 @@ CSR is a part of CSLB project. The CSLB project (which stands for Common Scripti
 consists of three parts: Assembler, Linker and Runtime. The runtime part is CSR itself, as can be understood from the name.
 The assembler and linker make up JASM and it has its [own repo](https://github.com/ysufender/JASM).
 
-> NOTE:
->   FlatVM is the currently in progress VM type and is the only supported one. If you
->   want to use the other VM under bytemode/structured/ I can't guarantee that it'll work
->   with the existing JASM.
-
 ## Quickstart
 
 ### Installation
@@ -29,29 +24,27 @@ See [BUILD.md](docs/BUILD.md)
 Here is the helper text from the current version of CSR:
 
 ```
-
 Common Script Runtime (CSR)
         Description: Common Script Runtime for JASM Bytecode
-        Version: 0.2.1
+        Version: 0.3.1
+        Build Type: Release
+        Build Details: Flat VM
         Enable JIT: Unavailable
 
 Available Flags:
         --help , -h : Print this help text.
         --version , -v : Print version.
 
-        --no-new , -n : Do not create a new instance of CSR, use an already running one.
-        --no-strict-messages , -nsm : Don't strictly verify messages in each checkpoint when dispatching.
+        --exe <value>, -e : Executable file to execute.
 
-        --exe <..params..>, -e : Executable files to execute.
-
-        --unsafe , -u : Load extender dll of each executable.
-
-        --step , -s : Run the VM once every input.
+        --no-stdout-buffering , -n : Disable buffered stdout.
 ```
 
 ### CSR Documentation 
 
-If you want to know more about how CSR works you can start by reading the [docs](docs/DOCUMENTATION.md)
+~If you want to know more about how CSR works you can start by reading the [docs](docs/DOCUMENTATION.md)~
+
+Documentation is not up-to-date.
 
 ## Footnotes
 

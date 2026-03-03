@@ -42,7 +42,6 @@ extern "C" void UnhandledSignalHandler(int signum)
 
 int csrmain(int argc, char** args)
 {
-    FastCout::Init();
     signal(SIGSEGV, UnhandledSignalHandler);
     signal(SIGABRT, UnhandledSignalHandler);
 
@@ -51,6 +50,9 @@ int csrmain(int argc, char** args)
     try
     {
         CLIParser::Flags flags { SetUpCLI(args, argc) };
+
+        if (!flags.GetFlag<CLIParser::FlagType::Bool>("no-stdout-buffering"))
+            FastCout::Init();
 
         if (flags.GetFlag<CLIParser::FlagType::Bool>("help"))
             PrintHelp(flags);
@@ -136,6 +138,7 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
     parser.Separator();
     parser.AddFlag<FlagType::String>("exe", "Executable file to execute.");
     parser.Separator();
+    parser.AddFlag<FlagType::Bool>("no-stdout-buffering", "Disable buffered stdout.");
 #ifndef NDEBUG
     parser.AddFlag<FlagType::Bool>("step", "Run the VM once every input.");
 
@@ -145,6 +148,7 @@ CLIParser::Flags SetUpCLI(char** args, int argc)
     parser.BindFlag("h", "help");
     parser.BindFlag("v", "version");
     parser.BindFlag("e", "exe");
+    parser.BindFlag("n", "no-stdout-buffering");
 
     try
     {

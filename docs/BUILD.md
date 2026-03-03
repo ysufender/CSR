@@ -8,12 +8,13 @@ to build in release mode you'll have to deal with cmake directly.
 
 ### build.sh
 
-`build.sh <-r|--refresh> <-g|--generate> <-w|--windows> <-m|--memtest>`
+`build.sh <-r|--refresh> <-g|--generate> <-w|--windows> <-m|--memtest> <-R|--release>`
 
 `-r|--refresh` : Clean the build directory for a fresh start.
 `-g|--generate`: Only generate build files. Do not build the project.
 `-w|--windows`: If this flag is set, the script will invoke cmake with windows presets.
 `-m|--memtest`: Build and run memory tests for leaks etc. Valgrind must be available on path.
+`-R|--release`: Build in release mode.
 
 ### build.ps1
 
@@ -46,60 +47,53 @@ The default presets are given below:
 
 ```json
 "configurePresets": [
-    {
-        "name": "default",
-        "hidden": true,
-        "generator": "Ninja",
-        "binaryDir": "build",
-        "cacheVariables": {
-            "CMAKE_CXX_COMPILER": "g++",
-            "CMAKE_EXPORT_COMPILE_COMMANDS": true,
-            "CMAKE_CXX_STANDART": "20",
-            "CMAKE_CXX_STANDART_REQUIRED": true,
+        {
+            "name": "default",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "build",
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": true,
 
-            "ENABLE_JIT": "OFF",
-            "OUTPUT_PATH": ""
+                "ENABLE_JIT": "OFF",
+                "OUTPUT_PATH": "",
+                "TOOLCHAIN_MODE": "OFF",
+                "BYTEMODE": "ON"
+            }
+        },
+        {
+            "name": "Release",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "OUTPUT_PATH": "Release",
+                "CMAKE_CXX_FLAGS": "-O3 -flto -DNDEBUG",
+                "CMAKE_EXE_LINKER_FLAGS": "-flto"
+            }
+        }, 
+        {
+            "name": "Debug",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "OUTPUT_PATH": "Debug",
+                "CMAKE_CXX_FLAGS": "-O0 -g"
+            }
         }
-    },
-    {
-        "name": "Debug",
-        "inherits": "default",
-        "cacheVariables": {
-            "CMAKE_BUILD_TYPE": "Debug",
-            "OUTPUT_PATH": "Debug"
+    ],
+    "buildPresets": [
+        {
+            "name": "Debug",
+            "configurePreset": "Debug"
+        },
+        {
+            "name": "Release",
+            "configurePreset": "Release"
         }
-    },
-    {
-        "name": "Debug-MinGW",
-        "inherits": "Debug",
-        "cacheVariables": {
-            "CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-g++",
-            "OUTPUT_PATH": "Debug-MinGW"
-        }
-    },
-    {
-        "name": "MemTest",
-        "inherits": "Debug",
-        "cacheVariables": {
-            "CMAKE_BUILD_TYPE": "MemTest",
-            "OUTPUT_PATH": "MemTest"
-        }
-    }
-],
-"buildPresets": [
-    {
-        "name": "Debug",
-        "configurePreset": "Debug"
-    },
-    {
-        "name": "Debug-MinGW",
-        "configurePreset": "Debug-MinGW"
-    },
-    {
-        "name": "MemTest",
-        "configurePreset": "MemTest"
-    }
-]
+    ]
 ```
 
 I don't advise changing the preset names, because you'll have to change the build scripts too
@@ -113,12 +107,11 @@ default:
     CMAKE_CXX_COMPILER (g++): Pretty clear I suppose
     CMAKE_EXPORT_COMPILE_COMMANDS (true): For lsps (clangd) to work properly.
     ENABLE_JIT (OFF): Activate JIT support.
+    TOOLCHAIN_MODE (OFF): Build as a library to be linked against.
 
 Debug:
-    CXX_COMPILER_NAME (g++): To differ from Debug-MinGW 
     OUTPUT_PATH (Debug): Place resulting bins to build/Debug/
 
-Debug-MinGW:
-    CXX_COMPILER_NAME (x86_64-w64-mingw32-g++): I hate building for Windows. For some reason I wasn't able to build for windows on Linux.
-    OUTPUT_PATH (Debug-MinGW): Place resulting bins to build/Debug/
+Release:
+    OUTPUT_PATH (Release): Place resulting bins to build/Release/
 ```

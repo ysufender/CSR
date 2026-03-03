@@ -409,16 +409,12 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             };
 
             const Slice values { ram.ReadSome(cpu.state.sp-size, size) };
+            cpu.PopSome(size);
             // ldc no longer allocates memory itself.
             // it should be allocated and address must be put on &ebx beforehand
-            //const sysbit_t alloc { ram.Allocate(size) };
+            // it can also be used to modify locals by manually setting &ebx this way
 
-            const System::ErrorCode errc { ram.WriteSome(cpu.state.ebx, values) };
-            if (errc != System::ErrorCode::Ok)
-                // even though we didn't allocate here, we free in case of an error.
-                return ram.Deallocate(cpu.state.ebx, size);
-            return errc;
-
+            return ram.WriteSome(cpu.state.ebx, values);
         )
 
         op_ReadFromHeap: block(
@@ -2894,13 +2890,14 @@ const System::ErrorCode FlatVM::Cycle() noexcept
             // &bl is still set,
             // values are pushed to stack then syscall is made.
             // values are eaten.
-            // sys <size:string>
-            // TODO: Pass pointer to signature instead of signature
-            const char* strptr { rom&(cpu.state.pc+sizeof(sysbit_t)) };
-            sysbit_t size { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
+            // sys <rom_address_of_signature>
+            sysbit_t address { IntegerFromBytes<sysbit_t>(rom.ReadSome(cpu.state.pc, 4).data) };
+
+            const char* strptr { rom&(address+4) };
+            sysbit_t size { IntegerFromBytes<sysbit_t>(rom.ReadSome(address, 4).data) };
             std::string_view signatureStr(strptr, size);
 
-            cpu.state.pc += size + 4;
+            cpu.state.pc += 4;
 
             SysFunctionHandle& handle { handler.MakeFunctionHandle(signatureStr) };
 
