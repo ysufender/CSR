@@ -1,0 +1,67 @@
+.prep
+    org Main
+    sts 512
+    sth 512
+
+    #Constants#
+        mac openmode_append 2
+        mac newline 0x0A
+
+    #Variable Addresses#
+        mac file_path 0
+        mac success_message 22
+        mac file_handle 39
+        mac content 43
+        mac final_success 59
+.body
+    CSR_Println: rom 22 "void CSR_Println byte*" ;
+    CSR_Print: rom 20 "void CSR_Print byte*" ;
+    CSR_Exists: rom 21 "bool CSR_Exists byte*" ;
+    CSR_OpenFile: rom 28 "uint CSR_OpenFile byte* uint" ;
+    CSR_Write: rom 25 "void CSR_Write byte* uint" ;
+    CSR_CloseFile: rom 23 "bool CSR_CloseFile uint" ;
+
+    Main:
+        raw
+            18 "examples/file.jasm"
+            13 "File Exists: " ;
+
+    #Test Path#
+        stc %ui file_path
+        mov 4 &bl sys CSR_Exists
+        stc %ub 0
+        cnj %ub %equ ByteCodeEnd
+
+    #Success#
+        stc %ui success_message
+        mov 4 &bl sys CSR_Print
+        stc %ui file_path
+        mov 4 &bl sys CSR_Println
+
+    #Open File#
+        stc %ui file_path
+        stc %ui openmode_append
+        mov 8 &bl sys CSR_OpenFile
+        dup %ui
+        stc %ui 0
+        cnj %ui %equ ByteCodeEnd
+
+    #Append Text#
+        raw 12 newline "Hello World"
+            8 "Success!" ;
+
+        stc %ui content
+        rdl %ui file_handle
+        mov 8 &bl sys CSR_Write
+
+    #Close File#
+        rdl %ui file_handle
+        mov 4 &bl sys CSR_CloseFile
+        stc %ub 0
+        cnj %ub %equ ByteCodeEnd
+
+        stc %ui final_success
+        mov 4 &bl sys CSR_Println
+
+    ByteCodeEnd:
+.end

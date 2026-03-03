@@ -1,6 +1,5 @@
 #pragma once
 
-#include "system.hpp"
 #include <cstring>
 #include <iostream>
 #include <new>
@@ -8,7 +7,10 @@
 #include <cstdlib>
 #include <mutex>
 
-#ifdef _WIN32
+#include "system.hpp"
+#include "platform.hpp"
+
+#ifdef CSR_WIN
 #include <windows.h>
 #else
 #include <unistd.h>
@@ -43,10 +45,10 @@ public:
 
     static VM_INLINE Error Flush() noexcept
     {
-        if (FastCout::singleton == nullptr)
-            return System::ErrorCode::IOError;
+        if (FastCout::singleton == nullptr) [[unlikely]]
+            return System::ErrorCode::Ok;
 
-        if (FastCout::singleton->pubsync() == -1)
+        if (FastCout::singleton->pubsync() == -1) [[unlikely]]
             return System::ErrorCode::IOError;
 
         return System::ErrorCode::Ok;
@@ -102,7 +104,7 @@ private:
 
     VM_INLINE FastCout(size_t bufferSize) : bufSize { bufferSize }
     {
-#ifdef _WIN32
+#ifdef CSR_WIN
         this->buffer = reinterpret_cast<char*>(_aligned_malloc(this->bufSize, 4096));
 #else
         if (posix_memalign(reinterpret_cast<void**>(&this->buffer),sysconf(_SC_PAGESIZE), this->bufSize) != 0)
